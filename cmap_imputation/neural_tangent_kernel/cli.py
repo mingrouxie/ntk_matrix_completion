@@ -109,8 +109,10 @@ def validate_zeolite_inputs(technique="NTK", mixed_prior=False, col_name="unit")
         technique, mixed_prior, col_name="SMILES"
     )
     args = cli()
-    # Secondary Matrix
-    if args.secondary_mat == None or not os.path.exists(args.secondary_mat):
-        raise AssertionError(f"Path to matrix, {args.secondary_mat} does not exist")
-    secondaryData = pd.read_pickle(args.secondary_mat)
+    # Secondary Matrix for Zeolite Nonbinding binary classification.
+    secondaryData = None
+    if args.secondary_mat is not None:
+        if not os.path.exists(args.secondary_mat):
+            raise AssertionError(f"Path to matrix, {args.secondary_mat} does not exist")
+        secondaryData = pd.read_pickle(args.secondary_mat)
     return allData, secondaryData, only_train, method, seed, preds_path, plot, prior

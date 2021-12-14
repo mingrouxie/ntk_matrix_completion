@@ -21,6 +21,8 @@ VALID_METHODS = {
     "only_train_cell_oneHot",
     "only_train_cell_average",
     "CustomOSDAandZeolite",
+    "CustomOSDAandZeoliteAsRows",
+    "skinny_identity"
 }
 
 def osda_prior_helper(all_data_df, column_name = 'Volume (Angstrom3)', normalize = True):
@@ -126,23 +128,35 @@ def zeolite_prior_helper(target_codes, normalize = True):
     return prior
 
 
-def make_prior(train, only_train, test, method='identity', normalization_factor=1.5):
+def make_prior(train, only_train, test, method='identity', normalization_factor=1.5, test_train_axis=0):
     assert method in VALID_METHODS, f"Invalid method used, pick one of {VALID_METHODS}"
-    all_data = np.vstack((train.to_numpy(), test.to_numpy()))
+    if test_train_axis == 0:
+        all_data = np.vstack((train.to_numpy(), test.to_numpy()))
+        all_data_df = pd.concat([train, test])
+    elif test_train_axis == 1:
+        all_data = np.hstack((train.to_numpy(), test.to_numpy()))
+        all_data_df = pd.concat([train, test], 1)
+    else:
+        # TODO: clean this up...
+        all_data = None
+        all_data_df = pd.concat([train, test], test_train_axis)
+
     prior = None
 
     if method == 'identity':
         prior = np.eye(all_data.shape[0])
         return prior
 
+    if method == 'skinny_identity':
+        prior = np.ones((all_data.shape[0],1))
+        return prior
+
     elif method == 'OneHotDrug':
-        all_data_df = pd.concat([train, test])
         encoder = OneHotEncoder()
         prior = encoder.fit_transform(all_data_df.reset_index().intervention.to_numpy().reshape(-1, 1)).toarray()
 
  
     elif method == "OneHotOSDA":
-        all_data_df = pd.concat([train, test])
         encoder = OneHotEncoder()
         # Isn't this just the same as an identity matrix???
         prior = encoder.fit_transform(
@@ -150,14 +164,14 @@ def make_prior(train, only_train, test, method='identity', normalization_factor=
         ).toarray()
 
     elif method == "CustomOSDA":
-        all_data_df = pd.concat([train, test])
+        prior = osda_prior_helper(
+            all_data_df, column_name="Axis 1 (Angstrom)", normalize=True
+        )
 
     elif method == "CustomZeolite":
-        all_data_df = pd.concat([train, test])
         prior = zeolite_prior_helper(target_codes=all_data_df.index, normalize=True)
 
     elif method == "CustomOSDAandZeolite":
-        all_data_df = pd.concat([train, test])
         # osda_prior.shape = (1194, 1) ... a prior over all the osda volumes...
         osda_axis1_lengths = osda_prior_helper(
             all_data_df, column_name="Axis 1 (Angstrom)", normalize=False
@@ -182,8 +196,18 @@ def make_prior(train, only_train, test, method='identity', normalization_factor=
         # prior = np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
         # return prior
 
+    # this is the one for really skinny Matrices
+    elif method == 'CustomOSDAandZeoliteAsRows':
+        # osda_prior.shape = (1194, 1) ... a prior over all the osda volumes...
+        osda_axis1_lengths = osda_prior_helper(
+            all_data_df, column_name="Axis 1 (Angstrom)", normalize=False
+        )
+        # zeolite_prior.shape = (1, 209)... a prior over all the possible zeolite sphere diameters...
+        zeolite_sphere_diameters = zeolite_prior_helper(
+            target_codes=(all_data_df.columns).to_numpy(), normalize=False
+        )
+        pdb.set_trace()
     elif method == 'OneHotCell':
-        all_data_df = pd.concat([train, test])
         encoder = OneHotEncoder()
         prior = encoder.fit_transform(all_data_df.reset_index().unit.to_numpy().reshape(-1, 1)).toarray()
 
@@ -325,8 +349,16 @@ def make_prior(train, only_train, test, method='identity', normalization_factor=
     elif method == 'custom':
         raise NotImplementedError("Custom prior not implemented")
 
-    # TODO: whyyy?? did they do that???
-    prior = np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
+    if test_train_axis == 0:
+        prior = np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
+    elif test_train_axis == 1:
+        prior = np.hstack([prior, normalization_factor * np.eye(all_data.shape[1])[0:all_data.shape[0], 1:]])
+        # TODO: this is quite gross... is this the right way to be making this?
+        # TODO: there is a better way to do this... add the bottom to the prior col first then just hstack the eye once.
+        # prior = np.hstack([prior, normalization_factor * np.eye(all_data.shape[1])[0:all_data.shape[0]]])
+        # lower_buffer = np.eye(all_data.shape[1])[all_data.shape[0]:]
+        # lower_buffer = np.hstack([np.zeros((lower_buffer.shape[0], 1)), lower_buffer])
+        # prior = np.vstack([prior, lower_buffer])
     # TODO: big debate... do I like this normalize?? probably not...
     normalize(prior, axis=1, copy=False)
     return prior

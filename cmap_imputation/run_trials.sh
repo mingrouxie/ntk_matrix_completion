@@ -10,7 +10,11 @@ python dnpp/dnpp.py -s 149
 # Trains Means on 10-Fold for All Data (Seed 149)
 python means/means.py -s 149
 
-# Train NTK with Zeolite dataset for 10-Fold
+# Train NTK with Zeolite dataset for 10-Fold 
+# this is the one with really skinny matrices...
+# python neural_tangent_kernel/two_step_ntk.py -i /Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/zeoliteOSDAIndexedMatrix.pkl -i2 /Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/zeoliteOSDANonbindingIndexedMatrix.pkl -r -o
+
+# This is the one with regular matrices
 python neural_tangent_kernel/two_step_ntk.py -i /Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/zeoliteTensor.pkl -i2 /Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/zeoliteNonbindingTensor.pkl -r -o
 # python neural_tangent_kernel/ntk.py -s 149 -x OneHotCombo
 
