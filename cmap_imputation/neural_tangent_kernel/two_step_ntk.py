@@ -22,7 +22,7 @@ sys.path.insert(
 )
 from singular_graphics import plot_graphics
 
-NORM_FACTOR = 0.1  # IS this better than 0.1?
+NORM_FACTOR = 0.01  # IS this better than 0.1?
 PI = np.pi
 
 # is this kappa something to be tuned?
@@ -49,22 +49,26 @@ def predict_space_opt_CMAP_data(all_data, mask, num_test_rows, X):
     observed_data = all_data[:, :num_observed]
     # this might not be kosher...
     # TODO: this might break the whole ntk assurance
+    # THIS IS CURSED. FEEL VERY ASHAMED
     # X_squared = (X @ X.T)
-    # X_squared = X_squared / X_squared.max() if normalize_intermediate else X_squared
-    pdb.set_trace()
+    # X_squared = X_squared / X_squared.max() #if normalize_intermediate else X_squared
+    # X_cross_terms = kappa(np.clip(X_squared, -1, 1))
+
     X_cross_terms = kappa(np.clip(X @ X.T, -1, 1))
-    pdb.set_trace()
     K_matrix[:, :] = X_cross_terms[:num_observed, :num_observed]
     k_matrix[:, :] = X_cross_terms[
         :num_observed, num_observed : num_observed + num_missing
     ]
     # plot_matrix(X_cross_terms, 'X_cross_terms', vmin=0, vmax=2)
     # plot_matrix(k_matrix, 'little_k', vmin=0, vmax=2)
+    # plot_matrix(K_matrix, 'big_K', vmin=0, vmax=2)
     # plot_matrix(X, 'X', vmin=0, vmax=1)
     # plot_matrix(X[0:100,0:100], 'close_up_prior_with_zeolite_diameter', vmin=0, vmax=1)
     # pdb.set_trace()
+    # pdb.set_trace()
+    # pdb.set_trace()
     results = np.linalg.solve(K_matrix, observed_data.T).T @ k_matrix
-    pdb.set_trace()
+    # pdb.set_trace()
     assert results.shape == (all_data.shape[0], num_test_rows), "Results malformed"
     return results.T
 
@@ -206,7 +210,7 @@ def run_ntk_binary_classification(
     plot,
     prior,
     # TODO: get rid of this argument and just use the fed in method argument.
-    prior_method="skinny_identity",#"CustomOSDA",
+    # prior_method="skinny_identity",  # "CustomOSDA",
 ):
     path_prefix += f"{prior}Prior"
     if method[0] == "kfold":
@@ -237,7 +241,7 @@ def run_ntk_binary_classification(
             train,
             only_train,
             test,
-            method=prior_method,
+            method="CustomZeolite", #"CustomOSDA",
             normalization_factor=NORM_FACTOR,
         )
         # okay so the bottom 1/10 of mask and all_data are just all zeros.
