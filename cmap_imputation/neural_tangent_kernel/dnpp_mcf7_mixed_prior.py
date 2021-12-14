@@ -3,6 +3,7 @@ import pathlib
 import os
 import pandas as pd
 import numpy as np
+import pdb
 
 from sklearn.preprocessing import normalize
 from auto_tqdm import tqdm
@@ -32,7 +33,7 @@ if __name__ == '__main__':
     dim = allData.shape[1]
     encoding = only_train.to_numpy()
     encoding = np.vstack([encoding, np.average(encoding, axis=0)])
-
+    pdb.set_trace()
     if method[0] == 'kfold':
         iterator = tqdm(get_splits_in_cell_type(allData, k=method[1], seed=SEED), total=method[1])
     else:

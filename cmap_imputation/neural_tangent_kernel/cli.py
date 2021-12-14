@@ -2,7 +2,13 @@ import argparse
 import os
 import pathlib
 import pandas as pd
+import pdb
+from enum import Enum
 
+# TODO: do more here ... I bet we'll need a whole set of things here...
+class ColNames(Enum):
+    ZEOLITE = 'SMILES'
+    CMAP = 'unit'
 
 def str2bool(v):
     ''' Credits:
@@ -30,10 +36,13 @@ def clipped_int(v):
 
 def cli():
     curr_path = pathlib.Path(__file__).parent.absolute()
-
+    print('whats the default path? ', os.path.join(curr_path.parent, "data", "largeTensor.pkl"))
     options = argparse.ArgumentParser()
     options.add_argument('-i', dest='original_mat', default=os.path.join(curr_path.parent, "data", "largeTensor.pkl"),
                          type=str, help=f'Path to initial matrix, .pkl DF - Default {os.path.join(curr_path.parent, "data", "largeTensor.pkl")}')
+    # TODO: really need to make this cleaner... perhaps put both original_mat and original_mat2 into a list as arguments?
+    options.add_argument('-i2', dest='secondary_mat', default=None,
+                         type=str, help=f'Path to secondary matrix for layered prediction, .pkl DF - Default None')
     options.add_argument('-p', dest='preds_path', default=os.path.join(curr_path.parent, "predictions"),
                          type=str, help=f'Path to save/load predictions - Default {os.path.join(curr_path.parent, "predictions")}')
     options.add_argument('-x', dest='prior', default='identity',
@@ -55,9 +64,8 @@ def cli():
     return options.parse_args()
 
 
-def validate_inputs(technique='NTK', mixed_prior=False):
+def validate_inputs(technique='NTK', mixed_prior=False, col_name='unit'):
     args = cli()
-
     # Original Matrix
     if not os.path.exists(args.original_mat):
         raise AssertionError(f"Path to matrix, {args.original_mat} does not exist")
@@ -79,13 +87,14 @@ def validate_inputs(technique='NTK', mixed_prior=False):
         method = ('sparse', args.sparse_subset)
         path_prefix = f"{technique}SparseSubset{args.sparse_subset}DrugsInTrain"
 
-    allData = allData[~allData.index.get_level_values("unit").isin(args.remove_cells)]
+    allData = allData[~allData.index.get_level_values(col_name).isin(args.remove_cells)]
 
     for cell in args.only_train:
-        assert cell in allData.index.get_level_values("unit"), f"Cell {cell} not in input data"
+        assert cell in allData.index.get_level_values(col_name), f"Cell {cell} not in input data"
 
-    only_train = allData[allData.index.get_level_values("unit").isin(args.only_train)]
-    allData = allData[~allData.index.get_level_values("unit").isin(args.only_train)]
+    only_train = allData[allData.index.get_level_values(col_name).isin(args.only_train)]
+    allData = allData[~allData.index.get_level_values(col_name).isin(args.only_train)]
+
 
     path_prefix += f"{args.seed}Seed{os.path.splitext(os.path.basename(args.original_mat))[0]}Source"
 
@@ -93,3 +102,15 @@ def validate_inputs(technique='NTK', mixed_prior=False):
         return allData, only_train, method, args.seed, os.path.join(args.preds_path, path_prefix), args.plot, args.threshold
     else:
         return allData, only_train, method, args.seed, os.path.join(args.preds_path, path_prefix), args.plot, args.prior
+
+# TODO: we need to allow both SMILES and unit... different datasets...
+def validate_zeolite_inputs(technique="NTK", mixed_prior=False, col_name="unit"):
+    allData, only_train, method, seed, preds_path, plot, prior = validate_inputs(
+        technique, mixed_prior, col_name="SMILES"
+    )
+    args = cli()
+    # Secondary Matrix
+    if args.secondary_mat == None or not os.path.exists(args.secondary_mat):
+        raise AssertionError(f"Path to matrix, {args.secondary_mat} does not exist")
+    secondaryData = pd.read_pickle(args.secondary_mat)
+    return allData, secondaryData, only_train, method, seed, preds_path, plot, prior

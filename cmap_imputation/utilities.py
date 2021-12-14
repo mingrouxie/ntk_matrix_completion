@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pdb
 
 from sklearn.model_selection import KFold
 from scipy.spatial.distance import cosine
@@ -30,17 +31,23 @@ def train_test_w_controls(allData, drugs_in_train, seed):
     return train, test
 
 
-def get_cosims(true, pred):
+def get_cosims(true, pred, bypass_epsilon_check = False):
     cosims = []
 
     for row_id in range(true.shape[0]):
         i = true[row_id]
         j = pred[row_id]
 
-        if not(np.abs(np.sum(i)) <= 1e-8 or np.abs(np.sum(j)) <= 1e-8):
+        if bypass_epsilon_check or (not(np.abs(np.sum(i)) <= 1e-8 or np.abs(np.sum(j)) <= 1e-8)):
             cosims.append(1 - cosine(i, j))
 
     return cosims
+
+def get_splits_in_zeolite_type(allData, k=10, seed=5):
+    fold_iterator = KFold(n_splits=k, shuffle=True, random_state=seed).split(allData)
+    for _fold in range(k):
+        train_idx, test_idx = next(fold_iterator)
+        yield allData.iloc[train_idx], allData.iloc[test_idx]
 
 
 def get_splits_in_cell_type(allData, k=10, seed=5):
@@ -68,3 +75,16 @@ def get_splits_in_cell_type(allData, k=10, seed=5):
                 test = test.append(dataSlice.iloc[test_idx])
 
         yield train, test
+    
+# TODO: I don't love this built in assumption that all 2D matrices must be zeolite
+# and that all 3D matrices must be CMAP... We can do better...
+def get_splits(allData, k=10, seed=5):
+    if len(allData.shape) == 3:
+        return get_splits_in_cell_type(allData, k=10, seed =5)
+    elif len(allData.shape) == 2:
+        return get_splits_in_zeolite_type(allData, k=10, seed =5)
+    else:
+        raise ValueError(
+            "Only matrices of 2 or 3 dimensions are currently supported, "+
+            "but further data shapes can easily be implemented."
+        )

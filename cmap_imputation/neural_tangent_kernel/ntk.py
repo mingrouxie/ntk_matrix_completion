@@ -3,6 +3,9 @@ import pathlib
 import os
 from prior import make_prior
 from cli import validate_inputs
+import pdb
+import matplotlib.pyplot as plt
+import matplotlib as mpl
 
 import numpy as np
 import pandas as pd
@@ -21,6 +24,7 @@ from singular_graphics import plot_graphics
 PI = np.pi
 
 
+# k(1) if exactly the same indices. k(0) if row is the same but not column, 0 else
 def kappa(x):
     return (x * (PI - np.arccos(x)) + np.sqrt(1 - np.square(x))) / PI +\
            (x * (PI - np.arccos(x))) / PI
@@ -33,24 +37,45 @@ def predict_space_opt_CMAP_data(all_data, mask, num_test_rows, X):
     all_data = all_data.T
     mask = mask.T
 
+    # num_observedd is 12876 or roughly 9/10 of 14336 total cells...
     num_observed = int(np.sum(mask[0:1, :]))
     num_missing = mask[0:1, :].shape[-1] - num_observed
 
     K_matrix = np.zeros((num_observed, num_observed))
     k_matrix = np.zeros((num_observed, num_missing))
 
+    # observed_data should not have the same dimensions as all_data
     observed_data = all_data[:, :num_observed]
     X_cross_terms = kappa(np.clip(X @ X.T, -1, 1))
 
     K_matrix[:, :] = X_cross_terms[:num_observed, :num_observed]
+    # this is all zeroes in the identity matrix case???
+    # np.all(k_matrix[:, :] == 0)
+    # plot_matrix(X, 'one_hot_cell_prior', vmin=0, vmax=1)
     k_matrix[:, :] = X_cross_terms[:num_observed, num_observed: num_observed + num_missing]
+    # pdb.set_trace()
 
     results = np.linalg.solve(K_matrix, observed_data.T).T @ k_matrix
+    # pdb.set_trace()
 
     assert results.shape == (all_data.shape[0], num_test_rows), "Results malformed"
 
     return results.T
 
+def plot_matrix(M, file_name, mask=None, vmin=16, vmax=23):
+    fig, ax = plt.subplots()
+    cmap = mpl.cm.get_cmap()
+    cmap.set_bad(color="white")
+    if mask is not None:
+        def invert_binary_mask(m):
+            return np.logical_not(m).astype(int)
+        inverted_mask = invert_binary_mask(mask)
+        masked_M = np.ma.masked_where(inverted_mask, M)
+    else:
+        masked_M = M
+    im = ax.imshow(masked_M, interpolation="nearest", cmap=cmap, vmin=vmin, vmax=vmax)
+    fig.colorbar(im)
+    fig.savefig(file_name + ".png", dpi=150)
 
 if __name__ == '__main__':
     print("Modify make_prior in prior.py to add a custom prior! There are a few choices to start.")
