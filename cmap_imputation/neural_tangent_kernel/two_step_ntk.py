@@ -208,9 +208,9 @@ def run_ntk_binary_classification(
     SEED,
     path_prefix,
     plot,
-    prior,
+    prior=None,
     # TODO: get rid of this argument and just use the fed in method argument.
-    # prior_method="skinny_identity",  # "CustomOSDA",
+    osda_feature="volume",  # "CustomOSDA",
 ):
     path_prefix += f"{prior}Prior"
     if method[0] == "kfold":
@@ -241,8 +241,9 @@ def run_ntk_binary_classification(
             train,
             only_train,
             test,
-            method="CustomZeolite", #"CustomOSDA",
+            method="CustomOSDA",  # "CustomOSDA",
             normalization_factor=NORM_FACTOR,
+            osda_feature=osda_feature,
         )
         # okay so the bottom 1/10 of mask and all_data are just all zeros.
         # TODO: take out this normalize intermediate
@@ -312,131 +313,13 @@ def run_ntk_binary_classification(
         " total recall: ",
         recall,
     )
-    plot_matrix(all_true, "binary_classification_truth", vmin=0, vmax=1)
-    plot_matrix(ntk_predictions, "binary_classification_prediction", vmin=0, vmax=1)
-    return ntk_predictions
+    # plot_matrix(all_true, "binary_classification_truth", vmin=0, vmax=1)
+    # plot_matrix(ntk_predictions, "binary_classification_prediction", vmin=0, vmax=1)
+    # return ntk_predictions
 
-
-def run_ntk_binary_classification_from_two_orientations(
-    allData,
-    only_train,
-    method,
-    SEED,
-    path_prefix,
-    plot,
-    prior,
-):
-    path_prefix += f"{prior}Prior"
-    if method[0] == "kfold":
-        iterator = tqdm(get_splits(allData, k=method[1], seed=SEED), total=method[1])
-    elif method[0] == "sparse":
-        iterator = tqdm(
-            [train_test_w_controls(allData, drugs_in_train=method[1], seed=SEED)],
-            total=1,
-        )
-    else:
-        raise AssertionError("Unknown method")
-
-    all_true = None  # Ground truths for all fold(s)
-    all_metrics_ntk = None  # Metrics (R^2, Cosine Similarity, Pearson R) for each entry
-    ntk_predictions = None  # Predictions for all fold(s)
-    splits = None  # Per-fold metrics
-    # Iterate over all predictions and populate metrics matrices
-    for train, test in iterator:
-        all_data = pd.concat([train, test]).to_numpy()
-        ##### SAFETY
-        all_data[train.shape[0] :, :] = 0
-        ##### SAFETY
-        mask = np.ones_like(all_data)
-        mask[len(train) :, :] = 0
-        # TODO: take this method declaration somewhere else.
-        regular_X = make_prior(
-            train,
-            only_train,
-            test,
-            method="CustomOSDA",
-            normalization_factor=NORM_FACTOR,
-        )
-        transpose_X = make_prior(
-            train.T,
-            only_train.T,
-            test.T,
-            method="CustomZeolite",
-            normalization_factor=NORM_FACTOR,
-            test_train_axis=1,
-        ).T
-        pdb.set_trace()
-        # okay so the bottom 1/10 of mask and all_data are just all zeros.
-        # TODO: take out this normalize intermediate
-        # results_ntk = predict_space_opt_CMAP_data(
-        #     all_data, mask, len(test), X=regular_X
-        # )
-        transpose_results_ntk = predict_space_opt_CMAP_data(
-            all_data, mask, len(test), X=transpose_X
-        )
-
-        # Take the average...
-        pdb.set_trace()
-        results_ntk = (results_ntk + transpose_results_ntk) / 2
-
-        # TADA! binary classification in full swing :^)
-        results_ntk = results_ntk.round()
-
-        prediction_ntk = pd.DataFrame(
-            data=results_ntk, index=test.index, columns=test.columns
-        )
-        # okay ntk_predictions is actuallly useful. I admit it.
-        ntk_predictions = (
-            prediction_ntk
-            if ntk_predictions is None
-            else pd.concat([ntk_predictions, prediction_ntk])
-        )
-
-        true = test.to_numpy()
-
-        correct = results_ntk[results_ntk == true]
-        incorrect = results_ntk[results_ntk != true]
-        new_splits = pd.DataFrame(
-            data=np.column_stack(
-                [
-                    len(correct[correct == 1]),
-                    len(correct[correct == 0]),
-                    # the prediction was 1 but true was 0
-                    len(incorrect[incorrect == 1]),
-                    # the prediction was 0 but true was 1
-                    len(incorrect[incorrect == 0]),
-                    len(train),
-                    len(test),
-                ]
-            )
-        )
-        new_splits.columns = [
-            "true_positive",
-            "true_negative",
-            "false_positive",
-            "false_negative",
-            "train_size",
-            "test_size",
-        ]
-        splits = (
-            new_splits
-            if splits is None
-            else pd.concat([splits, new_splits], ignore_index=True)
-        )
-        all_true = pd.concat([all_true, test]) if all_true is not None else test
-    total_accuracy = (1.0 * sum(splits.true_positive) + sum(splits.true_negative)) / (
-        sum(splits.false_positive)
-        + sum(splits.false_negative)
-        + sum(splits.true_positive)
-        + sum(splits.true_negative)
-    )
-    precision = (1.0 * sum(splits.true_positive)) / (
-        sum(splits.false_positive) + sum(splits.true_positive)
-    )
-    recall = (1.0 * sum(splits.true_positive)) / (
-        sum(splits.true_positive) + sum(splits.false_negative)
-    )
-    print(
+    plot_matrix(all_true, "binary_classification_truth_" + osda_feature, vmin=0, vmax=1)
+    plot_matrix(ntk_predictions, "binary_classification_prediction_" + osda_feature, vmin=0, vmax=1)
+    return (
         "total accuracy: ",
         total_accuracy,
         " total precision: ",
@@ -444,8 +327,6 @@ def run_ntk_binary_classification_from_two_orientations(
         " total recall: ",
         recall,
     )
-    plot_matrix(all_true, "binary_classification_truth", vmin=0, vmax=1)
-    plot_matrix(ntk_predictions, "binary_classification_prediction", vmin=0, vmax=1)
 
 
 if __name__ == "__main__":
@@ -471,22 +352,43 @@ if __name__ == "__main__":
     # run_ntk_binary_classification_from_two_orientations
     # TODO: Be very careful with this prior...
     # don't let the legacy code add it in some weird way..
-    ntk_predictions = run_ntk_binary_classification(
-        binaryData,
-        only_train,
-        method,
-        SEED,
-        path_prefix,
-        plot,
-        prior=None,
-    )
-    # run_ntk(
-    #     allData,
+    features_to_test = [
+        "mol_weights",
+        "volume",
+        "normalized_num_rotatable_bonds",
+        "formal_charge",
+        "asphericity",
+        "eccentricity",
+        "inertial_shape_factor",
+        "spherocity",
+        "gyration_radius",
+        "pmi1",
+        "pmi2",
+        "pmi3",
+        "npr1",
+        "npr2",
+        "free_sas",
+        "bertz_ct",
+    ]
+    results = {}
+    for feature in features_to_test:
+        results[feature] = run_ntk_binary_classification(
+            binaryData,
+            only_train,
+            method,
+            SEED,
+            path_prefix,
+            plot,
+            osda_feature=feature,
+        )
+    print(results)
+
+    # run_ntk_binary_classification(
+    #     binaryData,
     #     only_train,
     #     method,
     #     SEED,
     #     path_prefix,
     #     plot,
-    #     prior,
-    #     binary_classification=False,
+    #     osda_feature='volume',
     # )

@@ -6,6 +6,11 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import pdb
+from rdkit import Chem
+from rdkit.Chem import rdFreeSASA, Descriptors, Descriptors3D, AllChem, Draw
+from functools import lru_cache
+from tqdm import tqdm
+
 
 from sklearn.preprocessing import normalize, OneHotEncoder
 
@@ -49,34 +54,141 @@ def osda_prior_helper(all_data_df, column_name="Volume (Angstrom3)", normalize=T
         ]
     )
 
-def secondary_osda_prior_helper(target_codes, normalize=True):
-    # TODO: this is horrible. PLEASE PLEASE FIX!
-    # TODO TODO: this is so so so gross...
-    olivetti_table = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/Jensen_et_al_CentralScience_OSDA_Zeolite_data.tsv"
-    olivetti_df = pd.read_csv(olivetti_table, index_col=0, delimiter="\t")
-    pdb.set_trace()
-    metadata_by_zeolite = olivetti_df.set_index("Code").T.to_dict()
-    for olivetti_code, target_code in OLIVETTI_CODE_SWITCH.items():
-        metadata_by_zeolite[target_code] = metadata_by_zeolite.pop(olivetti_code)
 
-    # Double check that all target codes have corresponding data...
-    lookup_codes = list(metadata_by_zeolite.keys()) + list(
-        ZEOLITE_SPHERE_DIAMETER_LOOKUP.keys()
+# TODO: Conformers, WHIM PCA, GetMorganFingerprint, bertz_ct
+# Also TODO: figure out how to get deterministic results or at least less variance...
+# Also also TODO: cache this.
+def smile_to_property(smile, debug=False):
+    properties = {}
+    m = Chem.MolFromSmiles(smile)
+    num_bonds = len(Chem.RemoveAllHs(m).GetBonds())
+    m2 = Chem.AddHs(m)
+    rc = AllChem.EmbedMolecule(m2)
+    if rc < 0:
+        rc = Chem.AllChem.EmbedMolecule(
+            m2,
+            useRandomCoords=True,
+            enforceChirality=False,
+            ignoreSmoothingFailures=False,
+        )
+    try:
+        AllChem.MMFFOptimizeMolecule(m2)
+    except:
+        # Some molecules just can't be embedded it seems
+        return properties
+    properties["whims"] = Chem.rdMolDescriptors.CalcWHIM(m2)
+    properties["mol_weights"] = Descriptors.MolWt(m2)
+    properties["volume"] = AllChem.ComputeMolVolume(m2)
+    # Note https://issueexplorer.com/issue/rdkit/rdkit/4524
+    properties["normalized_num_rotatable_bonds"] = (
+        1.0 * Chem.rdMolDescriptors.CalcNumRotatableBonds(m2) / num_bonds
     )
-    assert (
-        len(np.setdiff1d(target_codes, lookup_codes)) == 0
-    ), "all target codes must be covered."
+    properties["formal_charge"] = Chem.GetFormalCharge(m2)
+    if debug:
+        print(
+            "volume ",
+            properties["volume"],
+            "mol_weights ",
+            properties["mol_weights"],
+            "normalized_num_rotatable_bonds",
+            properties["normalized_num_rotatable_bonds"],
+            "formal_charge",
+            properties["formal_charge"],
+        )
 
-    prior = [
-        metadata_by_zeolite[code]["inc_diameter"]
-        if code in metadata_by_zeolite
-        else ZEOLITE_SPHERE_DIAMETER_LOOKUP[code]
-        for code in target_codes
-    ]
-    max_diameter = max(prior) if normalize else 1.0
-    prior = np.array([[1.0 * diameter / max_diameter] for diameter in prior])
-    return prior
+    # these may be useless.
+    # 0.5 * ((pm3-pm2)**2 + (pm3-pm1)**2 + (pm2-pm1)**2)/(pm1**2+pm2**2+pm3**2)
+    properties["asphericity"] = Descriptors3D.Asphericity(m2)
+    # sqrt(pm3**2 -pm1**2) / pm3**2
+    properties["eccentricity"] = Descriptors3D.Eccentricity(m2)
+    # pm2 / (pm1*pm3)
+    properties["inertial_shape_factor"] = Descriptors3D.InertialShapeFactor(m2)
+    # 3 * pm1 / (pm1+pm2+pm3) where the moments are calculated without weights
+    properties["spherocity"] = Descriptors3D.SpherocityIndex(m2)
+    # for planar molecules: sqrt( sqrt(pm3*pm2)/MW )
+    # for nonplanar molecules: sqrt( 2*pi*pow(pm3*pm2*pm1,1/3)/MW )
+    properties["gyration_radius"] = Descriptors3D.RadiusOfGyration(m2)
+    if debug:
+        print(
+            "asphericity ",
+            properties["asphericity"],
+            "eccentricity ",
+            properties["eccentricity"],
+            ", inertial_shape_factor ",
+            properties["inertial_shape_factor"],
+            "spherocity ",
+            properties["spherocity"],
+            "gyration_radius ",
+            properties["gyration_radius"],
+        )
 
+    # first to third principal moments of inertia
+    properties["pmi1"] = Descriptors3D.PMI1(m2)
+    properties["pmi2"] = Descriptors3D.PMI2(m2)
+    properties["pmi3"] = Descriptors3D.PMI3(m2)
+    if debug:
+        print(
+            "pmi1 ",
+            properties["pmi1"],
+            "pmi2 ",
+            properties["pmi2"],
+            ", pmi3 ",
+            properties["pmi3"],
+        )
+
+    # normalized principal moments ratio
+    # https://doi.org/10.1021/ci025599w
+    properties["npr1"] = Descriptors3D.NPR1(m2)
+    properties["npr2"] = Descriptors3D.NPR2(m2)
+    if debug:
+        print("npr1 ", properties["npr1"], ", npr2 ", properties["npr2"])
+
+    radii = rdFreeSASA.classifyAtoms(m2)
+    properties["free_sas"] = rdFreeSASA.CalcSASA(m2, radii)
+    if debug:
+        print("free_sas ", properties["free_sas"])
+
+    # this quantifies the complexity of a molecule?
+    properties["bertz_ct"] = Chem.GraphDescriptors.BertzCT(m2)
+    # do we want other weird things like HallKierAlpha?
+    # I want some measure of flexibility. It seems like they calculated that by taking all the conformers.
+    # https://pubs.acs.org/doi/pdf/10.1021/acs.jcim.6b00565?rand=xovj8tmp
+
+    if debug:
+        Draw.MolToFile(m2, "test3.o.png")
+    return properties
+
+
+# TODO: Come back for the WHIMs list of floats can't be taken an average of apparently...
+@lru_cache(maxsize=16384)
+def average_properties(smile, num_runs=1):
+    df = pd.DataFrame([smile_to_property(smile) for i in range(num_runs)])
+    return dict(df.mean())
+
+
+def secondary_osda_prior_helper(
+    all_data_df, column_name="Volume (Angstrom3)", normalize=True
+):
+    # still need:
+    # rog
+    # Charge
+    # min_vol_conformer_pca_whim, all_conformer_whim
+    # WHIM descriptors https://onlinelibrary.wiley.com/doi/abs/10.1002/qsar.200510159
+    prior, bad_apples = np.array([]), np.array([])
+    for smile in tqdm(all_data_df.reset_index().SMILES):
+        # Some prior values might be 0.0 if the smiles string couldn't be embedded.
+        properties = average_properties(smile)
+        prior = np.append(prior, properties.get(column_name, 0.0))
+        if len(properties) == 0:
+            bad_apples = np.append(bad_apples, smile)
+    print(
+        " we got this many bad apples ",
+        len(bad_apples),
+        " check them out: ",
+        bad_apples,
+    )
+    max_volume = max(prior) if normalize else 1.0
+    return np.array([[1.0 * p / max_volume] for p in prior])
 
 
 # TODO: make this a frozen dict (https://pypi.org/project/frozendict/)
@@ -187,6 +299,7 @@ def make_prior(
     method="identity",
     normalization_factor=1.5,
     test_train_axis=0,
+    osda_feature=None,
 ):
     assert method in VALID_METHODS, f"Invalid method used, pick one of {VALID_METHODS}"
     if test_train_axis == 0:
@@ -226,10 +339,10 @@ def make_prior(
     elif method == "CustomOSDA":
         # Volume (Angstrom3)
         # Axis 2 (Angstrom)
-        prior = osda_prior_helper(
-            all_data_df, column_name="Axis 2 (Angstrom)", normalize=True
+        # all_data_df = all_data_df.head(100)
+        prior = secondary_osda_prior_helper(
+            all_data_df, column_name=osda_feature, normalize=True
         )
-
     elif method == "CustomZeolite":
         prior = zeolite_prior_helper(target_codes=all_data_df.index, normalize=True)
 
