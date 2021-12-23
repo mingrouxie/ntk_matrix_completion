@@ -138,7 +138,9 @@ def osda_prior_helper(all_data_df, num_runs):
     for smile in tqdm(all_data_df.reset_index().SMILES):
         # Some prior values might be 0.0 if the smiles string couldn't be embedded.
         properties = average_properties(smile, num_runs)
-        prior = prior.append(properties, ignore_index=True)
+        series = pd.Series(properties)
+        series.name = smile
+        prior = prior.append(series)
         if len(properties) == 0:
             bad_apples = np.append(bad_apples, smile)
     print(
@@ -147,6 +149,8 @@ def osda_prior_helper(all_data_df, num_runs):
         " check them out: ",
         bad_apples,
     )
+    # Fill in the NaN values for molecules which couldn't be embedded.
+    prior = prior.fillna(0)
     return prior
 
 
@@ -163,10 +167,10 @@ if __name__ == "__main__":
     print(
         "Modify make_prior in prior.py to add a custom prior! There are a few choices to start."
     )
-    num_runs = 1
+    num_runs = 10
     input = '/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/zeoliteNonbindingTensor.pkl'
     all_data_df = pd.read_pickle(input)
-    save_file = "precomputed_OSDA_prior.pkl"
+    save_file = "precomputed_OSDA_prior_10_run_average.pkl"
     prior = osda_prior_helper(all_data_df, num_runs)
     pdb.set_trace()
     save_matrix(prior, save_file)

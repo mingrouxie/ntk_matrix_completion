@@ -13,6 +13,8 @@ python means/means.py -s 149
 # Train NTK with Zeolite dataset for 10-Fold 
 # this is the one with really skinny matrices...
 # python neural_tangent_kernel/two_step_ntk.py -i /Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/zeoliteOSDAIndexedMatrix.pkl -i2 /Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/zeoliteOSDANonbindingIndexedMatrix.pkl -r -o
+# python neural_tangent_kernel/two_step_ntk.py -i /Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/zeoliteOSDAIndexedMatrix.pkl -i2 /Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/smaller_skinny_matrix.pkl -r -o
+
 
 # This is the one with regular matrices
 python neural_tangent_kernel/two_step_ntk.py -i /Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/zeoliteTensor.pkl -i2 /Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/zeoliteNonbindingTensor.pkl -r -o

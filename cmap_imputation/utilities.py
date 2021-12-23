@@ -31,13 +31,15 @@ def train_test_w_controls(allData, drugs_in_train, seed):
     return train, test
 
 
-def get_cosims(true, pred, bypass_epsilon_check = False):
+def get_cosims(true, pred, bypass_epsilon_check = False, filter_value = None):
     cosims = []
 
     for row_id in range(true.shape[0]):
         i = true[row_id]
         j = pred[row_id]
-
+        if filter_value:
+            j = j[i != filter_value]
+            i = i[i != filter_value]
         if bypass_epsilon_check or (not(np.abs(np.sum(i)) <= 1e-8 or np.abs(np.sum(j)) <= 1e-8)):
             cosims.append(1 - cosine(i, j))
 

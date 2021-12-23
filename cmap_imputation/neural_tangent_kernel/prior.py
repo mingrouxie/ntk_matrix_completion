@@ -31,247 +31,145 @@ VALID_METHODS = {
     "skinny_identity",
 }
 
-
-def osda_prior_helper(all_data_df, column_name="Volume (Angstrom3)", normalize=True):
-    # TODO: this is horrible. PLEASE PLEASE FIX!
-    # TODO TODO: this is so so so gross...
-    rafa_data = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/completeZeoliteData.pkl"
-    if not os.path.exists(rafa_data):
-        raise AssertionError(f"Path to matrix, {rafa_data} does not exist")
-    osda_df = pd.read_pickle(rafa_data)
-    # zeolite_data.set_index('SMILES')
-    metadata_by_osda = osda_df.set_index("SMILES").T.to_dict()
-    # 1108 unique volume values...
-    max_volume = (
-        max([dict[column_name] for dict in metadata_by_osda.values()])
-        if normalize
-        else 1.0
-    )
-    return np.array(
-        [
-            [1.0 * metadata_by_osda[smile][column_name] / max_volume]
-            for smile in all_data_df.reset_index().SMILES
-        ]
-    )
-
-
-# TODO: Conformers, WHIM PCA, GetMorganFingerprint, bertz_ct
-# Also TODO: figure out how to get deterministic results or at least less variance...
-# Also also TODO: cache this.
-def smile_to_property(smile, debug=False):
-    properties = {}
-    m = Chem.MolFromSmiles(smile)
-    num_bonds = len(Chem.RemoveAllHs(m).GetBonds())
-    m2 = Chem.AddHs(m)
-    rc = AllChem.EmbedMolecule(m2)
-    if rc < 0:
-        rc = Chem.AllChem.EmbedMolecule(
-            m2,
-            useRandomCoords=True,
-            enforceChirality=False,
-            ignoreSmoothingFailures=False,
-        )
-    try:
-        AllChem.MMFFOptimizeMolecule(m2)
-    except:
-        # Some molecules just can't be embedded it seems
-        return properties
-    properties["whims"] = Chem.rdMolDescriptors.CalcWHIM(m2)
-    properties["mol_weights"] = Descriptors.MolWt(m2)
-    properties["volume"] = AllChem.ComputeMolVolume(m2)
-    # Note https://issueexplorer.com/issue/rdkit/rdkit/4524
-    properties["normalized_num_rotatable_bonds"] = (
-        1.0 * Chem.rdMolDescriptors.CalcNumRotatableBonds(m2) / num_bonds
-    )
-    properties["formal_charge"] = Chem.GetFormalCharge(m2)
-    if debug:
-        print(
-            "volume ",
-            properties["volume"],
-            "mol_weights ",
-            properties["mol_weights"],
-            "normalized_num_rotatable_bonds",
-            properties["normalized_num_rotatable_bonds"],
-            "formal_charge",
-            properties["formal_charge"],
-        )
-
-    # these may be useless.
-    # 0.5 * ((pm3-pm2)**2 + (pm3-pm1)**2 + (pm2-pm1)**2)/(pm1**2+pm2**2+pm3**2)
-    properties["asphericity"] = Descriptors3D.Asphericity(m2)
-    # sqrt(pm3**2 -pm1**2) / pm3**2
-    properties["eccentricity"] = Descriptors3D.Eccentricity(m2)
-    # pm2 / (pm1*pm3)
-    properties["inertial_shape_factor"] = Descriptors3D.InertialShapeFactor(m2)
-    # 3 * pm1 / (pm1+pm2+pm3) where the moments are calculated without weights
-    properties["spherocity"] = Descriptors3D.SpherocityIndex(m2)
-    # for planar molecules: sqrt( sqrt(pm3*pm2)/MW )
-    # for nonplanar molecules: sqrt( 2*pi*pow(pm3*pm2*pm1,1/3)/MW )
-    properties["gyration_radius"] = Descriptors3D.RadiusOfGyration(m2)
-    if debug:
-        print(
-            "asphericity ",
-            properties["asphericity"],
-            "eccentricity ",
-            properties["eccentricity"],
-            ", inertial_shape_factor ",
-            properties["inertial_shape_factor"],
-            "spherocity ",
-            properties["spherocity"],
-            "gyration_radius ",
-            properties["gyration_radius"],
-        )
-
-    # first to third principal moments of inertia
-    properties["pmi1"] = Descriptors3D.PMI1(m2)
-    properties["pmi2"] = Descriptors3D.PMI2(m2)
-    properties["pmi3"] = Descriptors3D.PMI3(m2)
-    if debug:
-        print(
-            "pmi1 ",
-            properties["pmi1"],
-            "pmi2 ",
-            properties["pmi2"],
-            ", pmi3 ",
-            properties["pmi3"],
-        )
-
-    # normalized principal moments ratio
-    # https://doi.org/10.1021/ci025599w
-    properties["npr1"] = Descriptors3D.NPR1(m2)
-    properties["npr2"] = Descriptors3D.NPR2(m2)
-    if debug:
-        print("npr1 ", properties["npr1"], ", npr2 ", properties["npr2"])
-
-    radii = rdFreeSASA.classifyAtoms(m2)
-    properties["free_sas"] = rdFreeSASA.CalcSASA(m2, radii)
-    if debug:
-        print("free_sas ", properties["free_sas"])
-
-    # this quantifies the complexity of a molecule?
-    properties["bertz_ct"] = Chem.GraphDescriptors.BertzCT(m2)
-    # do we want other weird things like HallKierAlpha?
-    # I want some measure of flexibility. It seems like they calculated that by taking all the conformers.
-    # https://pubs.acs.org/doi/pdf/10.1021/acs.jcim.6b00565?rand=xovj8tmp
-
-    if debug:
-        Draw.MolToFile(m2, "test3.o.png")
-    return properties
-
-
-# TODO: Come back for the WHIMs list of floats can't be taken an average of apparently...
-@lru_cache(maxsize=16384)
-def average_properties(smile, num_runs=1):
-    df = pd.DataFrame([smile_to_property(smile) for i in range(num_runs)])
-    return dict(df.mean())
-
-
-def secondary_osda_prior_helper(
-    all_data_df, column_name="Volume (Angstrom3)", normalize=True
-):
-    # still need:
-    # rog
-    # Charge
-    # min_vol_conformer_pca_whim, all_conformer_whim
-    # WHIM descriptors https://onlinelibrary.wiley.com/doi/abs/10.1002/qsar.200510159
-    prior, bad_apples = np.array([]), np.array([])
-    for smile in tqdm(all_data_df.reset_index().SMILES):
-        # Some prior values might be 0.0 if the smiles string couldn't be embedded.
-        properties = average_properties(smile)
-        prior = np.append(prior, properties.get(column_name, 0.0))
-        if len(properties) == 0:
-            bad_apples = np.append(bad_apples, smile)
-    print(
-        " we got this many bad apples ",
-        len(bad_apples),
-        " check them out: ",
-        bad_apples,
-    )
-    max_volume = max(prior) if normalize else 1.0
-    return np.array([[1.0 * p / max_volume] for p in prior])
-
-
-# TODO: make this a frozen dict (https://pypi.org/project/frozendict/)
-# This is a lookup for all the maximum sphere diameters of zeolites that are not
-# present in olivetti et al.'s data.
-ZEOLITE_SPHERE_DIAMETER_LOOKUP = {
-    "AET": 8.41,
-    "AFG": 6.37,
-    "AFT": 7.75,
-    "BOF": 5.58,
-    "BRE": 5.29,
-    "CAN": 6.27,
-    "DAC": 5.28,
-    "EPI": 5.47,
-    "EWO": 5.41,
-    "FAR": 6.36,
-    "FRA": 6.67,
-    "GIU": 6.32,
-    "HEU": 5.97,
-    "IFY": 6.94,
-    "JNT": 4.72,
-    "JOZ": 4.92,
-    "JSN": 5.12,
-    "JSR": 7.83,
-    "LIO": 6.05,
-    "LOV": 5.15,
-    "LTF": 8.16,
-    "MAR": 6.35,
-    "MEP": 5.49,
-    "MSO": 7.23,
-    "NPO": 4.23,
-    "NPT": 10.28,
-    "OBW": 9.26,
-    "OKO": 6.7,
-    "OSI": 6.66,
-    "OSO": 6.07,
-    "PCR": 6.03,
-    "PCS": 6.84,
-    "POR": 6.14,
-    "SBS": 11.45,
-    "SBT": 11.17,
-    "TER": 6.94,
-    "TOL": 6.37,
-    "TSC": 16.45,
-    "UEI": 5.6,
-    "VNI": 4.8,
+ZEOLITE_PRIOR_LOOKUP = {
+    "a": 1.0,
+    "b": 1.0,
+    "c": 1.0,
+    "alpha": 1.0,
+    "betta": 1.0,
+    "gamma": 1.0,
+    "volume": 1.0,
+    "rdls": 1.0,
+    "framework_density": 1.0,
+    "td_10": 1.0,
+    "td": 1.0,
+    "included_sphere_diameter": 1.0,
+    "diffused_sphere_diameter_a": 1.0,
+    "diffused_sphere_diameter_b": 1.0,
+    "diffused_sphere_diameter_c": 1.0,
+    "accessible_volume": 1.0,
 }
 
-OLIVETTI_CODE_SWITCH = {
-    "*BEA": "BEA",
+OSDA_PRIOR_LOOKUP = {
+    "mol_weights": 1.0,
+    "volume": 1.0,
+    "normalized_num_rotatable_bonds": 1.0,
+    "formal_charge": 1.0,
+    "asphericity": 1.0,
+    "eccentricity": 1.0,
+    "inertial_shape_factor": 1.0,
+    "spherocity": 1.0,
+    "gyration_radius": 1.0,
+    "pmi1": 1.0,
+    "pmi2": 1.0,
+    "pmi3": 1.0,
+    "npr1": 1.0,
+    "npr2": 1.0,
+    "free_sas": 1.0,
+    "bertz_ct": 1.0,
+}
+ZEOLITE_PRIOR_FILE = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/scraped_zeolite_data.pkl"
+OSDA_PRIOR_FILE = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/precomputed_OSDA_prior.pkl"
+
+ZEOLITE_PRIOR_MAP = {
     "*CTH": "CTH",
     "*MRE": "MRE",
+    "*PCS": "PCS",
     "*STO": "STO",
     "*UOE": "UOE",
+    "*BEA": "BEA",
 }
 
+# is_NaN = precomputed_prior.isnull()
+# (Pdb) row_has_NaN = is_NaN.any(axis=1)
+# (Pdb) rows_with_NaN = precomputed_prior[row_has_NaN]
 
-def zeolite_prior_helper(target_codes, normalize=True):
-    # TODO: this is horrible. PLEASE PLEASE FIX!
-    # TODO TODO: this is so so so gross...
-    olivetti_table = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/Jensen_et_al_CentralScience_OSDA_Zeolite_data.tsv"
-    olivetti_df = pd.read_csv(olivetti_table, index_col=0, delimiter="\t")
-    metadata_by_zeolite = olivetti_df.set_index("Code").T.to_dict()
-    for olivetti_code, target_code in OLIVETTI_CODE_SWITCH.items():
-        metadata_by_zeolite[target_code] = metadata_by_zeolite.pop(olivetti_code)
 
-    # Double check that all target codes have corresponding data...
-    lookup_codes = list(metadata_by_zeolite.keys()) + list(
-        ZEOLITE_SPHERE_DIAMETER_LOOKUP.keys()
+def load_prior(
+    target_index,
+    column_weights,
+    precomputed_file_name,
+    identity_weight=0.01,
+    normalize=True,
+    prior_index_map=None,
+):
+    precomputed_prior = pd.read_pickle(precomputed_file_name)
+    if prior_index_map:
+        x = lambda i: prior_index_map[i] if i in prior_index_map else i
+        precomputed_prior.index = precomputed_prior.index.map(x)
+    precomputed_prior = precomputed_prior.reindex(target_index)
+    precomputed_prior = precomputed_prior.apply(pd.to_numeric)
+    precomputed_prior = precomputed_prior.fillna(0.0)
+
+    # Normalize down each column to between 0 & 1
+    if normalize:
+        precomputed_prior = precomputed_prior.apply(lambda x: x / x.max(), axis=0)
+    # Now time to weigh each column, taking into account identity_weight to make sure
+    # later when we add the identity matrix we don't go over 1.0 total per row...
+    precomputed_prior = precomputed_prior.filter(items=list(column_weights.keys()))
+    normalization_factor = sum(column_weights.values()) + identity_weight
+    results = precomputed_prior.apply(
+        lambda x: x * column_weights[x.name] / normalization_factor, axis=0
     )
-    assert (
-        len(np.setdiff1d(target_codes, lookup_codes)) == 0
-    ), "all target codes must be covered."
+    return results.to_numpy()
 
-    prior = [
-        metadata_by_zeolite[code]["inc_diameter"]
-        if code in metadata_by_zeolite
-        else ZEOLITE_SPHERE_DIAMETER_LOOKUP[code]
-        for code in target_codes
-    ]
-    max_diameter = max(prior) if normalize else 1.0
-    prior = np.array([[1.0 * diameter / max_diameter] for diameter in prior])
-    return prior
+
+def osda_prior(
+    all_data_df,
+    identity_weight=0.01,
+    normalize=True,
+):
+    return load_prior(
+        all_data_df.index,
+        OSDA_PRIOR_LOOKUP,
+        OSDA_PRIOR_FILE,
+        identity_weight,
+        normalize,
+    )
+
+
+def zeolite_prior(
+    all_data_df,
+    feature_lookup,
+    identity_weight=0.01,
+    normalize=True,
+):
+    return load_prior(
+        all_data_df.index,
+        ZEOLITE_PRIOR_LOOKUP if not feature_lookup else feature_lookup,
+        ZEOLITE_PRIOR_FILE,
+        identity_weight,
+        normalize,
+        ZEOLITE_PRIOR_MAP,
+    )
+
+
+def osda_zeolite_combined_prior(
+    all_data_df,
+    identity_weight=0.01,
+    normalize=True,
+):
+    # Give identity weight more so we can normalize both to be less than 1
+    identity_weight += max(
+        np.array(list(OSDA_PRIOR_LOOKUP.values())).sum(),
+        np.array(list(ZEOLITE_PRIOR_LOOKUP.values())).sum(),
+    )
+    osda_prior = load_prior(
+        [i[0] for i in all_data_df.index],
+        OSDA_PRIOR_LOOKUP,
+        OSDA_PRIOR_FILE,
+        identity_weight,
+        normalize,
+    )
+    zeolite_prior = load_prior(
+        [i[1] for i in all_data_df.index],
+        ZEOLITE_PRIOR_LOOKUP,
+        ZEOLITE_PRIOR_FILE,
+        identity_weight,
+        normalize,
+        ZEOLITE_PRIOR_MAP,
+    )
+    return np.hstack([osda_prior, zeolite_prior])
 
 
 def plot_matrix(M, file_name, mask=None, vmin=16, vmax=23):
@@ -299,7 +197,7 @@ def make_prior(
     method="identity",
     normalization_factor=1.5,
     test_train_axis=0,
-    osda_feature=None,
+    feature=None,
 ):
     assert method in VALID_METHODS, f"Invalid method used, pick one of {VALID_METHODS}"
     if test_train_axis == 0:
@@ -320,7 +218,8 @@ def make_prior(
         return prior
 
     if method == "skinny_identity":
-        prior = np.ones((all_data.shape[0], 1))
+        # prior = np.ones((all_data.shape[0], 1))
+        prior = np.eye(all_data.shape[0])
         return prior
 
     elif method == "OneHotDrug":
@@ -340,21 +239,24 @@ def make_prior(
         # Volume (Angstrom3)
         # Axis 2 (Angstrom)
         # all_data_df = all_data_df.head(100)
-        prior = secondary_osda_prior_helper(
-            all_data_df, column_name=osda_feature, normalize=True
-        )
+        # prior = osda_prior_helper(all_data_df)
+        # why_this_prior = secondary_osda_prior_helper(all_data_df)
+
+        prior = osda_prior(all_data_df, normalization_factor)
+        # We're just tacking on the I matrix without doing our due diligence to make sure
+        # it doesn't go over...
+        return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
+
     elif method == "CustomZeolite":
-        prior = zeolite_prior_helper(target_codes=all_data_df.index, normalize=True)
+        prior = zeolite_prior(all_data_df, feature)
 
     elif method == "CustomOSDAandZeolite":
         # osda_prior.shape = (1194, 1) ... a prior over all the osda volumes...
-        osda_axis1_lengths = osda_prior_helper(
+        osda_axis1_lengths = osda_prior(
             all_data_df, column_name="Axis 1 (Angstrom)", normalize=False
         )
         # zeolite_prior.shape = (1, 209)... a prior over all the possible zeolite sphere diameters...
-        zeolite_sphere_diameters = zeolite_prior_helper(
-            target_codes=(all_data_df.columns).to_numpy(), normalize=False
-        )
+        zeolite_sphere_diameters = zeolite_prior(all_data_df)
 
         prior = np.zeros((len(osda_axis1_lengths), len(zeolite_sphere_diameters)))
         for i, osda_length in enumerate(osda_axis1_lengths):
@@ -366,7 +268,6 @@ def make_prior(
         # TODO: is this necessary to normalize all of the values in prior to maximum?
         # This isn't working...
         # prior = prior / prior.max()
-        # pdb.set_trace()
 
         # Normalize prior across its rows:
         max = np.reshape(np.repeat(prior.sum(axis=1), prior.shape[1]), prior.shape)
@@ -380,15 +281,18 @@ def make_prior(
 
     # this is the one for really skinny Matrices
     elif method == "CustomOSDAandZeoliteAsRows":
-        # osda_prior.shape = (1194, 1) ... a prior over all the osda volumes...
-        osda_axis1_lengths = osda_prior_helper(
-            all_data_df, column_name="Axis 1 (Angstrom)", normalize=False
-        )
-        # zeolite_prior.shape = (1, 209)... a prior over all the possible zeolite sphere diameters...
-        zeolite_sphere_diameters = zeolite_prior_helper(
-            target_codes=(all_data_df.columns).to_numpy(), normalize=False
-        )
+        prior = osda_zeolite_combined_prior(all_data_df, normalize=True)
         pdb.set_trace()
+        # osda_prior.shape = (1194, 1) ... a prior over all the osda volumes...
+        # osda_axis1_lengths = osda_prior(all_data_df, normalize=False)
+        # # This is gross... If you're going to use this then fix this and grab zeolite names based on the index name.
+        # zeolites = [v[1] for v in all_data_df.index.values]
+
+        # # TODO: this might need to be fixed...
+        # zeolite_sphere_diameters = zeolite_prior(zeolites)
+        # stacked = np.hstack([zeolite_sphere_diameters, osda_axis1_lengths])
+        # prior = stacked / (stacked.max() * 1.111)
+        # return np.hstack([prior, 0.098 * np.eye(all_data.shape[0])])
     elif method == "OneHotCell":
         encoder = OneHotEncoder()
         prior = encoder.fit_transform(
