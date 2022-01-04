@@ -69,7 +69,8 @@ OSDA_PRIOR_LOOKUP = {
     "bertz_ct": 1.0,
 }
 ZEOLITE_PRIOR_FILE = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/scraped_zeolite_data.pkl"
-OSDA_PRIOR_FILE = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/precomputed_OSDA_prior.pkl"
+# OSDA_PRIOR_FILE = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/precomputed_OSDA_prior.pkl"
+OSDA_PRIOR_FILE = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/moleules_from_daniel/prior_precomputed_energies_78616by196.pkl"
 
 ZEOLITE_PRIOR_MAP = {
     "*CTH": "CTH",
@@ -282,7 +283,6 @@ def make_prior(
     # this is the one for really skinny Matrices
     elif method == "CustomOSDAandZeoliteAsRows":
         prior = osda_zeolite_combined_prior(all_data_df, normalize=True)
-        pdb.set_trace()
         # osda_prior.shape = (1194, 1) ... a prior over all the osda volumes...
         # osda_axis1_lengths = osda_prior(all_data_df, normalize=False)
         # # This is gross... If you're going to use this then fix this and grab zeolite names based on the index name.

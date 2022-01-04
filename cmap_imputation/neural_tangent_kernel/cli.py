@@ -86,7 +86,8 @@ def validate_inputs(technique='NTK', mixed_prior=False, col_name='unit'):
     else:
         method = ('sparse', args.sparse_subset)
         path_prefix = f"{technique}SparseSubset{args.sparse_subset}DrugsInTrain"
-
+    # TODO: delete me probably...
+    allData.index = allData.index.rename('SMILES')
     allData = allData[~allData.index.get_level_values(col_name).isin(args.remove_cells)]
 
     for cell in args.only_train:

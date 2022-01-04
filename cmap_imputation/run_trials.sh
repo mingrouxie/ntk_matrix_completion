@@ -18,7 +18,7 @@ python means/means.py -s 149
 
 # This is the one with regular matrices
 python neural_tangent_kernel/two_step_ntk.py -i /Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/zeoliteTensor.pkl -i2 /Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/zeoliteNonbindingTensor.pkl -r -o
-# python neural_tangent_kernel/ntk.py -s 149 -x OneHotCombo
+# python neural_tangent_kernel/two_step_ntk.py -i /Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/moleules_from_daniel/prior_precomputed_energies_100by196.pkl -r -o
 
 # Train NTK with MCF7 + Cell Averages for 10-Fold (Seed 149)
 python neural_tangent_kernel/ntk.py -s 149 -x only_train_cell_average

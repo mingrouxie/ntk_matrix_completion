@@ -135,7 +135,7 @@ def osda_prior_helper(all_data_df, num_runs):
     # WHIM descriptors https://onlinelibrary.wiley.com/doi/abs/10.1002/qsar.200510159
     prior = pd.DataFrame()
     bad_apples = np.array([])
-    for smile in tqdm(all_data_df.reset_index().SMILES):
+    for smile in tqdm(all_data_df.SMILES):
         # Some prior values might be 0.0 if the smiles string couldn't be embedded.
         properties = average_properties(smile, num_runs)
         series = pd.Series(properties)
@@ -149,8 +149,9 @@ def osda_prior_helper(all_data_df, num_runs):
         " check them out: ",
         bad_apples,
     )
-    # Fill in the NaN values for molecules which couldn't be embedded.
+    # Drop molecules which couldn't be embedded.
     prior = prior.fillna(0)
+    prior = prior.loc[(prior != 0).any(axis=1)]
     return prior
 
 
@@ -163,14 +164,40 @@ def save_matrix(matrix, file_name):
     matrix.to_pickle(savepath)
 
 
-if __name__ == "__main__":
-    print(
-        "Modify make_prior in prior.py to add a custom prior! There are a few choices to start."
-    )
+def prior_from_small_matrix():
     num_runs = 10
-    input = '/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/zeoliteNonbindingTensor.pkl'
+    input = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/zeoliteNonbindingTensor.pkl"
     all_data_df = pd.read_pickle(input)
     save_file = "precomputed_OSDA_prior_10_run_average.pkl"
     prior = osda_prior_helper(all_data_df, num_runs)
     pdb.set_trace()
     save_matrix(prior, save_file)
+
+
+if __name__ == "__main__":
+    num_runs = 1
+    sample_size = 78616
+
+    input = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/moleules_from_daniel/211221_energies.csv"
+    all_data_df = pd.read_csv(input)
+    all_data_df = all_data_df.set_index("inchi")
+
+    inchi_to_smile_conversion = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/moleules_from_daniel/211221_boxes.csv"
+    inchi_to_smile = pd.read_csv(inchi_to_smile_conversion)
+    inchi_to_smile = inchi_to_smile.set_index("inchi")[["smiles"]]  # .to_dict('index')
+
+    joined_df = all_data_df.join(inchi_to_smile, on="inchi")
+    joined_df.rename(columns={"smiles": "SMILES"}, inplace=True)
+    all_data_df = joined_df.sample(sample_size)
+
+    save_file = "precomputed_energies_" + str(sample_size) + "by196.pkl"
+    prior = osda_prior_helper(all_data_df, num_runs)
+    # drop all molecules that couldn't be embedded
+    prior = prior.loc[(prior != 0).any(axis=1)]
+    save_matrix(prior, "prior_" + save_file)
+
+    # We need to reindex all_data_df for later...
+    all_data_df = all_data_df.set_index("SMILES")
+    all_data_df = all_data_df.reindex(prior.index)
+    all_data_df.index = all_data_df.index.rename('SMILES')
+    save_matrix(all_data_df, save_file)

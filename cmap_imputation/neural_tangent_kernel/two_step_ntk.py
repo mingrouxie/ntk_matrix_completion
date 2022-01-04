@@ -104,6 +104,7 @@ def run_ntk(
     prior,
     fill_value,
     average_by_rows=False,
+    skinny=False,
 ):
     # Filter not by 30 but by the average mean...
     if average_by_rows:
@@ -130,8 +131,9 @@ def run_ntk(
     splits = None  # Per-fold metrics
     # Iterate over all predictions and populate metrics matrices
     for train, test in iterator:
+        pdb.set_trace()
         X = make_prior(
-            train, only_train, test, "CustomZeolite", normalization_factor=NORM_FACTOR #, feature = {'accessible_volume':1.0}
+            train, only_train, test, "CustomOSDAandZeoliteAsRows", normalization_factor=NORM_FACTOR #, feature = {'accessible_volume':1.0}
         )
         all_data = pd.concat([train, test]).to_numpy()
         # plot_matrix(all_data, "all_data_regression")
@@ -144,6 +146,11 @@ def run_ntk(
         # okay so the bottom 1/10 of mask and all_data are just all zeros.
         results_ntk = predict_space_opt_CMAP_data(all_data, mask, len(test), X=X)
 
+        if skinny:
+            results_ntk, true =unmake_skinny(results_ntk, test)
+        else:
+            true = test.to_numpy()
+
         prediction_ntk = pd.DataFrame(
             data=results_ntk, index=test.index, columns=test.columns
         )
@@ -153,7 +160,7 @@ def run_ntk(
             else pd.concat([ntk_predictions, prediction_ntk])
         )
 
-        true = test.to_numpy()
+        
         # TODO: this filter is pretty brutal... do we want to continue applying it?
         cosims, r2_scores = filter_res(true, results_ntk, fill_value, average_by_rows)
         temp_df_ntk = pd.DataFrame(
@@ -211,6 +218,7 @@ def run_ntk(
     # We want the lowest by zeolite... probably right?
     # UGH it makes no sense to test the lowest by zeolite. We want the lowest by OSDA...
     # Let's just do bof.
+    pdb.set_trace()
     top_1 = calculate_top_k_accuracy(all_true, ntk_predictions, 1)
     top_3 = calculate_top_k_accuracy(all_true, ntk_predictions, 3)
     top_5 = calculate_top_k_accuracy(all_true, ntk_predictions, 5)
@@ -223,7 +231,8 @@ def run_ntk(
         "\ntop_5_accuracy: ",
         top_5.round(4),
     )
-    # plot_matrix(ntk_predictions, "zeolites_justaccessible_volume")
+    # plot_matrix(ntk_predictions, "predictions_for_1000_generated_examples", vmin=-20, vmax=2)
+    # plot_matrix(all_true, "true_for_10k_generated_examples", vmin=-20, vmax=2)
     pdb.set_trace()
     if plot:
         plot_graphics(ntk_predictions, all_true, all_metrics_ntk, path_prefix, True)
@@ -442,15 +451,7 @@ def test_a_bunch_of_features(
         )
     print(results)
 
-
-if __name__ == "__main__":
-    print(
-        "Modify make_prior in prior.py to add a custom prior! There are a few choices to start."
-    )
-    # TODO: change this... make this tkae an argument from the input for col_names.
-    # TODO: add a mask? then
-    # 112426
-
+def buisness_as_normal():
     (
         allData,
         binaryData,
@@ -463,18 +464,6 @@ if __name__ == "__main__":
     ) = validate_zeolite_inputs(col_name="SMILES")
     # allData = allData.T
     # binaryData = binaryData.T
-    # run_ntk_binary_classification_from_two_orientations
-    # TODO: Be very careful with this prior...
-    # don't let the legacy code add it in some weird way..
-    # binaryData = binaryData.iloc[:100, :30]
-    # test_a_bunch_of_features(
-    #     binaryData,
-    #     only_train,
-    #     method,
-    #     SEED,
-    #     path_prefix,
-    #     plot,
-    # )
     run_ntk_binary_classification(
         binaryData,
         only_train,
@@ -498,10 +487,63 @@ if __name__ == "__main__":
         fill_value=30,
         average_by_rows=True,
     )
-    # when we turn it sideways these two zeolites have all the same lowest energies...
-    # SMILES   C(CC1CCNCC1)CC1CCNCC1  ...   c1ccncc1
-    # Zeolite                         ...
-    # PAU                   9.708801  ...   9.708801
-    # LOV                  11.821684  ...  11.821684
 
-    # python neural_tangent_kernel/two_step_ntk.py -i /Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/zeoliteOSDAIndexedMatrix.pkl -i2 /Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/smaller_skinny_matrix.pkl -r -o
+def make_skinny(allData):
+    allData = allData.reset_index()
+    melted_matrix = pd.melt(allData, id_vars='SMILES',value_vars=list(allData.columns[1:]))
+    return melted_matrix.set_index(['SMILES', 'variable'])
+
+def unmake_skinny(skinnyPrediction, skinnyTrue):
+    true_zeolites_per_osda = {}
+    predicted_zeolites_per_osda = {}
+    for index in range(len(skinnyTrue)):
+        true_value = skinnyTrue.iloc[index][0]
+        osda, zeolite = skinnyTrue.iloc[index].name
+        pred_value = skinnyPrediction[index][0]
+
+        if osda not in true_zeolites_per_osda:
+            true_zeolites_per_osda[osda] = {}
+        else:
+            pdb.set_trace()
+        true_zeolites_per_osda[osda][zeolite] = true_value
+
+        if osda not in predicted_zeolites_per_osda:
+            predicted_zeolites_per_osda[osda] = {}
+        predicted_zeolites_per_osda[osda][zeolite] = pred_value
+    pdb.set_trace()
+    predicted_zeolites_per_osda
+    return skinnyPrediction, skinnyTrue
+    # allData = allData.reset_index()
+    # melted_matrix = pd.melt(allData, id_vars='SMILES',value_vars=list(allData.columns[1:]))
+    # return melted_matrix.set_index(['SMILES', 'variable'])
+
+if __name__ == "__main__":
+    # python neural_tangent_kernel/two_step_ntk.py -i /Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/moleules_from_daniel/precomputed_energies_78616by196.pkl -r -o
+    (
+        allData,
+        binaryData,
+        only_train,
+        method,
+        SEED,
+        path_prefix,
+        plot,
+        prior,
+    ) = validate_zeolite_inputs(col_name="SMILES")
+    # allData = allData.T
+    # binaryData = binaryData.T
+    allData = allData[allData.max(axis=1) != allData.min(axis=1)]
+    allData = allData.iloc[:100,:30]
+    allData = make_skinny(allData)
+    # CustomOSDAandZeoliteAsRows
+    run_ntk(
+        allData,
+        only_train,
+        method,
+        SEED,
+        path_prefix,
+        plot,
+        prior="CustomOSDAandZeoliteAsRows",
+        fill_value=30,
+        average_by_rows=False,
+        skinny=True,
+    )
