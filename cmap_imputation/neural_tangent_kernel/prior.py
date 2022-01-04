@@ -69,8 +69,8 @@ OSDA_PRIOR_LOOKUP = {
     "bertz_ct": 1.0,
 }
 ZEOLITE_PRIOR_FILE = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/scraped_zeolite_data.pkl"
-# OSDA_PRIOR_FILE = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/precomputed_OSDA_prior.pkl"
-OSDA_PRIOR_FILE = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/moleules_from_daniel/prior_precomputed_energies_78616by196.pkl"
+OSDA_PRIOR_FILE = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/precomputed_OSDA_prior.pkl"
+# OSDA_PRIOR_FILE = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/moleules_from_daniel/prior_precomputed_energies_78616by196.pkl"
 
 ZEOLITE_PRIOR_MAP = {
     "*CTH": "CTH",
@@ -95,6 +95,7 @@ def load_prior(
     prior_index_map=None,
 ):
     precomputed_prior = pd.read_pickle(precomputed_file_name)
+    # TODO(Mingrou): add new zeolite prior...
     if prior_index_map:
         x = lambda i: prior_index_map[i] if i in prior_index_map else i
         precomputed_prior.index = precomputed_prior.index.map(x)
@@ -237,26 +238,18 @@ def make_prior(
         ).toarray()
 
     elif method == "CustomOSDA":
-        # Volume (Angstrom3)
-        # Axis 2 (Angstrom)
-        # all_data_df = all_data_df.head(100)
-        # prior = osda_prior_helper(all_data_df)
-        # why_this_prior = secondary_osda_prior_helper(all_data_df)
-
         prior = osda_prior(all_data_df, normalization_factor)
-        # We're just tacking on the I matrix without doing our due diligence to make sure
-        # it doesn't go over...
         return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
 
     elif method == "CustomZeolite":
         prior = zeolite_prior(all_data_df, feature)
+        return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
 
+    # This one is for the failed experiment 
     elif method == "CustomOSDAandZeolite":
-        # osda_prior.shape = (1194, 1) ... a prior over all the osda volumes...
         osda_axis1_lengths = osda_prior(
             all_data_df, column_name="Axis 1 (Angstrom)", normalize=False
         )
-        # zeolite_prior.shape = (1, 209)... a prior over all the possible zeolite sphere diameters...
         zeolite_sphere_diameters = zeolite_prior(all_data_df)
 
         prior = np.zeros((len(osda_axis1_lengths), len(zeolite_sphere_diameters)))
@@ -280,19 +273,10 @@ def make_prior(
         # prior = np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
         # return prior
 
-    # this is the one for really skinny Matrices
+    # This is the one for really skinny Matrices
     elif method == "CustomOSDAandZeoliteAsRows":
         prior = osda_zeolite_combined_prior(all_data_df, normalize=True)
-        # osda_prior.shape = (1194, 1) ... a prior over all the osda volumes...
-        # osda_axis1_lengths = osda_prior(all_data_df, normalize=False)
-        # # This is gross... If you're going to use this then fix this and grab zeolite names based on the index name.
-        # zeolites = [v[1] for v in all_data_df.index.values]
 
-        # # TODO: this might need to be fixed...
-        # zeolite_sphere_diameters = zeolite_prior(zeolites)
-        # stacked = np.hstack([zeolite_sphere_diameters, osda_axis1_lengths])
-        # prior = stacked / (stacked.max() * 1.111)
-        # return np.hstack([prior, 0.098 * np.eye(all_data.shape[0])])
     elif method == "OneHotCell":
         encoder = OneHotEncoder()
         prior = encoder.fit_transform(

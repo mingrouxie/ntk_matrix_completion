@@ -69,7 +69,12 @@ def predict_space_opt_CMAP_data(all_data, mask, num_test_rows, X):
     assert results.shape == (all_data.shape[0], num_test_rows), "Results malformed"
     return results.T
 
+# (30, 30, 12, 30, 30)
+# (29.9, 29.9, 11, 29.9, 29.9,)
 
+# (12, )
+# (11,)
+# Filter out all the non-binding results when calculating cosim & r2
 def filter_res(true, pred, filter_value, average_by_rows):
     cosims = []
     r2_scores = []
@@ -131,9 +136,8 @@ def run_ntk(
     splits = None  # Per-fold metrics
     # Iterate over all predictions and populate metrics matrices
     for train, test in iterator:
-        pdb.set_trace()
         X = make_prior(
-            train, only_train, test, "CustomOSDAandZeoliteAsRows", normalization_factor=NORM_FACTOR #, feature = {'accessible_volume':1.0}
+            train, only_train, test, prior, normalization_factor=NORM_FACTOR #, feature = {'accessible_volume':1.0}
         )
         all_data = pd.concat([train, test]).to_numpy()
         # plot_matrix(all_data, "all_data_regression")
@@ -168,8 +172,6 @@ def run_ntk(
                 [
                     r2_scores,
                     cosims
-                    # r2_score(true.T, results_ntk.T, multioutput="raw_values"),
-                    # get_cosims(true, results_ntk),
                 ]
             ),
             index=test.index,
@@ -203,7 +205,6 @@ def run_ntk(
             else pd.concat([all_metrics_ntk, temp_df_ntk])
         )
         all_true = pd.concat([all_true, test]) if all_true is not None else test
-
     r_ntk, p_ntk = pearsonr(
         all_true.to_numpy().ravel(), ntk_predictions.to_numpy().ravel()
     )
@@ -215,10 +216,9 @@ def run_ntk(
     pd.to_pickle(all_metrics_ntk, path_prefix + "AllMetrics.pkl")
     pd.to_pickle(splits, path_prefix + "SplitMetrics.pkl")
 
-    # We want the lowest by zeolite... probably right?
-    # UGH it makes no sense to test the lowest by zeolite. We want the lowest by OSDA...
-    # Let's just do bof.
-    pdb.set_trace()
+    # NOTE: this is top_k_accuracy as split by ROWS
+    # Rows in the original data are OSDAs, if the data is transposed then the rows will be Zeolites.
+    # Probably the top_k that makes the most sense is calculating it by zeolites (not by OSDAs)
     top_1 = calculate_top_k_accuracy(all_true, ntk_predictions, 1)
     top_3 = calculate_top_k_accuracy(all_true, ntk_predictions, 3)
     top_5 = calculate_top_k_accuracy(all_true, ntk_predictions, 5)
@@ -231,11 +231,9 @@ def run_ntk(
         "\ntop_5_accuracy: ",
         top_5.round(4),
     )
-    # plot_matrix(ntk_predictions, "predictions_for_1000_generated_examples", vmin=-20, vmax=2)
-    # plot_matrix(all_true, "true_for_10k_generated_examples", vmin=-20, vmax=2)
-    pdb.set_trace()
-    if plot:
-        plot_graphics(ntk_predictions, all_true, all_metrics_ntk, path_prefix, True)
+    plot_matrix(all_true, "regression_truth")
+    plot_matrix(ntk_predictions, "regression_prediction")
+    return ntk_predictions
 
 
 def calculate_top_k_accuracy(all_true, ntk_predictions, k, by_row=True):
@@ -307,19 +305,17 @@ def run_ntk_binary_classification(
         mask = np.ones_like(all_data)
         mask[len(train) :, :] = 0
 
-        # TODO: take this method declaration somewhere else.
         X = make_prior(
             train,
             only_train,
             test,
-            method="CustomOSDAandZeoliteAsRows",  # "CustomOSDA",
+            method=prior,
             normalization_factor=NORM_FACTOR,
             feature=feature,
         )
         # okay so the bottom 1/10 of mask and all_data are just all zeros.
-        # TODO: take out this normalize intermediate
         results_ntk = predict_space_opt_CMAP_data(all_data, mask, len(test), X=X)
-        # TADA! binary classification in full swing :^)
+        # TADAA! binary classification in full swing :^)
         results_ntk = results_ntk.round()
 
         prediction_ntk = pd.DataFrame(
@@ -391,25 +387,9 @@ def run_ntk_binary_classification(
         " total recall: ",
         recall,
     )
-    # plot_matrix(all_true, "binary_classification_truth", vmin=0, vmax=1)
-    # plot_matrix(ntk_predictions, "binary_classification_prediction", vmin=0, vmax=1)
-    # return ntk_predictions
-
-    # plot_matrix(all_true, "binary_classification_truth_" + feature, vmin=0, vmax=1)
-    # plot_matrix(
-    #     ntk_predictions,
-    #     "binary_classification_prediction_" + feature,
-    #     vmin=0,
-    #     vmax=1,
-    # )
-    return (
-        "total accuracy: ",
-        round(total_accuracy, 3),
-        " total precision: ",
-        round(precision, 3),
-        " total recall: ",
-        round(recall, 3)
-    )
+    plot_matrix(all_true, "binary_classification_truth", vmin=0, vmax=1)
+    plot_matrix(ntk_predictions, "binary_classification_prediction", vmin=0, vmax=1)
+    return ntk_predictions
 
 
 def test_a_bunch_of_features(
@@ -451,43 +431,6 @@ def test_a_bunch_of_features(
         )
     print(results)
 
-def buisness_as_normal():
-    (
-        allData,
-        binaryData,
-        only_train,
-        method,
-        SEED,
-        path_prefix,
-        plot,
-        prior,
-    ) = validate_zeolite_inputs(col_name="SMILES")
-    # allData = allData.T
-    # binaryData = binaryData.T
-    run_ntk_binary_classification(
-        binaryData,
-        only_train,
-        method,
-        SEED,
-        path_prefix,
-        plot,
-    )
-    # Let's take out rows that have just no templating energies at all...
-    # not even sure how they got into the dataset... Worth investigating...
-    # e.g., these four: C1COCCOCCNCCOCCOCCN1, C1COCCOCCOCCN1, Nc1ccccc1, OCC(CO)(CO)CO
-    allData = allData[allData.max(axis=1) != allData.min(axis=1)]
-    run_ntk(
-        allData,
-        only_train,
-        method,
-        SEED,
-        path_prefix,
-        plot,
-        prior="CustomOSDA",
-        fill_value=30,
-        average_by_rows=True,
-    )
-
 def make_skinny(allData):
     allData = allData.reset_index()
     melted_matrix = pd.melt(allData, id_vars='SMILES',value_vars=list(allData.columns[1:]))
@@ -510,15 +453,13 @@ def unmake_skinny(skinnyPrediction, skinnyTrue):
         if osda not in predicted_zeolites_per_osda:
             predicted_zeolites_per_osda[osda] = {}
         predicted_zeolites_per_osda[osda][zeolite] = pred_value
-    pdb.set_trace()
     predicted_zeolites_per_osda
     return skinnyPrediction, skinnyTrue
     # allData = allData.reset_index()
     # melted_matrix = pd.melt(allData, id_vars='SMILES',value_vars=list(allData.columns[1:]))
     # return melted_matrix.set_index(['SMILES', 'variable'])
 
-if __name__ == "__main__":
-    # python neural_tangent_kernel/two_step_ntk.py -i /Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/moleules_from_daniel/precomputed_energies_78616by196.pkl -r -o
+def skinny_ntk():
     (
         allData,
         binaryData,
@@ -529,8 +470,6 @@ if __name__ == "__main__":
         plot,
         prior,
     ) = validate_zeolite_inputs(col_name="SMILES")
-    # allData = allData.T
-    # binaryData = binaryData.T
     allData = allData[allData.max(axis=1) != allData.min(axis=1)]
     allData = allData.iloc[:100,:30]
     allData = make_skinny(allData)
@@ -547,3 +486,47 @@ if __name__ == "__main__":
         average_by_rows=False,
         skinny=True,
     )
+
+
+def buisness_as_normal():
+    (
+        allData,
+        binaryData,
+        only_train,
+        method,
+        SEED,
+        path_prefix,
+        plot,
+        prior,
+    ) = validate_zeolite_inputs(col_name="SMILES")
+    # TODO(Mingrou): For the new zeolite you'll want to take the transpose of allData & binaryData 
+    # TODO(Mingrou): You'll also want to set prior="CustomZeolite"
+    # allData = allData.T
+    # binaryData = binaryData.T
+    run_ntk_binary_classification(
+        binaryData,
+        only_train,
+        method,
+        SEED,
+        path_prefix,
+        plot,
+        prior="CustomOSDA",
+    )
+    # Let's take out rows that have just no templating energies at all...
+    # not even sure how they got into the dataset... Worth investigating...
+    # e.g., these four: C1COCCOCCNCCOCCOCCN1, C1COCCOCCOCCN1, Nc1ccccc1, OCC(CO)(CO)CO
+    allData = allData[allData.max(axis=1) != allData.min(axis=1)]
+    run_ntk(
+        allData,
+        only_train,
+        method,
+        SEED,
+        path_prefix,
+        plot,
+        prior="CustomOSDA",
+        fill_value=30,
+        average_by_rows=True,
+    )
+
+if __name__ == "__main__":
+    buisness_as_normal()
