@@ -31,9 +31,6 @@ TODOs:
         * Rafa says we could look at Message passing crystal GCNs. Seems intense.
 * Keep cracking on the skinny matrices to see if they can scale & combine row/col priors.
 * Try predicting binding energies rather than templating energies! (data from here: https://github.com/YitongTseo/Zeolite-Phase-Competition/blob/main/data/binding.csv)
-* Rather than R^2 or Cosine similarity measure regression results with:
-    * RMSE
-    * Spearman (which is rank only)
 
 
 * Unfortunately I remembered now why it doesn't work to run the row priors, then the col priors in series or in parallel. The problem comes from the fact that we need to partition the data into the same test & train for col & row priors. And taking out rows when the columns have the priors or vice versa doesn't make sense mathematically. the algorithm is written only to hold out rows with row priors or columns with column priors. 

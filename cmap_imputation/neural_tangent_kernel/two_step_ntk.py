@@ -5,6 +5,7 @@ import os
 from prior import make_prior
 from cli import validate_zeolite_inputs
 
+import math
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import pdb
@@ -12,7 +13,8 @@ import numpy as np
 import pandas as pd
 from auto_tqdm import tqdm
 from sklearn.metrics import r2_score
-from scipy.stats import pearsonr
+from sklearn.metrics import mean_squared_error
+from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import top_k_accuracy_score
 
 
@@ -69,6 +71,7 @@ def predict_space_opt_CMAP_data(all_data, mask, num_test_rows, X):
     assert results.shape == (all_data.shape[0], num_test_rows), "Results malformed"
     return results.T
 
+
 # (30, 30, 12, 30, 30)
 # (29.9, 29.9, 11, 29.9, 29.9,)
 
@@ -78,6 +81,8 @@ def predict_space_opt_CMAP_data(all_data, mask, num_test_rows, X):
 def filter_res(true, pred, filter_value, average_by_rows):
     cosims = []
     r2_scores = []
+    rmse_scores = []
+    spearman_scores = []
     for row_id in range(true.shape[0]):
         i = true[row_id]
         j = pred[row_id]
@@ -90,12 +95,16 @@ def filter_res(true, pred, filter_value, average_by_rows):
             # TODO: this is wrong. come back and fix me.
             cosims.append([1.0])
             r2_scores.append([1.0])
+            pdb.set_trace()
+            assert "there exists rows in your dataset which are completely unbinding"
             continue
         cosims.append(get_cosims(np.array([i]), np.array([j])))
-        r2_scores.append(
-            r2_score(np.array([i]).T, np.array([j]).T, multioutput="raw_values")
+        r2_scores.append(r2_score(i, j, multioutput="raw_values"))
+        rmse_scores.append(
+            [math.sqrt(mean_squared_error(i, j, multioutput="raw_values"))]
         )
-    return cosims, r2_scores
+        spearman_scores.append([spearmanr(i, j).correlation])
+    return cosims, r2_scores, rmse_scores, spearman_scores
 
 
 # TODO: collapse run_ntk & run_ntk_binary_classification together...
@@ -137,7 +146,11 @@ def run_ntk(
     # Iterate over all predictions and populate metrics matrices
     for train, test in iterator:
         X = make_prior(
-            train, only_train, test, prior, normalization_factor=NORM_FACTOR #, feature = {'accessible_volume':1.0}
+            train,
+            only_train,
+            test,
+            prior,
+            normalization_factor=NORM_FACTOR,  # , feature = {'accessible_volume':1.0}
         )
         all_data = pd.concat([train, test]).to_numpy()
         # plot_matrix(all_data, "all_data_regression")
@@ -151,7 +164,7 @@ def run_ntk(
         results_ntk = predict_space_opt_CMAP_data(all_data, mask, len(test), X=X)
 
         if skinny:
-            results_ntk, true =unmake_skinny(results_ntk, test)
+            results_ntk, true = unmake_skinny(results_ntk, test)
         else:
             true = test.to_numpy()
 
@@ -164,24 +177,28 @@ def run_ntk(
             else pd.concat([ntk_predictions, prediction_ntk])
         )
 
-        
         # TODO: this filter is pretty brutal... do we want to continue applying it?
-        cosims, r2_scores = filter_res(true, results_ntk, fill_value, average_by_rows)
+        cosims, r2_scores, rmse_scores, spearman_scores = filter_res(
+            true, results_ntk, fill_value, average_by_rows
+        )
+        pdb.set_trace()
         temp_df_ntk = pd.DataFrame(
-            data=np.column_stack(
-                [
-                    r2_scores,
-                    cosims
-                ]
-            ),
+            data=np.column_stack([r2_scores, cosims, rmse_scores, spearman_scores]),
             index=test.index,
         )
-        temp_df_ntk.columns = ["r_squared", "cosine_similarity"]
+        temp_df_ntk.columns = [
+            "r_squared",
+            "cosine_similarity",
+            "rmse",
+            "spearman_correlation",
+        ]
         new_splits = pd.DataFrame(
             data=np.column_stack(
                 [
                     temp_df_ntk["r_squared"].mean(),
                     temp_df_ntk["cosine_similarity"].mean(),
+                    temp_df_ntk["rmse"].mean(),
+                    temp_df_ntk["spearman_correlation"].mean(),
                     len(train),
                     len(test),
                 ]
@@ -190,6 +207,8 @@ def run_ntk(
         new_splits.columns = [
             "r_squared",
             "cosine_similarity",
+            "rmse",
+            "spearman_correlation",
             "train_size",
             "test_size",
         ]
@@ -431,10 +450,14 @@ def test_a_bunch_of_features(
         )
     print(results)
 
+
 def make_skinny(allData):
     allData = allData.reset_index()
-    melted_matrix = pd.melt(allData, id_vars='SMILES',value_vars=list(allData.columns[1:]))
-    return melted_matrix.set_index(['SMILES', 'variable'])
+    melted_matrix = pd.melt(
+        allData, id_vars="SMILES", value_vars=list(allData.columns[1:])
+    )
+    return melted_matrix.set_index(["SMILES", "variable"])
+
 
 def unmake_skinny(skinnyPrediction, skinnyTrue):
     true_zeolites_per_osda = {}
@@ -459,6 +482,7 @@ def unmake_skinny(skinnyPrediction, skinnyTrue):
     # melted_matrix = pd.melt(allData, id_vars='SMILES',value_vars=list(allData.columns[1:]))
     # return melted_matrix.set_index(['SMILES', 'variable'])
 
+
 def skinny_ntk():
     (
         allData,
@@ -471,7 +495,7 @@ def skinny_ntk():
         prior,
     ) = validate_zeolite_inputs(col_name="SMILES")
     allData = allData[allData.max(axis=1) != allData.min(axis=1)]
-    allData = allData.iloc[:100,:30]
+    allData = allData.iloc[:100, :30]
     allData = make_skinny(allData)
     # CustomOSDAandZeoliteAsRows
     run_ntk(
@@ -499,7 +523,7 @@ def buisness_as_normal():
         plot,
         prior,
     ) = validate_zeolite_inputs(col_name="SMILES")
-    # TODO(Mingrou): For the new zeolite you'll want to take the transpose of allData & binaryData 
+    # TODO(Mingrou): For the new zeolite you'll want to take the transpose of allData & binaryData
     # TODO(Mingrou): You'll also want to set prior="CustomZeolite"
     # allData = allData.T
     # binaryData = binaryData.T
@@ -527,6 +551,7 @@ def buisness_as_normal():
         fill_value=30,
         average_by_rows=True,
     )
+
 
 if __name__ == "__main__":
     buisness_as_normal()
