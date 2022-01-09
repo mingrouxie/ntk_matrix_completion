@@ -29,6 +29,7 @@ VALID_METHODS = {
     "CustomOSDAandZeolite",
     "CustomOSDAandZeoliteAsRows",
     "skinny_identity",
+    "CustomOSDAVector",
 }
 
 ZEOLITE_PRIOR_LOOKUP = {
@@ -69,7 +70,8 @@ OSDA_PRIOR_LOOKUP = {
     "bertz_ct": 1.0,
 }
 ZEOLITE_PRIOR_FILE = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/scraped_zeolite_data.pkl"
-OSDA_PRIOR_FILE = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/precomputed_OSDA_prior.pkl"
+OSDA_PRIOR_FILE = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/precomputed_OSDA_prior_10_with_whims.pkl"
+# OSDA_PRIOR_FILE = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/precomputed_OSDA_prior.pkl"
 # OSDA_PRIOR_FILE = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/moleules_from_daniel/prior_precomputed_energies_78616by196.pkl"
 
 ZEOLITE_PRIOR_MAP = {
@@ -86,6 +88,51 @@ ZEOLITE_PRIOR_MAP = {
 # (Pdb) rows_with_NaN = precomputed_prior[row_has_NaN]
 
 
+def load_vector_priors(
+    target_index,
+    vector_feature,
+    precomputed_file_name,
+    identity_weight=0.01,
+    normalize=True,
+):
+    precomputed_prior = pd.read_pickle(precomputed_file_name)
+    precomputed_prior = precomputed_prior.reindex(target_index)
+    precomputed_prior = precomputed_prior.filter(items=[vector_feature])
+
+    num_elements = len(precomputed_prior[vector_feature][0])
+
+    def column_name(index, vector_feature=vector_feature):
+        return vector_feature + "_" + str(index)
+
+    column_names = [column_name(i) for i in range(num_elements)]
+    exploded_prior = pd.DataFrame(columns=column_names)
+    for index, row in precomputed_prior.iterrows():
+        if row[vector_feature] is np.NaN:
+            series = pd.Series({column_name(i): 0.0 for i in range(num_elements)})
+        else:
+            row[vector_feature]
+            series = pd.Series(
+                {
+                    column_name(i): 0 if np.isnan(e) else e
+                    for i, e in enumerate(row[vector_feature])
+                }
+            )
+        series.name = index
+        exploded_prior = exploded_prior.append(series)
+
+    # TODO: here is where we should apply PCA...
+
+    # Normalize across the whole thing...
+    # Normalize to the biggest value & across all of the elements
+    biggest_value = exploded_prior.max().max()
+    normalization_factor = biggest_value * num_elements + identity_weight
+    if normalize:
+        exploded_prior = exploded_prior.apply(
+            lambda x: x / normalization_factor, axis=0
+        )
+    return exploded_prior.to_numpy()
+
+
 def load_prior(
     target_index,
     column_weights,
@@ -100,6 +147,7 @@ def load_prior(
         x = lambda i: prior_index_map[i] if i in prior_index_map else i
         precomputed_prior.index = precomputed_prior.index.map(x)
     precomputed_prior = precomputed_prior.reindex(target_index)
+    precomputed_prior = precomputed_prior.filter(items=list(column_weights.keys()))
     precomputed_prior = precomputed_prior.apply(pd.to_numeric)
     precomputed_prior = precomputed_prior.fillna(0.0)
 
@@ -108,7 +156,6 @@ def load_prior(
         precomputed_prior = precomputed_prior.apply(lambda x: x / x.max(), axis=0)
     # Now time to weigh each column, taking into account identity_weight to make sure
     # later when we add the identity matrix we don't go over 1.0 total per row...
-    precomputed_prior = precomputed_prior.filter(items=list(column_weights.keys()))
     normalization_factor = sum(column_weights.values()) + identity_weight
     results = precomputed_prior.apply(
         lambda x: x * column_weights[x.name] / normalization_factor, axis=0
@@ -128,6 +175,33 @@ def osda_prior(
         identity_weight,
         normalize,
     )
+
+
+def osda_vector_prior(
+    all_data_df,
+    vector_feature="whims",
+    identity_weight=0.01,
+    normalize=True,
+):
+    prior = osda_prior(all_data_df, identity_weight)
+    getaway_prior = load_vector_priors(
+        all_data_df.index,
+        "getaway",
+        OSDA_PRIOR_FILE,
+        identity_weight,
+        normalize,
+    )
+
+    # Splitting the original prior and the vector prior 50-50
+    normalized_getaway_prior = getaway_prior / (2 * max(getaway_prior, key=sum).sum())
+    normalized_prior = prior / (2 * max(prior, key=sum).sum())
+    stacked = np.hstack(
+        [normalized_prior, normalized_getaway_prior]
+    )
+
+    # Make room for the identity weight
+    stacked = (1 - identity_weight) * stacked
+    return stacked
 
 
 def zeolite_prior(
@@ -200,18 +274,22 @@ def make_prior(
     normalization_factor=1.5,
     test_train_axis=0,
     feature=None,
+    all_data=None,
 ):
     assert method in VALID_METHODS, f"Invalid method used, pick one of {VALID_METHODS}"
-    if test_train_axis == 0:
-        all_data = np.vstack((train.to_numpy(), test.to_numpy()))
-        all_data_df = pd.concat([train, test])
-    elif test_train_axis == 1:
-        all_data = np.hstack((train.to_numpy(), test.to_numpy()))
-        all_data_df = pd.concat([train, test], 1)
+    if all_data is not None:
+        all_data_df = all_data
     else:
-        # TODO: clean this up...
-        all_data = None
-        all_data_df = pd.concat([train, test], test_train_axis)
+        if test_train_axis == 0:
+            all_data = np.vstack((train.to_numpy(), test.to_numpy()))
+            all_data_df = pd.concat([train, test])
+        elif test_train_axis == 1:
+            all_data = np.hstack((train.to_numpy(), test.to_numpy()))
+            all_data_df = pd.concat([train, test], 1)
+        else:
+            # TODO: clean this up...
+            all_data = None
+            all_data_df = pd.concat([train, test], test_train_axis)
 
     prior = None
 
@@ -241,11 +319,15 @@ def make_prior(
         prior = osda_prior(all_data_df, normalization_factor)
         return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
 
+    elif method == "CustomOSDAVector":
+        prior = osda_vector_prior(all_data_df, "getaway", normalization_factor)
+        return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
+
     elif method == "CustomZeolite":
         prior = zeolite_prior(all_data_df, feature)
         return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
 
-    # This one is for the failed experiment 
+    # This one is for the failed experiment
     elif method == "CustomOSDAandZeolite":
         osda_axis1_lengths = osda_prior(
             all_data_df, column_name="Axis 1 (Angstrom)", normalize=False

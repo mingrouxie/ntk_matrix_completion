@@ -26,7 +26,7 @@ sys.path.insert(
 )
 from singular_graphics import plot_graphics
 
-NORM_FACTOR = 0.01  # IS this better than 0.1?
+NORM_FACTOR = 0.001  # IS this better than 0.1?
 PI = np.pi
 
 # is this kappa something to be tuned?
@@ -49,7 +49,6 @@ def predict_space_opt_CMAP_data(all_data, mask, num_test_rows, X):
 
     K_matrix = np.zeros((num_observed, num_observed))
     k_matrix = np.zeros((num_observed, num_missing))
-
     observed_data = all_data[:, :num_observed]
     # this might not be kosher...
     # TODO: this might break the whole ntk assurance
@@ -65,8 +64,8 @@ def predict_space_opt_CMAP_data(all_data, mask, num_test_rows, X):
     # plot_matrix(X_cross_terms, 'X_cross_terms', vmin=0, vmax=2)
     # plot_matrix(k_matrix, 'little_k', vmin=0, vmax=2)
     # plot_matrix(K_matrix, 'big_K', vmin=0, vmax=2)
-    # plot_matrix(X, 'X', vmin=0, vmax=1)
-    # plot_matrix(X[0:100,0:100], 'close_up_X', vmin=0, vmax=1)
+    # plot_matrix(X, 'X', vmin=0, vmax=0.01)
+    # plot_matrix(X[0:400,0:400], 'close_up_X', vmin=0, vmax=0.05)
     results = np.linalg.solve(K_matrix, observed_data.T).T @ k_matrix
     assert results.shape == (all_data.shape[0], num_test_rows), "Results malformed"
     return results.T
@@ -181,7 +180,6 @@ def run_ntk(
         cosims, r2_scores, rmse_scores, spearman_scores = filter_res(
             true, results_ntk, fill_value, average_by_rows
         )
-        pdb.set_trace()
         temp_df_ntk = pd.DataFrame(
             data=np.column_stack([r2_scores, cosims, rmse_scores, spearman_scores]),
             index=test.index,
@@ -451,12 +449,12 @@ def test_a_bunch_of_features(
     print(results)
 
 
-def make_skinny(allData):
+def make_skinny(allData, col_1="variable", col_2="SMILES"):
     allData = allData.reset_index()
     melted_matrix = pd.melt(
-        allData, id_vars="SMILES", value_vars=list(allData.columns[1:])
+        allData, id_vars=col_2, value_vars=list(allData.columns[1:])
     )
-    return melted_matrix.set_index(["SMILES", "variable"])
+    return melted_matrix.set_index([col_2, col_1])
 
 
 def unmake_skinny(skinnyPrediction, skinnyTrue):
@@ -478,9 +476,6 @@ def unmake_skinny(skinnyPrediction, skinnyTrue):
         predicted_zeolites_per_osda[osda][zeolite] = pred_value
     predicted_zeolites_per_osda
     return skinnyPrediction, skinnyTrue
-    # allData = allData.reset_index()
-    # melted_matrix = pd.melt(allData, id_vars='SMILES',value_vars=list(allData.columns[1:]))
-    # return melted_matrix.set_index(['SMILES', 'variable'])
 
 
 def skinny_ntk():
@@ -496,19 +491,32 @@ def skinny_ntk():
     ) = validate_zeolite_inputs(col_name="SMILES")
     allData = allData[allData.max(axis=1) != allData.min(axis=1)]
     allData = allData.iloc[:100, :30]
-    allData = make_skinny(allData)
-    # CustomOSDAandZeoliteAsRows
-    run_ntk(
-        allData,
+    allData = make_skinny(allData, col_1="Zeolite")
+
+    binaryData = binaryData[binaryData.max(axis=1) != binaryData.min(axis=1)]
+    binaryData = binaryData.iloc[:200, :100]
+    binaryData = make_skinny(binaryData, col_1="Zeolite")
+    # TODO: for regression on skinny matrix... see how to average_by_rows...
+    # run_ntk(
+    #     allData,
+    #     only_train,
+    #     method,
+    #     SEED,
+    #     path_prefix,
+    #     plot,
+    #     prior="CustomOSDAandZeoliteAsRows",
+    #     fill_value=30,
+    #     average_by_rows=False,
+    #     skinny=True,
+    # )
+    run_ntk_binary_classification(
+        binaryData,
         only_train,
         method,
         SEED,
         path_prefix,
         plot,
         prior="CustomOSDAandZeoliteAsRows",
-        fill_value=30,
-        average_by_rows=False,
-        skinny=True,
     )
 
 
@@ -534,7 +542,7 @@ def buisness_as_normal():
         SEED,
         path_prefix,
         plot,
-        prior="CustomOSDA",
+        prior="CustomOSDAVector",  # "CustomOSDA",
     )
     # Let's take out rows that have just no templating energies at all...
     # not even sure how they got into the dataset... Worth investigating...
@@ -547,11 +555,66 @@ def buisness_as_normal():
         SEED,
         path_prefix,
         plot,
-        prior="CustomOSDA",
+        prior="CustomOSDAVector",  # "CustomOSDAVector",
         fill_value=30,
         average_by_rows=True,
     )
 
 
 if __name__ == "__main__":
-    buisness_as_normal()
+    (
+        allData,
+        binaryData,
+        only_train,
+        method,
+        SEED,
+        path_prefix,
+        plot,
+        prior,
+    ) = validate_zeolite_inputs(col_name="SMILES")
+    precomputed_energies = pd.read_pickle(
+        "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/data_from_daniels_ml_models/precomputed_energies_78616by196.pkl"
+    )
+    precomputed_priors = pd.read_pickle(
+        "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/data_from_daniels_ml_models/prior_precomputed_energies_78616by196.pkl"
+    )
+    truth = binaryData.to_numpy()
+    # Let's add binary data again as the test set...
+    binaryData = pd.concat([binaryData, binaryData])
+    X = make_prior(
+        None,
+        None,
+        None,
+        method="CustomOSDAVector",
+        normalization_factor=NORM_FACTOR,
+        all_data=binaryData,
+    )
+
+    binaryData = binaryData.to_numpy()
+    num_test_rows = 1194
+    mask = np.ones_like(binaryData)
+    mask[len(binaryData) - num_test_rows :, :] = 0
+
+    results = predict_space_opt_CMAP_data(binaryData, mask, num_test_rows, X)
+    results = results.round()
+    plot_matrix(results, "results", vmin=0, vmax=1)
+    plot_matrix(truth, "truth", vmin=0, vmax=1)
+
+    correct = results[results == truth]
+    incorrect = results[results != truth]
+    true_positive = len(correct[correct == 1])
+    true_negative = len(correct[correct == 0])
+    false_positive = len(incorrect[incorrect == 1])
+    false_negative = len(incorrect[incorrect == 0])
+    total = (true_positive + true_negative + false_positive + false_negative)
+    total_accuracy = (1.0 * true_positive + true_negative) / total
+    precision = (1.0 * true_positive) / (false_positive + true_positive)
+    recall = (1.0 * true_positive) / (true_positive + false_negative)
+    print(
+        "total_accuracy: ",
+        total_accuracy,
+        " precision: ",
+        precision,
+        " recall: ",
+        recall,
+    )

@@ -29,6 +29,7 @@ TODOs:
     * Use the Box Values from Daniel & Omar (data/data_from_daniels_ml_models/211221_boxes.csv)
     * What priors can we pull from CIF files for Zeolites?
         * Rafa says we could look at Message passing crystal GCNs. Seems intense.
+
 * Keep cracking on the skinny matrices to see if they can scale & combine row/col priors.
 * Try predicting binding energies rather than templating energies! (data from here: https://github.com/YitongTseo/Zeolite-Phase-Competition/blob/main/data/binding.csv)
 
