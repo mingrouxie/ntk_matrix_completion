@@ -16,6 +16,7 @@ from sklearn.metrics import r2_score
 from sklearn.metrics import mean_squared_error
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import top_k_accuracy_score
+import time
 
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
@@ -64,8 +65,8 @@ def predict_space_opt_CMAP_data(all_data, mask, num_test_rows, X):
     # plot_matrix(X_cross_terms, 'X_cross_terms', vmin=0, vmax=2)
     # plot_matrix(k_matrix, 'little_k', vmin=0, vmax=2)
     # plot_matrix(K_matrix, 'big_K', vmin=0, vmax=2)
-    # plot_matrix(X, 'X', vmin=0, vmax=0.01)
-    # plot_matrix(X[0:400,0:400], 'close_up_X', vmin=0, vmax=0.05)
+    # plot_matrix(X, 'X', vmin=0, vmax=1)
+    # plot_matrix(X[0:50,0:50], 'close_up_X', vmin=0, vmax=0.05)
     results = np.linalg.solve(K_matrix, observed_data.T).T @ k_matrix
     assert results.shape == (all_data.shape[0], num_test_rows), "Results malformed"
     return results.T
@@ -91,12 +92,27 @@ def filter_res(true, pred, filter_value, average_by_rows):
         j = j[i != filter_value]
         i = i[i != filter_value]
         if len(i) == 0:
-            # TODO: this is wrong. come back and fix me.
-            cosims.append([1.0])
-            r2_scores.append([1.0])
-            pdb.set_trace()
-            assert "there exists rows in your dataset which are completely unbinding"
-            continue
+            raise ValueError(
+                "There exists complete rows in your dataset which are completely unbinding."
+            )
+        cosims.append(get_cosims(np.array([i]), np.array([j])))
+        r2_scores.append(r2_score(i, j, multioutput="raw_values"))
+        rmse_scores.append(
+            [math.sqrt(mean_squared_error(i, j, multioutput="raw_values"))]
+        )
+        spearman_scores.append([spearmanr(i, j).correlation])
+    return cosims, r2_scores, rmse_scores, spearman_scores
+
+
+# TODO: Are these the more accurate results to report?
+def res_without_filter(true, pred):
+    cosims = []
+    r2_scores = []
+    rmse_scores = []
+    spearman_scores = []
+    for row_id in range(true.shape[0]):
+        i = true[row_id]
+        j = pred[row_id]
         cosims.append(get_cosims(np.array([i]), np.array([j])))
         r2_scores.append(r2_score(i, j, multioutput="raw_values"))
         rmse_scores.append(
@@ -152,7 +168,6 @@ def run_ntk(
             normalization_factor=NORM_FACTOR,  # , feature = {'accessible_volume':1.0}
         )
         all_data = pd.concat([train, test]).to_numpy()
-        # plot_matrix(all_data, "all_data_regression")
         ##### SAFETY
         all_data[train.shape[0] :, :] = 0
         ##### SAFETY
@@ -239,6 +254,11 @@ def run_ntk(
     top_1 = calculate_top_k_accuracy(all_true, ntk_predictions, 1)
     top_3 = calculate_top_k_accuracy(all_true, ntk_predictions, 3)
     top_5 = calculate_top_k_accuracy(all_true, ntk_predictions, 5)
+    top_20_accuracies = [
+        calculate_top_k_accuracy(all_true, ntk_predictions, k) for k in range(0, 21)
+    ]
+    plot_top_k_curves(top_20_accuracies)
+    pdb.set_trace()
     print(
         splits.mean(),
         "\ntop_1_accuracy: ",
@@ -251,6 +271,17 @@ def run_ntk(
     plot_matrix(all_true, "regression_truth")
     plot_matrix(ntk_predictions, "regression_prediction")
     return ntk_predictions
+
+
+def plot_top_k_curves(top_accuracies):
+    plt.plot(top_accuracies)
+    plt.title("Top K Accuracy for Zeolites per OSDA")
+    plt.xlabel("K")
+    plt.ylabel("Accuracy")
+    plt.xticks(np.arange(0, len(top_accuracies) + 1, step=5))
+    plt.show()
+    plt.draw()
+    plt.savefig("top_k_accuracies.png", dpi=100)
 
 
 def calculate_top_k_accuracy(all_true, ntk_predictions, k, by_row=True):
@@ -279,6 +310,38 @@ def plot_matrix(M, file_name, mask=None, vmin=16, vmax=23):
     else:
         masked_M = M
     im = ax.imshow(masked_M, interpolation="nearest", cmap=cmap, vmin=vmin, vmax=vmax)
+    fig.colorbar(im)
+    fig.savefig(file_name + ".png", dpi=150)
+
+
+def plot_two_matrices(
+    M1, M1_title, M2, M2_title, file_name, mask=None, vmin=15, vmax=22
+):
+    fig, ax = plt.subplots()
+    plt.set_cmap("plasma")
+
+    cmap = mpl.cm.get_cmap()
+    cmap.set_bad(color="white")
+    if mask is not None:
+
+        def invert_binary_mask(m):
+            return np.logical_not(m).astype(int)
+
+        inverted_mask = invert_binary_mask(mask)
+        masked_M1 = np.ma.masked_where(inverted_mask, M1)
+        masked_M2 = np.ma.masked_where(inverted_mask, M2)
+    else:
+        masked_M1 = M1
+        masked_M2 = M2
+    im = ax.imshow(masked_M1, interpolation="nearest", cmap=cmap, vmin=vmin, vmax=vmax)
+    ax.set_title(M1_title)
+    ax.set_ylabel("OSDAs")
+    ax2 = fig.add_subplot(111)
+    im2 = ax2.imshow(
+        masked_M2, interpolation="nearest", cmap=cmap, vmin=vmin, vmax=vmax
+    )
+    ax2.set_title(M2_title)
+    fig.text(0.6, 0.04, "Zeolites", ha="center", va="center")
     fig.colorbar(im)
     fig.savefig(file_name + ".png", dpi=150)
 
@@ -520,6 +583,171 @@ def skinny_ntk():
     )
 
 
+def save_matrix(matrix, file_name):
+    file = os.path.abspath("")
+    dir_main = pathlib.Path(file).parent.absolute()
+    savepath = os.path.join(dir_main, file_name)
+    matrix.to_pickle(savepath)
+
+
+def test_all_osdas():
+    (
+        allData,
+        binaryData,
+        only_train,
+        method,
+        SEED,
+        path_prefix,
+        plot,
+        prior,
+    ) = validate_zeolite_inputs(col_name="SMILES")
+    precomputed_energies = pd.read_pickle(
+        "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/data_from_daniels_ml_models/precomputed_energies_78616by196.pkl"
+    )
+    precomputed_priors = pd.read_pickle(
+        "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/data_from_daniels_ml_models/precomputed_energies_78616by196WithWhims.pkl"
+    )
+    precomputed_energies = precomputed_energies.reindex(precomputed_priors.index)
+    # Set non-bindings to the row mean...
+    fill_value = 30
+    allData[allData == fill_value] = None
+    allData = allData.apply(lambda row: row.fillna(row.mean()), axis=1)
+    # Let's filter out all the rows with all empty values...
+    # e.g., these four: C1COCCOCCNCCOCCOCCN1, C1COCCOCCOCCN1, Nc1ccccc1, OCC(CO)(CO)CO
+    allData = allData.dropna(thresh=1)
+    allData = allData[allData.max(axis=1) != allData.min(axis=1)]
+    # 1190 rows x 209 columns
+
+    truth = precomputed_energies.to_numpy()
+
+    allData = pd.concat([allData, precomputed_energies])
+    # We need to dedup indices so we're not testing on training samples. (only 2 overlap??? crazy)
+    allData = allData[~allData.index.duplicated(keep="first")]
+    # This 10K is a limitation we've got to get around with matrix multiplication and out of memory...
+    allData = allData.iloc[: (1190 + 10000), :]
+
+    # 79536 rows x 209 columns
+    # So now the question becomes, do we do the binary sweep first? My guess is yes.
+    # and after the binary sweep we can zero everything to some middle value...
+
+    X = make_prior(
+        None,
+        None,
+        None,
+        method="CustomOSDA",
+        normalization_factor=NORM_FACTOR,
+        all_data=allData,
+    )
+
+    allData = allData.to_numpy()
+    num_test_rows = 10000  # 78346
+    mask = np.ones_like(allData)
+    mask[len(allData) - num_test_rows :, :] = 0
+
+    start = time.time()
+    results = predict_space_opt_CMAP_data(allData, mask, num_test_rows, X)
+    end = time.time()
+    print("total time: ", end - start)
+    pdb.set_trace()
+    # TODO: test this shit...
+    plot_matrix(results, "results", vmin=0, vmax=1)
+    plot_matrix(truth, "truth", vmin=0, vmax=1)
+
+
+# TODO: try some stuff.
+def calculate_results_with_masks(true, pred):
+    cosims = []
+    r2_scores = []
+    rmse_scores = []
+    spearman_scores = []
+    for row_id in range(true.shape[0]):
+        i = true[row_id]
+        j = pred[row_id]
+
+        # I still don't know if this is koshure, to fill in all the nan results with the mean like this...
+        i = np.nan_to_num(i, nan=np.mean(i[~np.isnan(i)]))
+        j = np.nan_to_num(j, nan=np.mean(j[~np.isnan(j)]))
+
+        cosims.append(get_cosims(np.array([i]), np.array([j])))
+        r2_scores.append(r2_score(i, j, multioutput="raw_values"))
+        rmse_scores.append(
+            [math.sqrt(mean_squared_error(i, j, multioutput="raw_values"))]
+        )
+        spearman_scores.append([spearmanr(i, j).correlation])
+    return cosims, r2_scores, rmse_scores, spearman_scores
+
+
+def crazy_stuff():
+    allData = pd.read_pickle(
+        "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/templating_truth.pkl"
+    )
+    mask_truth = pd.read_pickle(
+        "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/mask_truth.pkl"
+    )
+    templating_predictions = pd.read_pickle(
+        "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/templating_pred.pkl"
+    )
+    mask_predictions = pd.read_pickle(
+        "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/mask_pred.pkl"
+    )
+
+    # # I can kinda already tell this binary prediction task is not going to help... unless we weigh the actual training differently...
+
+    # cosims, r2_scores, rmse_scores, spearman_scores = calculate_results_with_masks(
+    #     allData.to_numpy(),
+    #     templating_predictions.mask(np.logical_not(mask_predictions)).to_numpy(),
+    # )
+
+    # combined_predictions = np.nan_to_num(
+    #     templating_predictions.mask(np.logical_not(mask_predictions)).to_numpy(),
+    #     nan=100,
+    # )
+    # results = np.nan_to_num(
+    #     allData.to_numpy(),
+    #     nan=100,
+    # )
+    # pdb.set_trace()
+    # top_1 = calculate_top_k_accuracy(results, templating_predictions.to_numpy(), 1)
+    # top_3 = calculate_top_k_accuracy(results, templating_predictions.to_numpy(), 3)
+    # top_5 = calculate_top_k_accuracy(results, templating_predictions.to_numpy(), 5)
+
+    # pdb.set_trace()
+    # print("howdy yitong")
+    # print(
+    #     "\ntop_1_accuracy: ",
+    #     top_1.round(4),
+    #     "\ntop_3_accuracy: ",
+    #     top_3.round(4),
+    #     "\ntop_5_accuracy: ",
+    #     top_5.round(4),
+    # )
+
+    # # def calculate_top_k_accuracy(all_true, ntk_predictions, k, by_row=True):
+    # #     if by_row:
+    # #         lowest_mask = (allData.T == allData.min(axis=1)).T
+    # #         _col_nums, top_indices = np.where(lowest_mask)
+    # #         pred = -templating_predictions.to_numpy()
+    # #     else:
+    # #         lowest_mask = all_true == all_true.min(axis=0)
+    # #         _col_nums, top_indices = np.where(lowest_mask)
+    # #         pred = -ntk_predictions.to_numpy().T
+    # #     return top_k_accuracy_score(top_indices, pred, k=k, labels=range(pred.shape[1]))
+
+    # # allData = pd.read_pickle('/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/templating_truth.pkl')
+    # # mask_truth = pd.read_pickle('/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/mask_truth.pkl')
+    # # templating_predictions = pd.read_pickle('/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/templating_pred.pkl')
+
+    plot_two_matrices(
+        allData.to_numpy(),
+        "Ground Truth",
+        templating_predictions.to_numpy(),
+        "Predicted",
+        "combined_figure_2",
+        mask_truth,
+    )
+
+
+
 def buisness_as_normal():
     (
         allData,
@@ -535,86 +763,47 @@ def buisness_as_normal():
     # TODO(Mingrou): You'll also want to set prior="CustomZeolite"
     # allData = allData.T
     # binaryData = binaryData.T
-    run_ntk_binary_classification(
-        binaryData,
-        only_train,
-        method,
-        SEED,
-        path_prefix,
-        plot,
-        prior="CustomOSDAVector",  # "CustomOSDA",
-    )
+    binaryData = binaryData[binaryData.max(axis=1) != binaryData.min(axis=1)]
+    # binary_predictions = run_ntk_binary_classification(
+    #     binaryData,
+    #     only_train,
+    #     method,
+    #     SEED,
+    #     path_prefix,
+    #     plot,
+    #     prior="CustomOSDAVector",
+    # )
     # Let's take out rows that have just no templating energies at all...
     # not even sure how they got into the dataset... Worth investigating...
     # e.g., these four: C1COCCOCCNCCOCCOCCN1, C1COCCOCCOCCN1, Nc1ccccc1, OCC(CO)(CO)CO
     allData = allData[allData.max(axis=1) != allData.min(axis=1)]
-    run_ntk(
+    templating_predictions = run_ntk(
         allData,
         only_train,
         method,
         SEED,
         path_prefix,
         plot,
-        prior="CustomOSDAVector",  # "CustomOSDAVector",
+        prior="CustomOSDAVector",
         fill_value=30,
         average_by_rows=True,
     )
 
+    plot_matrix(
+        templating_predictions.to_numpy(),
+        "templating_predictions",
+        binaryData.to_numpy(),
+    )
+    plot_matrix(allData.to_numpy(), "combined_truth", binaryData.to_numpy())
 
+    pdb.set_trace()
+
+    save_matrix(templating_predictions, "templating_pred.pkl")
+    # save_matrix(binary_predictions, "mask_pred.pkl")
+    save_matrix(allData, "templating_truth.pkl")
+    save_matrix(binaryData, "mask_truth.pkl")
+
+    print("hello yitong! howzit look all combined?")
+    
 if __name__ == "__main__":
-    (
-        allData,
-        binaryData,
-        only_train,
-        method,
-        SEED,
-        path_prefix,
-        plot,
-        prior,
-    ) = validate_zeolite_inputs(col_name="SMILES")
-    precomputed_energies = pd.read_pickle(
-        "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/data_from_daniels_ml_models/precomputed_energies_78616by196.pkl"
-    )
-    precomputed_priors = pd.read_pickle(
-        "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/data_from_daniels_ml_models/prior_precomputed_energies_78616by196.pkl"
-    )
-    truth = binaryData.to_numpy()
-    # Let's add binary data again as the test set...
-    binaryData = pd.concat([binaryData, binaryData])
-    X = make_prior(
-        None,
-        None,
-        None,
-        method="CustomOSDAVector",
-        normalization_factor=NORM_FACTOR,
-        all_data=binaryData,
-    )
-
-    binaryData = binaryData.to_numpy()
-    num_test_rows = 1194
-    mask = np.ones_like(binaryData)
-    mask[len(binaryData) - num_test_rows :, :] = 0
-
-    results = predict_space_opt_CMAP_data(binaryData, mask, num_test_rows, X)
-    results = results.round()
-    plot_matrix(results, "results", vmin=0, vmax=1)
-    plot_matrix(truth, "truth", vmin=0, vmax=1)
-
-    correct = results[results == truth]
-    incorrect = results[results != truth]
-    true_positive = len(correct[correct == 1])
-    true_negative = len(correct[correct == 0])
-    false_positive = len(incorrect[incorrect == 1])
-    false_negative = len(incorrect[incorrect == 0])
-    total = (true_positive + true_negative + false_positive + false_negative)
-    total_accuracy = (1.0 * true_positive + true_negative) / total
-    precision = (1.0 * true_positive) / (false_positive + true_positive)
-    recall = (1.0 * true_positive) / (true_positive + false_negative)
-    print(
-        "total_accuracy: ",
-        total_accuracy,
-        " precision: ",
-        precision,
-        " recall: ",
-        recall,
-    )
+    buisness_as_normal()

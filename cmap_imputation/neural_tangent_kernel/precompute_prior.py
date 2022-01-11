@@ -182,7 +182,7 @@ def smile_to_property(smile, process_conformers=False, debug=False):
 # TODO: Come back for the WHIMs list of floats can't be taken an average of apparently...
 @lru_cache(maxsize=16384)
 def average_properties(smile, num_runs=1):
-    df = pd.DataFrame([smile_to_property(smile, process_conformers=True) for i in range(num_runs)])
+    df = pd.DataFrame([smile_to_property(smile, process_conformers=False) for i in range(num_runs)])
     meaned_df = df.mean(numeric_only=True)
     # Pretty certain it's okay to take the average over WHIMs and GETAWAY...
     # But maybe good to double check...
@@ -242,15 +242,15 @@ def prior_from_small_matrix():
     save_matrix(prior, save_file)
 
 
-def precompute_priors_for_200K_Osdas():
-    num_runs = 1
+def precompute_priors_for_780K_Osdas():
+    num_runs = 4
     sample_size = 78616
 
-    input = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/moleules_from_daniel/211221_energies.csv"
+    input = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/data_from_daniels_ml_models/211221_energies.csv"
     all_data_df = pd.read_csv(input)
     all_data_df = all_data_df.set_index("inchi")
 
-    inchi_to_smile_conversion = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/moleules_from_daniel/211221_boxes.csv"
+    inchi_to_smile_conversion = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/data_from_daniels_ml_models/211221_boxes.csv"
     inchi_to_smile = pd.read_csv(inchi_to_smile_conversion)
     inchi_to_smile = inchi_to_smile.set_index("inchi")[["smiles"]]  # .to_dict('index')
 
@@ -258,8 +258,8 @@ def precompute_priors_for_200K_Osdas():
     joined_df.rename(columns={"smiles": "SMILES"}, inplace=True)
     all_data_df = joined_df.sample(sample_size)
 
-    save_file = "precomputed_energies_" + str(sample_size) + "by196.pkl"
-    prior = osda_prior_helper(all_data_df, num_runs)
+    save_file = "precomputed_energies_" + str(sample_size) + "by196WithWhims.pkl"
+    prior = osda_prior_helper(all_data_df, num_runs, save_file)
     # drop all molecules that couldn't be embedded
     prior = prior.loc[(prior != 0).any(axis=1)]
     save_matrix(prior, "prior_" + save_file)
@@ -272,4 +272,4 @@ def precompute_priors_for_200K_Osdas():
 
 
 if __name__ == "__main__":
-    prior_from_small_matrix()
+    precompute_priors_for_780K_Osdas()
