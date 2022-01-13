@@ -17,6 +17,7 @@ from sklearn.metrics import mean_squared_error
 from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import top_k_accuracy_score
 import time
+from precompute_prior import smile_to_property
 
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
@@ -122,7 +123,8 @@ def res_without_filter(true, pred):
     return cosims, r2_scores, rmse_scores, spearman_scores
 
 
-# TODO: collapse run_ntk & run_ntk_binary_classification together...
+# TODO: Move the processing of the data (replacing non-binding with row mean) outside of run_ntk()
+# TODO: perhaps move the analysis (spearman, etc) after the function as well.
 def run_ntk(
     allData,
     only_train,
@@ -268,8 +270,8 @@ def run_ntk(
         "\ntop_5_accuracy: ",
         top_5.round(4),
     )
-    plot_matrix(all_true, "regression_truth")
-    plot_matrix(ntk_predictions, "regression_prediction")
+    plot_matrix(all_true, "regression_truth", vmin=-30, vmax=5)
+    plot_matrix(ntk_predictions, "regression_prediction", vmin=-30, vmax=5)
     return ntk_predictions
 
 
@@ -350,168 +352,6 @@ def num_correct(true, results):
     true - results
 
 
-def run_ntk_binary_classification(
-    allData,
-    only_train,
-    method,
-    SEED,
-    path_prefix,
-    plot,
-    prior=None,
-    # TODO: get rid of this argument and just use the fed in method argument.
-    feature=None,  # "CustomOSDA",
-):
-    path_prefix += f"{prior}Prior"
-    if method[0] == "kfold":
-        iterator = tqdm(get_splits(allData, k=method[1], seed=SEED), total=method[1])
-    elif method[0] == "sparse":
-        iterator = tqdm(
-            [train_test_w_controls(allData, drugs_in_train=method[1], seed=SEED)],
-            total=1,
-        )
-    else:
-        raise AssertionError("Unknown method")
-
-    all_true = None  # Ground truths for all fold(s)
-    all_metrics_ntk = None  # Metrics (R^2, Cosine Similarity, Pearson R) for each entry
-    ntk_predictions = None  # Predictions for all fold(s)
-    splits = None  # Per-fold metrics
-    # Iterate over all predictions and populate metrics matrices
-    for train, test in iterator:
-        all_data = pd.concat([train, test]).to_numpy()
-        ##### SAFETY
-        all_data[train.shape[0] :, :] = 0
-        ##### SAFETY
-        mask = np.ones_like(all_data)
-        mask[len(train) :, :] = 0
-
-        X = make_prior(
-            train,
-            only_train,
-            test,
-            method=prior,
-            normalization_factor=NORM_FACTOR,
-            feature=feature,
-        )
-        # okay so the bottom 1/10 of mask and all_data are just all zeros.
-        results_ntk = predict_space_opt_CMAP_data(all_data, mask, len(test), X=X)
-        # TADAA! binary classification in full swing :^)
-        results_ntk = results_ntk.round()
-
-        prediction_ntk = pd.DataFrame(
-            data=results_ntk, index=test.index, columns=test.columns
-        )
-        # okay ntk_predictions is actuallly useful. I admit it.
-        ntk_predictions = (
-            prediction_ntk
-            if ntk_predictions is None
-            else pd.concat([ntk_predictions, prediction_ntk])
-        )
-
-        true = test.to_numpy()
-
-        correct = results_ntk[results_ntk == true]
-        incorrect = results_ntk[results_ntk != true]
-        new_splits = pd.DataFrame(
-            data=np.column_stack(
-                [
-                    len(correct[correct == 1]),
-                    len(correct[correct == 0]),
-                    # the prediction was 1 but true was 0
-                    len(incorrect[incorrect == 1]),
-                    # the prediction was 0 but true was 1
-                    len(incorrect[incorrect == 0]),
-                    len(train),
-                    len(test),
-                ]
-            )
-        )
-        new_splits.columns = [
-            "true_positive",
-            "true_negative",
-            "false_positive",
-            "false_negative",
-            "train_size",
-            "test_size",
-        ]
-        splits = (
-            new_splits
-            if splits is None
-            else pd.concat([splits, new_splits], ignore_index=True)
-        )
-        all_true = pd.concat([all_true, test]) if all_true is not None else test
-    total = (
-        sum(splits.false_positive)
-        + sum(splits.false_negative)
-        + sum(splits.true_positive)
-        + sum(splits.true_negative)
-    )
-    total_accuracy = (
-        1.0 * sum(splits.true_positive) + sum(splits.true_negative)
-    ) / total
-    if sum(splits.false_positive) + sum(splits.true_positive) == 0:
-        precision = 0
-    else:
-        precision = (1.0 * sum(splits.true_positive)) / (
-            sum(splits.false_positive) + sum(splits.true_positive)
-        )
-
-    recall = (1.0 * sum(splits.true_positive)) / (
-        sum(splits.true_positive) + sum(splits.false_negative)
-    )
-    print(
-        "total accuracy: ",
-        total_accuracy,
-        " total precision: ",
-        precision,
-        " total recall: ",
-        recall,
-    )
-    plot_matrix(all_true, "binary_classification_truth", vmin=0, vmax=1)
-    plot_matrix(ntk_predictions, "binary_classification_prediction", vmin=0, vmax=1)
-    return ntk_predictions
-
-
-def test_a_bunch_of_features(
-    binaryData,
-    only_train,
-    method,
-    SEED,
-    path_prefix,
-    plot,
-):
-    features_to_test = [
-        "a",
-        "b",
-        "c",
-        "alpha",
-        "betta",
-        "gamma",
-        "volume",
-        "rdls",
-        "framework_density",
-        "td_10",
-        "td",
-        "included_sphere_diameter",
-        "diffused_sphere_diameter_a",
-        "diffused_sphere_diameter_b",
-        "diffused_sphere_diameter_c",
-        "accessible_volume",
-    ]
-    results = {}
-    for feature in features_to_test:
-        results[feature] = run_ntk_binary_classification(
-            binaryData,
-            only_train,
-            method,
-            SEED,
-            path_prefix,
-            plot,
-            feature={feature: 1.0},
-        )
-    print(results)
-
-
 def make_skinny(allData, col_1="variable", col_2="SMILES"):
     allData = allData.reset_index()
     melted_matrix = pd.melt(
@@ -558,28 +398,22 @@ def skinny_ntk():
 
     binaryData = binaryData[binaryData.max(axis=1) != binaryData.min(axis=1)]
     binaryData = binaryData.iloc[:200, :100]
+    # TODO: average this by rows...
+
     binaryData = make_skinny(binaryData, col_1="Zeolite")
     # TODO: for regression on skinny matrix... see how to average_by_rows...
-    # run_ntk(
-    #     allData,
-    #     only_train,
-    #     method,
-    #     SEED,
-    #     path_prefix,
-    #     plot,
-    #     prior="CustomOSDAandZeoliteAsRows",
-    #     fill_value=30,
-    #     average_by_rows=False,
-    #     skinny=True,
-    # )
-    run_ntk_binary_classification(
-        binaryData,
+    # TODO: rather than make things weird. just pass in a mask for what to use in calculations.
+    run_ntk(
+        allData,
         only_train,
         method,
         SEED,
         path_prefix,
         plot,
         prior="CustomOSDAandZeoliteAsRows",
+        fill_value=30,
+        average_by_rows=False,
+        skinny=True,
     )
 
 
@@ -590,9 +424,110 @@ def save_matrix(matrix, file_name):
     matrix.to_pickle(savepath)
 
 
+def chunks(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i : i + n]
+
+
 def test_all_osdas():
+    # (
+    #     training_data,
+    #     binaryData,
+    #     only_train,
+    #     method,
+    #     SEED,
+    #     path_prefix,
+    #     plot,
+    #     prior,
+    # ) = validate_zeolite_inputs(col_name="SMILES")
+    # First thing's first, let's process the training data
+    # Set non-bindings to the row mean...
+    # fill_value = 30
+    # training_data[training_data == fill_value] = None
+    # training_data = training_data.apply(lambda row: row.fillna(row.mean()), axis=1)
+    # # Let's filter out all the rows with all empty values...
+    # # e.g., these four: C1COCCOCCNCCOCCOCCN1, C1COCCOCCOCCN1, Nc1ccccc1, OCC(CO)(CO)CO
+    # training_data = training_data.dropna(thresh=1)
+    # training_data = training_data[
+    #     training_data.max(axis=1) != training_data.min(axis=1)
+    # ]
+
+    binding_data = pd.read_pickle("data/BindingSiO2.pkl")
+    binding_data = binding_data.apply(lambda row: row.fillna(row.mean()), axis=1)
+    # Let's filter out all the rows with all empty values...
+    # e.g., these four: C1COCCOCCNCCOCCOCCN1, C1COCCOCCOCCN1, Nc1ccccc1, OCC(CO)(CO)CO
+    binding_data = binding_data.dropna(thresh=1)
+    training_data = binding_data[binding_data.max(axis=1) != binding_data.min(axis=1)]
+    pdb.set_trace()
+    # training_data ends up as 1190 rows x 209 columns
+
+    # These are predictions according to Daniel's per Zeolite ML model for 78K OSDAs
+    daniel_energies = pd.read_pickle(
+        "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/data_from_daniels_ml_models/precomputed_energies_78616by196.pkl"
+    )
+    # These are precomputed priors for those 78K OSDAs
+    precomputed_priors = pd.read_pickle(
+        "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/data_from_daniels_ml_models/precomputed_energies_78616by196WithWhims.pkl"
+    )
+    daniel_energies = daniel_energies.reindex(precomputed_priors.index)
+    truth = daniel_energies.to_numpy()
+    # We need to dedup indices so we're not testing on training samples. (only 2 overlap??? crazy)
+    daniel_energies = daniel_energies.drop(
+        set.intersection(set(training_data.index), set(daniel_energies.index))
+    )
+
+    # Chunking by 10K to get around how bad matrix multiplication scales with memory...
+    # This won't actually make our results any less accurate since we're only training with the 1190x209 samples in training_data
+    # and just extending the results to the 10K next samples.
+    chunk_size = 10000
+    iterator = tqdm(chunks(range(len(daniel_energies.index)), chunk_size))
+    predicted_energies = pd.DataFrame()
+    for chunk in iterator:
+        daniel_energies_chunk = daniel_energies.iloc[chunk, :]
+        allData = pd.concat([training_data, daniel_energies_chunk])
+        X = make_prior(
+            None,
+            None,
+            None,
+            method="CustomOSDA",
+            normalization_factor=NORM_FACTOR,
+            all_data=allData,
+        )
+
+        # So now the question becomes, do we do the binary sweep first? My guess is yes.
+        # and after the binary sweep we can zero everything to some middle value...
+        # bleh binary sweep doesn't work well :(
+        # Remember that we set all non-binding energies to the row mean so predicted templating energies
+        # that are close to row means might be way off.
+        # Only the really low values & really high values are to be trusted.
+        # That's the problem with setting non-binding to row means.
+
+        allData = allData.to_numpy()
+        mask = np.ones_like(allData)
+        mask[len(allData) - len(chunk) :, :] = 0
+        results = predict_space_opt_CMAP_data(allData, mask, len(chunk), X)
+        predicted_energies = predicted_energies.append(
+            pd.DataFrame(
+                results,
+                index=daniel_energies_chunk.index,
+                columns=training_data.columns,
+            )
+        )
+    save_matrix(predicted_energies, "predicted_binding_energies_for_78K_OSDAs.pkl")
+
+
+def make_skinny(allData, col_1="variable", col_2="SMILES"):
+    allData = allData.reset_index()
+    melted_matrix = pd.melt(
+        allData, id_vars=col_2, value_vars=list(allData.columns[1:])
+    )
+    return melted_matrix.set_index([col_2, col_1])
+
+
+def lets_look_at_predicted_energies():
     (
-        allData,
+        training_data,
         binaryData,
         only_train,
         method,
@@ -601,73 +536,148 @@ def test_all_osdas():
         plot,
         prior,
     ) = validate_zeolite_inputs(col_name="SMILES")
-    precomputed_energies = pd.read_pickle(
-        "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/data_from_daniels_ml_models/precomputed_energies_78616by196.pkl"
+    # fill_value = 30
+    # training_data[training_data == fill_value] = None
+    # training_data = training_data.apply(lambda row: row.fillna(row.mean()), axis=1)
+    # # Let's filter out all the rows with all empty values...
+    # # e.g., these four: C1COCCOCCNCCOCCOCCN1, C1COCCOCCOCCN1, Nc1ccccc1, OCC(CO)(CO)CO
+    # training_data = training_data.dropna(thresh=1)
+    # training_data = training_data[
+    #     training_data.max(axis=1) != training_data.min(axis=1)
+    # ]
+    # skinny_training_data = make_skinny(training_data, col_1="Zeolite", col_2="SMILES")
+    # skinny_training_data.plot.hist(bins=30)
+    # plt.savefig("training_data_histogram.png", dpi=100)
+
+    daniel_energies = pd.read_pickle(
+        "data/data_from_daniels_ml_models/precomputed_energies_78616by196.pkl"
     )
-    precomputed_priors = pd.read_pickle(
-        "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/data_from_daniels_ml_models/precomputed_energies_78616by196WithWhims.pkl"
+    predicted_energies = pd.read_pickle(
+        "data/predicted_templating_energies_for_78K_OSDAs.pkl"
     )
-    precomputed_energies = precomputed_energies.reindex(precomputed_priors.index)
-    # Set non-bindings to the row mean...
-    fill_value = 30
-    allData[allData == fill_value] = None
-    allData = allData.apply(lambda row: row.fillna(row.mean()), axis=1)
-    # Let's filter out all the rows with all empty values...
-    # e.g., these four: C1COCCOCCNCCOCCOCCN1, C1COCCOCCOCCN1, Nc1ccccc1, OCC(CO)(CO)CO
-    allData = allData.dropna(thresh=1)
-    allData = allData[allData.max(axis=1) != allData.min(axis=1)]
-    # 1190 rows x 209 columns
+    # predicted_energies = pd.read_pickle(
+    #     "data/predicted_binding_energies_for_78K_OSDAs.pkl"
+    # )
+    # all_energies = pd.concat([predicted_energies, training_data])
+    sorted_training_data_by_column = pd.DataFrame()
+    for col in predicted_energies:
+        sorted_training_data_by_column[col] = training_data[col].sort_values(
+            ignore_index=True
+        )
 
-    truth = precomputed_energies.to_numpy()
+    sorted_energies_by_column = pd.DataFrame()
+    for col in predicted_energies:
+        sorted_energies_by_column[col] = predicted_energies[col].sort_values(
+            ignore_index=True
+        )
+    
+    bag_of_differences = []
+    bag_where_we_beat_existing_OSDAs_with_labels = []
+    for col_index in range(len(sorted_energies_by_column.columns)):
+        # if sorted_energies_by_column.iloc[0, col_index] > sorted_training_data_by_column.iloc[0, col_index]:
+        #     continue
+        difference = sorted_training_data_by_column.iloc[0, col_index] - sorted_energies_by_column.iloc[0, col_index]
+        bag_of_differences.append(difference) 
+        bag_where_we_beat_existing_OSDAs_with_labels.append((difference, col_index))
+    plt.hist(bag_of_differences, bins = 100)
+    plt.show()
+    plt.savefig("histogram_where_were_lower_than_literature.png", dpi=30)
 
-    allData = pd.concat([allData, precomputed_energies])
-    # We need to dedup indices so we're not testing on training samples. (only 2 overlap??? crazy)
-    allData = allData[~allData.index.duplicated(keep="first")]
-    # This 10K is a limitation we've got to get around with matrix multiplication and out of memory...
-    allData = allData.iloc[: (1190 + 10000), :]
+    bag_where_we_beat_existing_OSDAs_with_labels.sort(key = lambda x: x[0]) 
 
-    # 79536 rows x 209 columns
-    # So now the question becomes, do we do the binary sweep first? My guess is yes.
-    # and after the binary sweep we can zero everything to some middle value...
+    lowest_value = sorted_energies_by_column.iloc[0,154]
+    column_name = sorted_energies_by_column.columns[154]
+    row = predicted_energies.loc[predicted_energies[column_name] == lowest_value]
+    smile_to_property('CC(C)[P+](C(C)C)(C(C)C)C(C)C', debug=True)
 
-    X = make_prior(
-        None,
-        None,
-        None,
-        method="CustomOSDA",
-        normalization_factor=NORM_FACTOR,
-        all_data=allData,
+    lowest_value = sorted_training_data_by_column.iloc[0,154]
+    column_name = sorted_training_data_by_column.columns[154]
+    training_row = training_data.loc[training_data[column_name] == lowest_value]
+    # 112
+    # sorted_energies_by_column.iloc[0, 112]
+
+
+    # difference & the corresponding lowest templating energy.
+    differences_between_last_two = [
+        (
+            sorted_energies_by_column.iloc[1, col_index]
+            - sorted_energies_by_column.iloc[0, col_index],
+            col_index,
+        )
+        for col_index in range(len(sorted_energies_by_column.columns))
+    ]
+    differences_between_last_two.sort(key = lambda x: x[0]) 
+    # sorted_energies_by_column[]
+    lowest_value = sorted_energies_by_column.iloc[0,147]
+    column_name = sorted_energies_by_column.columns[147]
+    row = predicted_energies.loc[predicted_energies[column_name] == lowest_value]
+    smile_to_property('CCC[N+](CCC)(CCC)CCC', debug=True)
+
+
+    # differences_between_last_two = [
+    #     sorted_energies_by_column.iloc[1, col_index] - sorted_energies_by_column.iloc[0, col_index]
+    #     for col_index in range(len(sorted_energies_by_column.columns))
+    # ]
+    # differences_between_last_two.sort() 
+
+
+    # plt.hist(differences_between_last_two, bins = 30)
+    # plt.show()
+    # plt.savefig("predicted_energy_difference_histogram.png", dpi=100)
+    # pdb.set_trace()
+
+    # # predicted_energies.mean(axis=1).max()
+    # skinny_energies = make_skinny(predicted_energies, col_1="Zeolite", col_2="index")
+    # skinny_energies.plot.hist(bins=30)
+    # plt.savefig("predicted_energy_histogram.png", dpi=100)
+
+    # # Sorted each energy
+    # skinny_energies = skinny_energies.sort_values(by=['value'])
+    # smile_to_property('C[C@H]1CCCC[N@@+]12CCC[C@@H]2C', debug=True)
+
+    # For comparison make sure they all have the same columns & rows
+    daniel_energies = daniel_energies.loc[
+        set.intersection(set(predicted_energies.index), set(daniel_energies.index))
+    ]
+    predicted_energies = predicted_energies.loc[
+        set.intersection(set(predicted_energies.index), set(daniel_energies.index))
+    ]
+    predicted_energies = predicted_energies.filter(daniel_energies.columns)
+    predicted_energies = predicted_energies.reindex(daniel_energies.index)
+    daniel_energies = daniel_energies.reindex(predicted_energies.index)
+    top_20_accuracies = [
+        calculate_top_k_accuracy(daniel_energies, predicted_energies, k)
+        for k in range(0, 21)
+    ]
+    plot_top_k_curves(top_20_accuracies)
+    cosims, r2_scores, rmse_scores, spearman_scores = res_without_filter(
+        daniel_energies.to_numpy(), predicted_energies.to_numpy()
+    )
+    print(
+        "cosims:\n",
+        np.mean(cosims),
+        "r2_scores:\n",
+        np.mean(r2_scores),
+        "rmse_scores:\n",
+        np.mean(rmse_scores),
+        "spearman_scores:\n",
+        np.mean(spearman_scores),
+        "top_20_accuracies: ",
+        top_20_accuracies,
     )
 
-    allData = allData.to_numpy()
-    num_test_rows = 10000  # 78346
-    mask = np.ones_like(allData)
-    mask[len(allData) - num_test_rows :, :] = 0
-
-    start = time.time()
-    results = predict_space_opt_CMAP_data(allData, mask, num_test_rows, X)
-    end = time.time()
-    print("total time: ", end - start)
-    pdb.set_trace()
-    # TODO: test this shit...
-    plot_matrix(results, "results", vmin=0, vmax=1)
-    plot_matrix(truth, "truth", vmin=0, vmax=1)
+    print("hello")
 
 
-# TODO: try some stuff.
-def calculate_results_with_masks(true, pred):
+# TODO: Are these the more accurate results to report?
+def res_without_filter(true, pred):
     cosims = []
     r2_scores = []
     rmse_scores = []
     spearman_scores = []
-    for row_id in range(true.shape[0]):
+    for row_id in tqdm(range(true.shape[0])):
         i = true[row_id]
         j = pred[row_id]
-
-        # I still don't know if this is koshure, to fill in all the nan results with the mean like this...
-        i = np.nan_to_num(i, nan=np.mean(i[~np.isnan(i)]))
-        j = np.nan_to_num(j, nan=np.mean(j[~np.isnan(j)]))
-
         cosims.append(get_cosims(np.array([i]), np.array([j])))
         r2_scores.append(r2_score(i, j, multioutput="raw_values"))
         rmse_scores.append(
@@ -675,77 +685,6 @@ def calculate_results_with_masks(true, pred):
         )
         spearman_scores.append([spearmanr(i, j).correlation])
     return cosims, r2_scores, rmse_scores, spearman_scores
-
-
-def crazy_stuff():
-    allData = pd.read_pickle(
-        "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/templating_truth.pkl"
-    )
-    mask_truth = pd.read_pickle(
-        "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/mask_truth.pkl"
-    )
-    templating_predictions = pd.read_pickle(
-        "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/templating_pred.pkl"
-    )
-    mask_predictions = pd.read_pickle(
-        "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/mask_pred.pkl"
-    )
-
-    # # I can kinda already tell this binary prediction task is not going to help... unless we weigh the actual training differently...
-
-    # cosims, r2_scores, rmse_scores, spearman_scores = calculate_results_with_masks(
-    #     allData.to_numpy(),
-    #     templating_predictions.mask(np.logical_not(mask_predictions)).to_numpy(),
-    # )
-
-    # combined_predictions = np.nan_to_num(
-    #     templating_predictions.mask(np.logical_not(mask_predictions)).to_numpy(),
-    #     nan=100,
-    # )
-    # results = np.nan_to_num(
-    #     allData.to_numpy(),
-    #     nan=100,
-    # )
-    # pdb.set_trace()
-    # top_1 = calculate_top_k_accuracy(results, templating_predictions.to_numpy(), 1)
-    # top_3 = calculate_top_k_accuracy(results, templating_predictions.to_numpy(), 3)
-    # top_5 = calculate_top_k_accuracy(results, templating_predictions.to_numpy(), 5)
-
-    # pdb.set_trace()
-    # print("howdy yitong")
-    # print(
-    #     "\ntop_1_accuracy: ",
-    #     top_1.round(4),
-    #     "\ntop_3_accuracy: ",
-    #     top_3.round(4),
-    #     "\ntop_5_accuracy: ",
-    #     top_5.round(4),
-    # )
-
-    # # def calculate_top_k_accuracy(all_true, ntk_predictions, k, by_row=True):
-    # #     if by_row:
-    # #         lowest_mask = (allData.T == allData.min(axis=1)).T
-    # #         _col_nums, top_indices = np.where(lowest_mask)
-    # #         pred = -templating_predictions.to_numpy()
-    # #     else:
-    # #         lowest_mask = all_true == all_true.min(axis=0)
-    # #         _col_nums, top_indices = np.where(lowest_mask)
-    # #         pred = -ntk_predictions.to_numpy().T
-    # #     return top_k_accuracy_score(top_indices, pred, k=k, labels=range(pred.shape[1]))
-
-    # # allData = pd.read_pickle('/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/templating_truth.pkl')
-    # # mask_truth = pd.read_pickle('/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/mask_truth.pkl')
-    # # templating_predictions = pd.read_pickle('/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/templating_pred.pkl')
-
-    plot_two_matrices(
-        allData.to_numpy(),
-        "Ground Truth",
-        templating_predictions.to_numpy(),
-        "Predicted",
-        "combined_figure_2",
-        mask_truth,
-    )
-
 
 
 def buisness_as_normal():
@@ -773,12 +712,18 @@ def buisness_as_normal():
     #     plot,
     #     prior="CustomOSDAVector",
     # )
+    binding_data = pd.read_pickle("data/BindingSiO2.pkl")
+    binding_data = binding_data.apply(lambda row: row.fillna(30), axis=1)
+    # Let's filter out all the rows with all empty values...
+    # e.g., these four: C1COCCOCCNCCOCCOCCN1, C1COCCOCCOCCN1, Nc1ccccc1, OCC(CO)(CO)CO
+    binding_data = binding_data.dropna(thresh=1)
+    binding_data = binding_data[binding_data.max(axis=1) != binding_data.min(axis=1)]
     # Let's take out rows that have just no templating energies at all...
     # not even sure how they got into the dataset... Worth investigating...
     # e.g., these four: C1COCCOCCNCCOCCOCCN1, C1COCCOCCOCCN1, Nc1ccccc1, OCC(CO)(CO)CO
     allData = allData[allData.max(axis=1) != allData.min(axis=1)]
     templating_predictions = run_ntk(
-        allData,
+        binding_data,
         only_train,
         method,
         SEED,
@@ -788,22 +733,23 @@ def buisness_as_normal():
         fill_value=30,
         average_by_rows=True,
     )
-
-    plot_matrix(
-        templating_predictions.to_numpy(),
-        "templating_predictions",
-        binaryData.to_numpy(),
-    )
-    plot_matrix(allData.to_numpy(), "combined_truth", binaryData.to_numpy())
+    pdb.set_trace()
+    # plot_matrix(
+    #     binding_predictions.to_numpy(),
+    #     "binding_predictions",
+    #     binaryData.to_numpy(),
+    # )
 
     pdb.set_trace()
 
-    save_matrix(templating_predictions, "templating_pred.pkl")
+    # save_matrix(binding_predictions, "templating_pred.pkl")
     # save_matrix(binary_predictions, "mask_pred.pkl")
-    save_matrix(allData, "templating_truth.pkl")
-    save_matrix(binaryData, "mask_truth.pkl")
 
     print("hello yitong! howzit look all combined?")
-    
+
+
 if __name__ == "__main__":
-    buisness_as_normal()
+    # test_all_osdas()
+    # buisness_as_normal()
+    # lets_look_at_predicted_energies()
+    skinny_ntk()

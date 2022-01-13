@@ -110,11 +110,11 @@ def load_conformer_priors(
     exploded_prior = pd.DataFrame(
         columns=[
             "num_conformers",
-            "mean_volume",
-            "min_volume",
+            # "mean_volume",
+            # "min_volume",
             "std_dev_volume",
-            "mean_energy",
-            "min_energy",
+            # "mean_energy",
+            # "min_energy",
             "std_dev_energy",
         ]
     )
@@ -128,11 +128,11 @@ def load_conformer_priors(
             series = pd.Series(
                 {
                     "num_conformers": 1.0,
-                    "mean_volume": 0.0,
-                    "min_volume": 0.0,
+                    # "mean_volume": 0.0,
+                    # "min_volume": 0.0,
                     "std_dev_volume": 0.0,
-                    "mean_energy": 0.0,
-                    "min_energy": 0.0,
+                    # "mean_energy": 0.0,
+                    # "min_energy": 0.0,
                     "std_dev_energy": 0.0,
                 }
             )
@@ -141,11 +141,11 @@ def load_conformer_priors(
             series = pd.Series(
                 {
                     "num_conformers": len(conformer_properties["volumes"]),
-                    "mean_volume": np.mean(conformer_properties["volumes"]),
-                    "min_volume": min(conformer_properties["volumes"]),
+                    # "mean_volume": np.mean(conformer_properties["volumes"]),
+                    # "min_volume": min(conformer_properties["volumes"]),
                     "std_dev_volume": np.std(conformer_properties["volumes"]),
-                    "mean_energy": np.mean(conformer_properties["energies"]),
-                    "min_energy": min(conformer_properties["energies"]),
+                    # "mean_energy": np.mean(conformer_properties["energies"]),
+                    # "min_energy": min(conformer_properties["energies"]),
                     "std_dev_energy": np.std(conformer_properties["energies"]),
                 }
             )

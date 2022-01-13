@@ -173,8 +173,9 @@ def smile_to_property(smile, process_conformers=False, debug=False):
     # do we want other weird things like HallKierAlpha?
     # I want some measure of flexibility. It seems like they calculated that by taking all the conformers.
     # https://pubs.acs.org/doi/pdf/10.1021/acs.jcim.6b00565?rand=xovj8tmp
-
+    pdb.set_trace()
     if debug:
+        m2 = Chem.RemoveHs(m)
         Draw.MolToFile(m2, "test3.o.png")
     return properties
 
