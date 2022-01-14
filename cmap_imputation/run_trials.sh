@@ -1,5 +1,7 @@
 # Prepare Data
-python prepare_data.py
+python zeolite_scraper.py
+python package_matrix.py
+python precompute_osda_priors.py
 
 # Trains DNPP on Sparse Subset (Seed 149)
 python dnpp/dnpp.py -b 2 -k 0 -s 149

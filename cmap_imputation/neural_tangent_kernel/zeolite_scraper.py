@@ -72,7 +72,7 @@ def save_matrix(matrix, file_name):
 
 TABLE = "https://america.iza-structure.org/IZA-SC/ftc_table.php"
 URL_STEM = "https://america.iza-structure.org/IZA-SC/"
-ZEOLITE_DATA = "scraped_zeolite_data.pkl"
+ZEOLITE_DATA = "data/scraped_zeolite_data.pkl"
 
 table_page = requests.get(TABLE)
 table_soup = BeautifulSoup(table_page.content, "html.parser")

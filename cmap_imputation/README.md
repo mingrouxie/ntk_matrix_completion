@@ -19,19 +19,11 @@ The files you'll care the most about at run-time:
 
 TODOs: 
 * Try the newly discovered Zeolite (I left TODO(Mingrou) in the code of prior.py and two_step_ntk.py to help with that).
+* Work on the rest of the zeolites with parameters from 
 * Keep cracking with as many priors for OSDAs & Zeolites as we can muster!
-    * PCA of WHIM (Weighted Holistic Invariant Molecular) descriptors: https://onlinelibrary.wiley.com/doi/abs/10.1002/qsar.200510159 
-    * GETAWAY descriptors https://pubmed.ncbi.nlm.nih.gov/12086530/ 
-    * Other measures of flexibility: https://pubs.acs.org/doi/pdf/10.1021/acs.jcim.6b00565?rand=xovj8tmp 
-    * Conformers:
-        * Something as simple as a list, or min/max length, or calculate out all properties for each conformer.
-    * Anything else I can pull from RDKit
-    * Use the Box Values from Daniel & Omar (data/data_from_daniels_ml_models/211221_boxes.csv)
-    * What priors can we pull from CIF files for Zeolites?
-        * Rafa says we could look at Message passing crystal GCNs. Seems intense.
-
 * Keep cracking on the skinny matrices to see if they can scale & combine row/col priors.
-* Try predicting binding energies rather than templating energies! (data from here: https://github.com/YitongTseo/Zeolite-Phase-Competition/blob/main/data/binding.csv)
+* Move the calculations of correctness outside of the run_ntk function... that's just sloppy. We can do that all after it runs with just the pooled results & and the true. We just have to make sure we split by rows/columns correctly...
+
 
 
 * Unfortunately I remembered now why it doesn't work to run the row priors, then the col priors in series or in parallel. The problem comes from the fact that we need to partition the data into the same test & train for col & row priors. And taking out rows when the columns have the priors or vice versa doesn't make sense mathematically. the algorithm is written only to hold out rows with row priors or columns with column priors. 
