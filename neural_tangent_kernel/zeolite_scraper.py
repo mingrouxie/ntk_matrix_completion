@@ -7,6 +7,8 @@ import os
 import pathlib
 from tqdm import tqdm
 
+from path_constants import ZEOLITE_PRIOR_FILE
+from utilities import save_matrix
 
 def scrape(url):
     properties = {}
@@ -61,18 +63,8 @@ def scrape(url):
     properties["accessible_volume"] = re.sub("[^0-9|.]", "", top_table[12].text)
     return properties
 
-
-def save_matrix(matrix, file_name):
-    file = os.path.abspath("")
-    dir_main = pathlib.Path(file).parent.absolute()
-    savepath = os.path.join(dir_main, file_name)
-    matrix.to_pickle(savepath)
-    matrix.to_csv(savepath.replace(".pkl", ".csv"))
-
-
 TABLE = "https://america.iza-structure.org/IZA-SC/ftc_table.php"
 URL_STEM = "https://america.iza-structure.org/IZA-SC/"
-ZEOLITE_DATA = "data/scraped_zeolite_data.pkl"
 
 table_page = requests.get(TABLE)
 table_soup = BeautifulSoup(table_page.content, "html.parser")
@@ -88,4 +80,4 @@ for zeolite in tqdm(all_zeolites):
     series.name = code
     zeolite_data = zeolite_data.append(series)
 
-save_matrix(zeolite_data, ZEOLITE_DATA)
+save_matrix(zeolite_data, ZEOLITE_PRIOR_FILE)

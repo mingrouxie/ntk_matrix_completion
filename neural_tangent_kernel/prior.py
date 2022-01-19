@@ -62,9 +62,12 @@ OSDA_PRIOR_LOOKUP = {
     "free_sas": 1.0,
     "bertz_ct": 1.0,
 }
-ZEOLITE_PRIOR_FILE = "/Users/mr/Documents/Work/MIT/PhD/matrix_completion/ntk_matrix_completion/cmap_imputation/data/scraped_zeolite_data.pkl"
-OSDA_PRIOR_FILE = "/Users/mr/Documents/Work/MIT/PhD/matrix_completion/ntk_matrix_completion/cmap_imputation/data/precomputed_OSDA_prior_10_with_whims.pkl"
-OSDA_CONFORMER_PRIOR_FILE = "//Users/mr/Documents/Work/MIT/PhD/matrix_completion/ntk_matrix_completion/cmap_imputation/data/OSDA_priors_with_conjugates.pkl"
+from path_constants import (
+    ZEOLITE_PRIOR_FILE,
+    OSDA_PRIOR_FILE,
+    OSDA_HYPOTHETICAL_PRIOR_FILE,
+    OSDA_CONFORMER_PRIOR_FILE,
+)
 
 
 ZEOLITE_PRIOR_MAP = {
@@ -152,7 +155,7 @@ def load_vector_priors(
     precomputed_file_name,
     identity_weight=0.01,
     normalize=True,
-    other_prior_to_concat="data/data_from_daniels_ml_models/precomputed_energies_78616by196WithWhims.pkl",
+    other_prior_to_concat=OSDA_HYPOTHETICAL_PRIOR_FILE,
 ):
     precomputed_prior = pd.read_pickle(precomputed_file_name)
     if other_prior_to_concat:
@@ -203,7 +206,7 @@ def load_prior(
     identity_weight=0.01,
     normalize=True,
     prior_index_map=None,
-    other_prior_to_concat="data/data_from_daniels_ml_models/precomputed_energies_78616by196WithWhims.pkl",
+    other_prior_to_concat=OSDA_HYPOTHETICAL_PRIOR_FILE,
 ):
     precomputed_prior = pd.read_pickle(precomputed_file_name)
     if other_prior_to_concat:
@@ -246,7 +249,7 @@ def osda_prior(
         OSDA_PRIOR_FILE,
         identity_weight,
         normalize,
-    )
+    ).to_numpy()
 
 
 def osda_vector_prior(
@@ -263,7 +266,6 @@ def osda_vector_prior(
         identity_weight,
         normalize,
     )
-
     # Splitting the original prior and the vector prior 50-50
     normalized_getaway_prior = getaway_prior / (2 * max(getaway_prior, key=sum).sum())
     normalized_prior = prior / (2 * max(prior, key=sum).sum())
@@ -304,7 +306,7 @@ def osda_zeolite_combined_prior(
         OSDA_PRIOR_FILE,
         identity_weight,
         normalize,
-    )
+    ).to_numpy()
     zeolite_prior = load_prior(
         [i[1] for i in all_data_df.index],
         ZEOLITE_PRIOR_LOOKUP,
@@ -312,7 +314,7 @@ def osda_zeolite_combined_prior(
         identity_weight,
         normalize,
         ZEOLITE_PRIOR_MAP,
-    )
+    ).to_numpy()
     return np.hstack([osda_prior, zeolite_prior])
 
 
@@ -373,7 +375,7 @@ def make_prior(
         return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
 
     elif method == "CustomZeolite":
-        prior = zeolite_prior(all_data_df, feature, file_name=file_name)
+        prior = zeolite_prior(all_data_df, feature, file_name=file_name).to_numpy()
         return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
 
     # This one is for the failed experiment
@@ -381,7 +383,7 @@ def make_prior(
         osda_axis1_lengths = osda_prior(
             all_data_df, column_name="Axis 1 (Angstrom)", normalize=False
         )
-        zeolite_sphere_diameters = zeolite_prior(all_data_df)
+        zeolite_sphere_diameters = zeolite_prior(all_data_df).to_numpy()
 
         prior = np.zeros((len(osda_axis1_lengths), len(zeolite_sphere_diameters)))
         for i, osda_length in enumerate(osda_axis1_lengths):
@@ -390,19 +392,11 @@ def make_prior(
 
         if prior.min() < 0:
             prior = prior - prior.min()
-        # TODO: is this necessary to normalize all of the values in prior to maximum?
-        # This isn't working...
-        # prior = prior / prior.max()
-
         # Normalize prior across its rows:
         max = np.reshape(np.repeat(prior.sum(axis=1), prior.shape[1]), prior.shape)
         prior = prior / max
         prior = np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
         return prior
-        # TODO: DO I ALSO NEED to normalize all of the rows to 1... DO I???
-        # plot_matrix(prior, 'prior', vmin=0, vmax=1)
-        # prior = np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
-        # return prior
 
     # This is the one for really skinny Matrices
     elif method == "CustomOSDAandZeoliteAsRows":
@@ -422,12 +416,5 @@ def make_prior(
                 * np.eye(all_data.shape[1])[0 : all_data.shape[0], 1:],
             ]
         )
-        # TODO: this is quite gross... is this the right way to be making this?
-        # TODO: there is a better way to do this... add the bottom to the prior col first then just hstack the eye once.
-        # prior = np.hstack([prior, normalization_factor * np.eye(all_data.shape[1])[0:all_data.shape[0]]])
-        # lower_buffer = np.eye(all_data.shape[1])[all_data.shape[0]:]
-        # lower_buffer = np.hstack([np.zeros((lower_buffer.shape[0], 1)), lower_buffer])
-        # prior = np.vstack([prior, lower_buffer])
-    # TODO: big debate... do I like this normalize?? probably not...
     normalize(prior, axis=1, copy=False)
     return prior

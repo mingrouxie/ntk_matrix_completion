@@ -29,13 +29,21 @@ from utilities import (
     chunks,
 )
 from analysis_utilities import calculate_metrics
+from path_constants import (
+    HYPOTHETICAL_OSDA_ENERGIES,
+    HYPOTHETICAL_OSDA_BOXES,
+    OSDA_HYPOTHETICAL_PRIOR_FILE,
+    OSDA_HYPOTHETICAL_PREDICTED_ENERGIES,
+    ZEOLITE_HYPOTHETICAL_PREDICTED_ENERGIES,
+    TEN_FOLD_CROSS_VALIDATION_ENERGIES,
+)
 
 sys.path.insert(
     1, os.path.join(str(pathlib.Path(__file__).parent.absolute().parent), "graphical")
 )
 
 SEED = 5
-NORM_FACTOR = 0.1
+NORM_FACTOR = 0.001
 PI = np.pi
 
 
@@ -47,7 +55,8 @@ def kappa(x):
 
 def predict(all_data, mask, num_test_rows, X):
     """
-    Space optimized version for CMap Data
+    Run the NTK Matrix Completion Algorithm
+    https://arxiv.org/abs/2108.00131
     """
     all_data = all_data.T
     mask = mask.T
@@ -144,6 +153,7 @@ def run_ntk(
     # And the results are shuffled from the original all_data & metrics_mask
     return aggregate_pred, aggregate_true, aggregate_mask
 
+
 # This method calculates binding energies for the 78K new OSDAs
 # from the Ground truth set of 1.19K x 200 matrix
 def calculate_energies_for_78K_osdas():
@@ -203,20 +213,17 @@ def calculate_energies_for_78K_osdas():
                 columns=training_data.columns,
             )
         )
-    save_matrix(predicted_energies, "predicted_binding_energies_for_78K_OSDAs.pkl")
+    save_matrix(predicted_energies, OSDA_HYPOTHETICAL_PREDICTED_ENERGIES)
 
 
 # This method is pure mess. but it's just examining the predicted energies for daniel's 78K new OSDAs
 def lets_look_at_predicted_energies():
-    daniel_energies = pd.read_pickle(
-        "data/data_from_daniels_ml_models/precomputed_energies_78616by196.pkl"
-    )
-    predicted_energies = pd.read_pickle(
-        "data/predicted_templating_energies_for_78K_OSDAs.pkl"
-    )
-    # predicted_energies = pd.read_pickle(
-    #     "data/predicted_binding_energies_for_78K_OSDAs.pkl"
-    # )
+
+    HYPOTHETICAL_OSDA_ENERGIES,
+    HYPOTHETICAL_OSDA_BOXES,
+    OSDA_HYPOTHETICAL_PRIOR_FILE,
+    daniel_energies = pd.read_pickle(HYPOTHETICAL_OSDA_ENERGIES)
+    predicted_energies = pd.read_pickle(OSDA_HYPOTHETICAL_PREDICTED_ENERGIES)
     training_data, _binary_data = get_ground_truth_energy_matrix()
     sorted_training_data_by_column = pd.DataFrame()
     for col in predicted_energies:
@@ -308,33 +315,32 @@ def lets_look_at_predicted_energies():
     print("hello")
 
 
-def skinny_ntk():
-    """
-    This method runs 10-fold cross validation on the 1194x209 Ground Truth matrix made SKINNY
-    """
-    # Make sure the row # for desired_shape is modulo 10 (aka our k_folds size)
-    ground_truth, binary_data = get_ground_truth_energy_matrix(desired_shape=(100, 30))
-    skinny_ground_truth = make_skinny(ground_truth)
-
-    skinny_pred, _t, _m = run_ntk(
-        skinny_ground_truth,
-        prior="CustomOSDAandZeoliteAsRows",
-        metrics_mask=binary_data,
-        shuffled_iterator=False,
-    )
-    pred = unmake_skinny(skinny_pred)
-    calculate_metrics(pred.to_numpy(), ground_truth.to_numpy(), binary_data.to_numpy())
-
-
-def buisness_as_normal():
-    """
-    This method runs 10-fold cross validation on the 1194x209 Ground Truth matrix.
-    """
+def calculate_energies_for_new_zeolite(name, parameter_file):
     ground_truth, binary_data = get_ground_truth_energy_matrix(
         energy_type=Energy_Type.BINDING, transpose=True
     )
+    num_new_zeolites = 1
 
-    # change prior=CustomZeolite etc.
+    # add new zeolite to training data
+    new = pd.Series([])
+    new.name = name
+    td = ground_truth.append(new)
+
+    X = make_prior(
+        None,
+        None,
+        method="CustomZeolite",
+        normalization_factor=NORM_FACTOR,
+        all_data=td,
+        file_name=parameter_file,
+    )
+    all_data = td.to_numpy()
+    mask = np.ones_like(all_data)
+    mask[len(all_data) - num_new_zeolites :, :] = 0
+    results = predict(all_data, mask, num_new_zeolites, X)
+    save_matrix(results, ZEOLITE_HYPOTHETICAL_PREDICTED_ENERGIES)
+
+    # Now let's test the accuracy of this new zeolite data...
     pred, true, mask = run_ntk(
         ground_truth, prior="CustomZeolite", metrics_mask=binary_data
     )
@@ -370,46 +376,45 @@ def buisness_as_normal():
     ]
     x_val = [x[0] for x in volume_accuracy_pairs]
     y_val = [x[1] for x in volume_accuracy_pairs]
-    # plt.scatter(x_val,y_val)
+    plt.scatter(x_val, y_val)
 
     breakpoint()
     calculate_metrics(pred.to_numpy(), true.to_numpy(), mask.to_numpy())
-    save_matrix(pred, "data/templating_pred.pkl")
 
 
-def calculate_energies_for_new_zeolite(name, parameter_file):
-    # training_data ends up as 1190 rows x 209 columns
-    training_data, _binary_data = get_ground_truth_energy_matrix(
-        energy_type=Energy_Type.BINDING
+def skinny_ntk():
+    """
+    This method runs 10-fold cross validation on the 1194x209 Ground Truth matrix made SKINNY
+    """
+    # Make sure the row # for desired_shape is modulo 10 (aka our k_folds size)
+    ground_truth, binary_data = get_ground_truth_energy_matrix(desired_shape=(100, 30))
+    skinny_ground_truth = make_skinny(ground_truth)
+
+    skinny_pred, _t, _m = run_ntk(
+        skinny_ground_truth,
+        prior="CustomOSDAandZeoliteAsRows",
+        metrics_mask=binary_data,
+        shuffled_iterator=False,
     )
+    pred = unmake_skinny(skinny_pred)
+    calculate_metrics(pred.to_numpy(), ground_truth.to_numpy(), binary_data.to_numpy())
 
-    # number of new zeolites
-    num_new_zeolites = 1
 
-    # add new zeolite to training data
-    td = training_data.T
-    new = pd.Series([])
-    new.name = name
-    td = td.append(new)
-
-    X = make_prior(
-        None,
-        None,
-        method="CustomZeolite",
-        normalization_factor=NORM_FACTOR,
-        all_data=td,
-        file_name=parameter_file,
+def buisness_as_normal():
+    """
+    This method runs 10-fold cross validation on the 1194x209 Ground Truth matrix.
+    """
+    ground_truth, binary_data = get_ground_truth_energy_matrix()
+    pred, true, mask = run_ntk(
+        ground_truth, prior="CustomOSDAVector", metrics_mask=binary_data
     )
-    all_data = td.to_numpy()
-    mask = np.ones_like(all_data)
-    mask[len(all_data) - num_new_zeolites :, :] = 0
-    results = predict(all_data, mask, num_new_zeolites, X)
-    save_matrix(results, "predicted_binding_energies_for_new_zeolite.pkl")
+    calculate_metrics(pred.to_numpy(), true.to_numpy(), mask.to_numpy())
+    save_matrix(pred, TEN_FOLD_CROSS_VALIDATION_ENERGIES)
 
 
 if __name__ == "__main__":
     buisness_as_normal()
-    calculate_energies_for_new_zeolite(name="ZEO1", parameter_file="data/zeo_1.pkl")
+    # calculate_energies_for_new_zeolite(name="ZEO1", parameter_file="data/zeo_1.pkl")
     # skinny_ntk()
     # calculate_energies_for_78K_osdas()
     # lets_look_at_predicted_energies()

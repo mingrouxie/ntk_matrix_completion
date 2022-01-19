@@ -4,7 +4,7 @@ import os
 import pdb
 import pandas as pd
 from enum import Enum
-
+from path_constants import BINDING_GROUND_TRUTH, TEMPLATING_GROUND_TRUTH, BINDING_CSV
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 from utilities import (
@@ -21,16 +21,8 @@ class Energy_Type(Enum):
     BINDING = 2
 
 
-TEMPLATING_SAVE_FILENAME = "data/TemplatingGroundTruth.pkl"
-BINDING_SAVE_FILENAME = "data/BindingSiO2GroundTruth.pkl"
-
-
 def format_ground_truth_pkl():
-    """
-    Format binding.csv from Schwalbe Coda's work, requires binding.csv downloaded into the /data folder
-    https://github.com/learningmatter-mit/Zeolite-Phase-Competition/blob/main/data/binding.csv
-    """
-    ground_truth_df = pd.read_csv("../data/binding.csv", index_col=0)
+    ground_truth_df = pd.read_csv(BINDING_CSV, index_col=0)
     binding_matrix = ground_truth_df.pivot(
         index="SMILES", columns="Zeolite", values="Binding (SiO2)"
     )
@@ -40,7 +32,7 @@ def format_ground_truth_pkl():
         " out of these many total cells",
         binding_matrix.isna().sum().sum() + binding_matrix.notna().sum().sum(),
     )
-    save_matrix(binding_matrix, BINDING_SAVE_FILENAME)
+    save_matrix(binding_matrix, BINDING_GROUND_TRUTH)
 
     templating_matrix = ground_truth_df.pivot(
         index="SMILES", columns="Zeolite", values="Templating"
@@ -52,7 +44,7 @@ def format_ground_truth_pkl():
         templating_matrix.isna().sum().sum() + templating_matrix.notna().sum().sum(),
     )
 
-    save_matrix(templating_matrix, TEMPLATING_SAVE_FILENAME)
+    save_matrix(templating_matrix, TEMPLATING_GROUND_TRUTH)
 
 
 # minimum_row_length default set to 2 so we can perform r^2 and Spearman correlation.
@@ -63,9 +55,9 @@ def get_ground_truth_energy_matrix(
     transpose=False,
 ):
     if energy_type == Energy_Type.TEMPLATING:
-        ground_truth = pd.read_pickle("data/TemplatingGroundTruth.pkl")
+        ground_truth = pd.read_pickle(TEMPLATING_GROUND_TRUTH)
     elif energy_type == Energy_Type.BINDING:
-        ground_truth = pd.read_pickle("data/BindingSiO2GroundTruth.pkl")
+        ground_truth = pd.read_pickle(BINDING_GROUND_TRUTH)
     else:
         # REFERENCE format_ground_truth_pkl()
         raise ValueError(
@@ -73,7 +65,7 @@ def get_ground_truth_energy_matrix(
         )
     if transpose:
         ground_truth = ground_truth.T
-    
+
     # Filter down to desired_shape & filter by min_row_length
     if desired_shape is not None:
         assert (

@@ -14,6 +14,13 @@ import os
 import pathlib
 import time
 
+from path_constants import (
+    HYPOTHETICAL_OSDA_ENERGIES,
+    HYPOTHETICAL_OSDA_BOXES,
+    OSDA_HYPOTHETICAL_PRIOR_FILE,
+)
+from utilities import save_matrix
+
 
 @lru_cache(maxsize=16384)
 def get_conformers(smile, debug=False, number_of_conformers=2000):
@@ -88,12 +95,9 @@ def smile_to_property(smile, process_conformers=False, debug=False):
         # Some molecules just can't be embedded it seems
         return properties
     # WHIMs and GETAWAY are the big ones I think...
-
-    # TODO: these will need to be normalized...
     properties["whims"] = Chem.rdMolDescriptors.CalcWHIM(m2)
     properties["getaway"] = Chem.rdMolDescriptors.CalcGETAWAY(m2)
     # TODO: do we need to do PCA here?
-    # TODO: we're going to need to do some weird processing here...
     if process_conformers:
         properties["conformer"] = get_conformers(smile)
 
@@ -180,19 +184,22 @@ def smile_to_property(smile, process_conformers=False, debug=False):
     return properties
 
 
-# TODO: Come back for the WHIMs list of floats can't be taken an average of apparently...
 @lru_cache(maxsize=16384)
 def average_properties(smile, num_runs=1):
-    df = pd.DataFrame([smile_to_property(smile, process_conformers=False) for i in range(num_runs)])
+    df = pd.DataFrame(
+        [smile_to_property(smile, process_conformers=False) for i in range(num_runs)]
+    )
     meaned_df = df.mean(numeric_only=True)
     # Pretty certain it's okay to take the average over WHIMs and GETAWAY...
     # But maybe good to double check...
     # Now let's take care of the columns that are not numeric.
     for col in df.columns:
-        if df.dtypes[col] in (np.dtype('float64'), np.dtype('int64')):
+        if df.dtypes[col] in (np.dtype("float64"), np.dtype("int64")):
             continue
         if isinstance(df[col][0], list):
-            meaned_df[col] = np.mean(np.array([np.array(v) for v in df[col].values]), axis=0)
+            meaned_df[col] = np.mean(
+                np.array([np.array(v) for v in df[col].values]), axis=0
+            )
         elif isinstance(df[col][0], dict):
             # For now since only conformers are lists and because all conformer requests are
             # cached and identical, let's just pick one at random.
@@ -225,41 +232,23 @@ def osda_prior_helper(all_data_df, num_runs, save_file=None):
     return prior.dropna()
 
 
-def save_matrix(matrix, file_name):
-    file = os.path.abspath("")
-    dir_main = pathlib.Path(file).parent.absolute()
-    savepath = os.path.join(dir_main, file_name)
-    matrix.to_pickle(savepath)
-
-
-def prior_from_small_matrix():
-    num_runs = 10
-    input = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/zeoliteNonbindingTensor.pkl"
-    all_data_df = pd.read_pickle(input)
-    save_file = "precomputed_OSDA_prior_conjugates_part2.pkl"
-    all_data_df.reset_index(inplace=True)
-    all_data_df = all_data_df.iloc[339:,:]
-    prior = osda_prior_helper(all_data_df, num_runs, save_file)
-    save_matrix(prior, save_file)
-
-
 def precompute_priors_for_780K_Osdas():
     num_runs = 4
     sample_size = 78616
 
-    input = "/Users/mr/Documents/Work/MIT/PhD/matrix_completion/ntk_matrix_completion/cmap_imputation/data/daniels_data/211221_energies.csv"
+    input = HYPOTHETICAL_OSDA_ENERGIES
     all_data_df = pd.read_csv(input)
     all_data_df = all_data_df.set_index("inchi")
 
-    inchi_to_smile_conversion = "/Users/mr/Documents/Work/MIT/PhD/matrix_completion/ntk_matrix_completion/cmap_imputation/data/daniels_data/211221_boxes.csv"
+    inchi_to_smile_conversion = HYPOTHETICAL_OSDA_BOXES
     inchi_to_smile = pd.read_csv(inchi_to_smile_conversion)
-    inchi_to_smile = inchi_to_smile.set_index("inchi")[["smiles"]]  # .to_dict('index')
+    inchi_to_smile = inchi_to_smile.set_index("inchi")[["smiles"]]
 
     joined_df = all_data_df.join(inchi_to_smile, on="inchi")
     joined_df.rename(columns={"smiles": "SMILES"}, inplace=True)
     all_data_df = joined_df.sample(sample_size)
 
-    save_file = "precomputed_energies_" + str(sample_size) + "by196WithWhims.pkl"
+    save_file = OSDA_HYPOTHETICAL_PRIOR_FILE
     prior = osda_prior_helper(all_data_df, num_runs, save_file)
     # drop all molecules that couldn't be embedded
     prior = prior.loc[(prior != 0).any(axis=1)]

@@ -5,8 +5,8 @@ If any requirements are missing then try running: https://github.com/YitongTseo/
 (sorry if there is anything missing ... please let me know!)
 
 What you'll be running for the most part:
-```python neural_tangent_kernel/two_step_ntk.py -i data/zeoliteTensor.pkl -i2 data/zeoliteNonbindingTensor.pkl -r -o```
-Which just feeds the zeoliteTensor.pkl & zeoliteNonbindingTensor.pkl (the ground truth for the regression & binary classification tasks respectively)
+```python neural_tangent_kernel/two_step_ntk.py```
+All input & output data files are specified in `neural_tangent_kernel/path_constants.py`.
 
 The files you'll care the most about at run-time:
 * `neural_tangent_kernel/two_step_ntk.py`: Loads the data & does all the computation

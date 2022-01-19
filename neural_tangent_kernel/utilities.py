@@ -1,12 +1,12 @@
 import numpy as np
 import pandas as pd
-import pdb
 import os
-import pathlib
+import pdb
 
 from sklearn.model_selection import KFold
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+
 
 def plot_matrix(M, file_name, mask=None, vmin=16, vmax=23):
     fig, ax = plt.subplots()
@@ -23,6 +23,7 @@ def plot_matrix(M, file_name, mask=None, vmin=16, vmax=23):
         masked_M = M
     im = ax.imshow(masked_M, interpolation="nearest", cmap=cmap, vmin=vmin, vmax=vmax)
     fig.colorbar(im)
+    pdb.set_trace()
     fig.savefig(file_name + ".png", dpi=150)
 
 
@@ -69,12 +70,12 @@ def chunks(lst, n, chunk_train=False, chunk_metrics=None):
 
 def save_matrix(matrix, file_name, overwrite=True):
     file = os.path.abspath("")
-    dir_main = pathlib.Path(file).parent.absolute()
-    savepath = os.path.join(dir_main, file_name)
+    savepath = os.path.join(file, file_name)
     if not (overwrite) and os.path.exists(savepath):
         overwrite = input(
             f"A file already exists at path {savepath}, do you want to overwrite? (Y/N): "
         )
+    matrix.to_csv(savepath.replace(".pkl", ".csv"))
     matrix.to_pickle(savepath)
 
 
@@ -85,6 +86,3 @@ def get_splits_in_zeolite_type(allData, metrics_mask, k=10, seed=5, shuffle=True
         yield allData.iloc[train_idx], allData.iloc[test_idx], metrics_mask.iloc[
             test_idx
         ]
-
-
-
