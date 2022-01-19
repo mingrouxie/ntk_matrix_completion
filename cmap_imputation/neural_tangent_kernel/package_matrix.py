@@ -30,7 +30,7 @@ def format_ground_truth_pkl():
     Format binding.csv from Schwalbe Coda's work, requires binding.csv downloaded into the /data folder
     https://github.com/learningmatter-mit/Zeolite-Phase-Competition/blob/main/data/binding.csv
     """
-    ground_truth_df = pd.read_csv("data/binding.csv", index_col=0)
+    ground_truth_df = pd.read_csv("../data/binding.csv", index_col=0)
     binding_matrix = ground_truth_df.pivot(
         index="SMILES", columns="Zeolite", values="Binding (SiO2)"
     )
@@ -51,6 +51,7 @@ def format_ground_truth_pkl():
         " out of these many total cells",
         templating_matrix.isna().sum().sum() + templating_matrix.notna().sum().sum(),
     )
+
     save_matrix(templating_matrix, TEMPLATING_SAVE_FILENAME)
 
 
@@ -59,6 +60,7 @@ def get_ground_truth_energy_matrix(
     energy_type=Energy_Type.TEMPLATING,
     desired_shape=None,
     minimum_row_length=2,
+    transpose=False,
 ):
     if energy_type == Energy_Type.TEMPLATING:
         ground_truth = pd.read_pickle("data/TemplatingGroundTruth.pkl")
@@ -69,7 +71,9 @@ def get_ground_truth_energy_matrix(
         raise ValueError(
             "Sorry, but if you want to use a different ground truth for the energy then create the matrix first."
         )
-
+    if transpose:
+        ground_truth = ground_truth.T
+    
     # Filter down to desired_shape & filter by min_row_length
     if desired_shape is not None:
         assert (

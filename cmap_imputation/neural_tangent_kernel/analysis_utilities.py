@@ -90,7 +90,7 @@ def calculate_row_metrics(true, pred, metrics_mask=None):
     return cosims, r2_scores, rmse_scores, spearman_scores
 
 
-def calculate_metrics(pred, true, mask=None, energy_type=Energy_Type.TEMPLATING):
+def calculate_metrics(pred, true, mask=None, energy_type=Energy_Type.TEMPLATING, verbose=True):
     """
     All metrics as calculated by ROW
     """
@@ -100,32 +100,35 @@ def calculate_metrics(pred, true, mask=None, energy_type=Energy_Type.TEMPLATING)
     top_1 = calculate_top_k_accuracy(true, pred, 1)
     top_3 = calculate_top_k_accuracy(true, pred, 3)
     top_5 = calculate_top_k_accuracy(true, pred, 5)
-    print(
-        "\ncosim: ",
-        np.mean(np.mean(cosims).round(4)),
-        "\nr2_scores: ",
-        np.mean(np.mean(r2_scores).round(4)),
-        "\nrmse_scores: ",
-        np.mean(np.mean(rmse_scores).round(4)),
-        "\nspearman_scores: ",
-        np.mean(np.mean(spearman_scores).round(4)),
-        "\ntop_1_accuracy: ",
-        top_1.round(4),
-        "\ntop_3_accuracy: ",
-        top_3.round(4),
-        "\ntop_5_accuracy: ",
-        top_5.round(4),
-    )
     top_20_accuracies = [calculate_top_k_accuracy(true, pred, k) for k in range(0, 21)]
-    plot_top_k_curves(top_20_accuracies)
-    if energy_type == Energy_Type.BINDING:
-        vmin = -30
-        vmax = 5
-    else:
-        vmin = 16
-        vmax = 23
-    plot_matrix(true, "regression_truth", vmin=vmin, vmax=vmax)
-    plot_matrix(pred, "regression_prediction", vmin=vmin, vmax=vmax)
+    
+    if verbose:
+        print(
+            "\ncosim: ",
+            np.mean(np.mean(cosims).round(4)),
+            "\nr2_scores: ",
+            np.mean(np.mean(r2_scores).round(4)),
+            "\nrmse_scores: ",
+            np.mean(np.mean(rmse_scores).round(4)),
+            "\nspearman_scores: ",
+            np.mean(np.mean(spearman_scores).round(4)),
+            "\ntop_1_accuracy: ",
+            top_1.round(4),
+            "\ntop_3_accuracy: ",
+            top_3.round(4),
+            "\ntop_5_accuracy: ",
+            top_5.round(4),
+        )
+        plot_top_k_curves(top_20_accuracies)
+        if energy_type == Energy_Type.BINDING:
+            vmin = -30
+            vmax = 5
+        else:
+            vmin = 16
+            vmax = 23
+        plot_matrix(true, "regression_truth", vmin=vmin, vmax=vmax)
+        plot_matrix(pred, "regression_prediction", vmin=vmin, vmax=vmax)
+    return top_20_accuracies
 
 
 def calculate_top_k_accuracy(all_true, ntk_predictions, k, by_row=True):

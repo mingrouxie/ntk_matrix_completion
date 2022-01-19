@@ -173,7 +173,7 @@ def smile_to_property(smile, process_conformers=False, debug=False):
     # do we want other weird things like HallKierAlpha?
     # I want some measure of flexibility. It seems like they calculated that by taking all the conformers.
     # https://pubs.acs.org/doi/pdf/10.1021/acs.jcim.6b00565?rand=xovj8tmp
-    pdb.set_trace()
+    # pdb.set_trace()
     if debug:
         m2 = Chem.RemoveHs(m)
         Draw.MolToFile(m2, "test3.o.png")
@@ -247,11 +247,11 @@ def precompute_priors_for_780K_Osdas():
     num_runs = 4
     sample_size = 78616
 
-    input = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/data_from_daniels_ml_models/211221_energies.csv"
+    input = "/Users/mr/Documents/Work/MIT/PhD/matrix_completion/ntk_matrix_completion/cmap_imputation/data/daniels_data/211221_energies.csv"
     all_data_df = pd.read_csv(input)
     all_data_df = all_data_df.set_index("inchi")
 
-    inchi_to_smile_conversion = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/data_from_daniels_ml_models/211221_boxes.csv"
+    inchi_to_smile_conversion = "/Users/mr/Documents/Work/MIT/PhD/matrix_completion/ntk_matrix_completion/cmap_imputation/data/daniels_data/211221_boxes.csv"
     inchi_to_smile = pd.read_csv(inchi_to_smile_conversion)
     inchi_to_smile = inchi_to_smile.set_index("inchi")[["smiles"]]  # .to_dict('index')
 

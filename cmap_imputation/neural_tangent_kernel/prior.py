@@ -22,25 +22,26 @@ VALID_METHODS = {
     "CustomOSDAandZeolite",
     "CustomOSDAandZeoliteAsRows",
     "CustomOSDAVector",
+    "ManualZeolite",
 }
 
 ZEOLITE_PRIOR_LOOKUP = {
     "a": 1.0,
     "b": 1.0,
     "c": 1.0,
-    "alpha": 1.0,
-    "betta": 1.0,
-    "gamma": 1.0,
+    # "alpha": 1.0,
+    # "betta": 1.0,
+    # "gamma": 1.0,
     "volume": 1.0,
-    "rdls": 1.0,
-    "framework_density": 1.0,
-    "td_10": 1.0,
-    "td": 1.0,
+    # "rdls": 1.0,
+    # "framework_density": 1.0,
+    # "td_10": 1.0,
+    # "td": 1.0,
     "included_sphere_diameter": 1.0,
-    "diffused_sphere_diameter_a": 1.0,
-    "diffused_sphere_diameter_b": 1.0,
-    "diffused_sphere_diameter_c": 1.0,
-    "accessible_volume": 1.0,
+    # "diffused_sphere_diameter_a": 1.0,
+    # "diffused_sphere_diameter_b": 1.0,
+    # "diffused_sphere_diameter_c": 1.0,
+    # "accessible_volume": 1.0,
 }
 
 OSDA_PRIOR_LOOKUP = {
@@ -61,9 +62,9 @@ OSDA_PRIOR_LOOKUP = {
     "free_sas": 1.0,
     "bertz_ct": 1.0,
 }
-ZEOLITE_PRIOR_FILE = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/scraped_zeolite_data.pkl"
-OSDA_PRIOR_FILE = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/precomputed_OSDA_prior_10_with_whims.pkl"
-OSDA_CONFORMER_PRIOR_FILE = "/Users/yitongtseo/Documents/GitHub/ntk_matrix_completion/cmap_imputation/data/OSDA_priors_with_conjugates.pkl"
+ZEOLITE_PRIOR_FILE = "/Users/mr/Documents/Work/MIT/PhD/matrix_completion/ntk_matrix_completion/cmap_imputation/data/scraped_zeolite_data.pkl"
+OSDA_PRIOR_FILE = "/Users/mr/Documents/Work/MIT/PhD/matrix_completion/ntk_matrix_completion/cmap_imputation/data/precomputed_OSDA_prior_10_with_whims.pkl"
+OSDA_CONFORMER_PRIOR_FILE = "//Users/mr/Documents/Work/MIT/PhD/matrix_completion/ntk_matrix_completion/cmap_imputation/data/OSDA_priors_with_conjugates.pkl"
 
 
 ZEOLITE_PRIOR_MAP = {
@@ -213,7 +214,7 @@ def load_prior(
         ]
 
     # TODO(Mingrou): add new zeolite prior...
-    if prior_index_map:
+    if prior_index_map:  # zeolite prior lookup MR
         x = lambda i: prior_index_map[i] if i in prior_index_map else i
         precomputed_prior.index = precomputed_prior.index.map(x)
     precomputed_prior = precomputed_prior.reindex(target_index)
@@ -230,7 +231,8 @@ def load_prior(
     results = precomputed_prior.apply(
         lambda x: x * column_weights[x.name] / normalization_factor, axis=0
     )
-    return results.to_numpy()
+
+    return results
 
 
 def osda_prior(
@@ -273,10 +275,7 @@ def osda_vector_prior(
 
 
 def zeolite_prior(
-    all_data_df,
-    feature_lookup,
-    identity_weight=0.01,
-    normalize=True,
+    all_data_df, feature_lookup, identity_weight=0.01, normalize=True, file_name=None
 ):
     return load_prior(
         all_data_df.index,
@@ -285,6 +284,7 @@ def zeolite_prior(
         identity_weight,
         normalize,
         ZEOLITE_PRIOR_MAP,
+        other_prior_to_concat=file_name,
     )
 
 
@@ -342,6 +342,7 @@ def make_prior(
     test_train_axis=0,
     feature=None,
     all_data=None,
+    file_name=None,
 ):
     assert method in VALID_METHODS, f"Invalid method used, pick one of {VALID_METHODS}"
     if all_data is not None:
@@ -372,7 +373,7 @@ def make_prior(
         return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
 
     elif method == "CustomZeolite":
-        prior = zeolite_prior(all_data_df, feature)
+        prior = zeolite_prior(all_data_df, feature, file_name=file_name)
         return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
 
     # This one is for the failed experiment
