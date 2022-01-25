@@ -1,3 +1,5 @@
+# TODO: add some path wizardry to make sure these work despite the directory it's called in...
+
 """
 INPUT DATA
 """

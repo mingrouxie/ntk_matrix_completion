@@ -7,10 +7,12 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import pdb
 from functools import lru_cache
-from tqdm import tqdm
+from auto_tqdm import tqdm
 import os
 import pathlib
 import math
+from scipy.sparse import csc_matrix
+import scipy as sp
 
 from sklearn.preprocessing import normalize, OneHotEncoder
 
@@ -29,19 +31,37 @@ ZEOLITE_PRIOR_LOOKUP = {
     "a": 1.0,
     "b": 1.0,
     "c": 1.0,
-    # "alpha": 1.0,
-    # "betta": 1.0,
-    # "gamma": 1.0,
+    "alpha": 1.0,
+    "betta": 1.0,
+    "gamma": 1.0,
     "volume": 1.0,
-    # "rdls": 1.0,
-    # "framework_density": 1.0,
-    # "td_10": 1.0,
-    # "td": 1.0,
+    "rdls": 1.0,
+    "framework_density": 1.0,
+    "td_10": 1.0,
+    "td": 1.0,
     "included_sphere_diameter": 1.0,
-    # "diffused_sphere_diameter_a": 1.0,
-    # "diffused_sphere_diameter_b": 1.0,
-    # "diffused_sphere_diameter_c": 1.0,
-    # "accessible_volume": 1.0,
+    "diffused_sphere_diameter_a": 1.0,
+    "diffused_sphere_diameter_b": 1.0,
+    "diffused_sphere_diameter_c": 1.0,
+    "accessible_volume": 1.0,
+    "ring_size_0": 1.0,
+    "ring_size_1": 1.0,
+    "ring_size_2": 1.0,
+    "ring_size_3": 1.0,
+    "ring_size_4": 1.0,
+    "ring_size_5": 1.0,
+    "N_1": 1.0,
+    "N_2": 1.0,
+    "N_3": 1.0,
+    "N_4": 1.0,
+    "N_5": 1.0,
+    "N_6": 1.0,
+    "N_7": 1.0,
+    "N_8": 1.0,
+    "N_9": 1.0,
+    "N_10": 1.0,
+    "N_11": 1.0,
+    "N_12": 1.0,
 }
 
 OSDA_PRIOR_LOOKUP = {
@@ -152,10 +172,11 @@ def load_conformer_priors(
 def load_vector_priors(
     target_index,
     vector_feature,
-    precomputed_file_name,
+    precomputed_file_name=OSDA_PRIOR_FILE,
     identity_weight=0.01,
     normalize=True,
     other_prior_to_concat=OSDA_HYPOTHETICAL_PRIOR_FILE,
+    replace_nan=0.0,
 ):
     precomputed_prior = pd.read_pickle(precomputed_file_name)
     if other_prior_to_concat:
@@ -164,39 +185,21 @@ def load_vector_priors(
         precomputed_prior = precomputed_prior[
             ~precomputed_prior.index.duplicated(keep="first")
         ]
+    vector_explode = lambda x: pd.Series(x[vector_feature])
+    precomputed_prior = precomputed_prior.apply(vector_explode, axis=1)
+    exploded_prior = precomputed_prior.reindex(target_index)
 
-    precomputed_prior = precomputed_prior.reindex(target_index)
-    precomputed_prior = precomputed_prior.filter(items=[vector_feature])
-
-    num_elements = len(precomputed_prior[vector_feature][0])
-
-    def column_name(index, vector_feature=vector_feature):
-        return vector_feature + "_" + str(index)
-
-    column_names = [column_name(i) for i in range(num_elements)]
-    exploded_prior = pd.DataFrame(columns=column_names)
-    for index, row in precomputed_prior.iterrows():
-        if row[vector_feature] is np.NaN:
-            series = pd.Series({column_name(i): 0.0 for i in range(num_elements)})
-        else:
-            series = pd.Series(
-                {
-                    column_name(i): 0 if np.isnan(e) else e
-                    for i, e in enumerate(row[vector_feature])
-                }
-            )
-        series.name = index
-        exploded_prior = exploded_prior.append(series)
-
+    if replace_nan is not None:
+        exploded_prior = exploded_prior.fillna(replace_nan)
     # Normalize across the whole thing...
     # Normalize to the biggest value & across all of the elements
     biggest_value = exploded_prior.max().max()
-    normalization_factor = biggest_value * num_elements + identity_weight
+    normalization_factor = biggest_value * precomputed_prior.shape[1] + identity_weight
     if normalize:
         exploded_prior = exploded_prior.apply(
             lambda x: x / normalization_factor, axis=0
         )
-    return exploded_prior.to_numpy()
+    return exploded_prior
 
 
 def load_prior(
@@ -215,8 +218,6 @@ def load_prior(
         precomputed_prior = precomputed_prior[
             ~precomputed_prior.index.duplicated(keep="first")
         ]
-
-    # TODO(Mingrou): add new zeolite prior...
     if prior_index_map:  # zeolite prior lookup MR
         x = lambda i: prior_index_map[i] if i in prior_index_map else i
         precomputed_prior.index = precomputed_prior.index.map(x)
@@ -234,7 +235,6 @@ def load_prior(
     results = precomputed_prior.apply(
         lambda x: x * column_weights[x.name] / normalization_factor, axis=0
     )
-
     return results
 
 
@@ -265,7 +265,9 @@ def osda_vector_prior(
         OSDA_PRIOR_FILE,
         identity_weight,
         normalize,
-    )
+        # TODO: change me...
+        other_prior_to_concat=None
+    ).to_numpy()
     # Splitting the original prior and the vector prior 50-50
     normalized_getaway_prior = getaway_prior / (2 * max(getaway_prior, key=sum).sum())
     normalized_prior = prior / (2 * max(prior, key=sum).sum())
@@ -295,17 +297,20 @@ def osda_zeolite_combined_prior(
     identity_weight=0.01,
     normalize=True,
 ):
-    # Give identity weight more so we can normalize both to be less than 1
-    identity_weight += max(
-        np.array(list(OSDA_PRIOR_LOOKUP.values())).sum(),
-        np.array(list(ZEOLITE_PRIOR_LOOKUP.values())).sum(),
-    )
     osda_prior = load_prior(
         [i[0] for i in all_data_df.index],
         OSDA_PRIOR_LOOKUP,
         OSDA_PRIOR_FILE,
         identity_weight,
         normalize,
+    ).to_numpy()
+    osda_vector_prior = load_vector_priors(
+        target_index=[i[0] for i in all_data_df.index],
+        vector_feature="getaway",
+        precomputed_file_name=OSDA_PRIOR_FILE,
+        identity_weight=identity_weight,
+        normalize=normalize,
+        other_prior_to_concat=None,
     ).to_numpy()
     zeolite_prior = load_prior(
         [i[1] for i in all_data_df.index],
@@ -315,7 +320,17 @@ def osda_zeolite_combined_prior(
         normalize,
         ZEOLITE_PRIOR_MAP,
     ).to_numpy()
-    return np.hstack([osda_prior, zeolite_prior])
+    normalized_osda_vector_prior = osda_vector_prior / (
+        3 * max(osda_vector_prior, key=sum).sum()
+    )
+    normalized_osda_prior = osda_prior / (3 * max(osda_prior, key=sum).sum())
+    normalized_zeolite_prior = zeolite_prior / (3 * max(zeolite_prior, key=sum).sum())
+    stacked = np.hstack(
+        [normalized_osda_vector_prior, normalized_osda_prior, normalized_zeolite_prior]
+    )
+    stacked = np.nan_to_num(stacked)
+    # Make room for the identity weight
+    return (1 - identity_weight) * stacked
 
 
 def plot_matrix(M, file_name, mask=None, vmin=16, vmax=23):
@@ -342,7 +357,7 @@ def make_prior(
     method="identity",
     normalization_factor=1.5,
     test_train_axis=0,
-    feature=None,
+    prior_map=None,
     all_data=None,
     file_name=None,
 ):
@@ -375,7 +390,7 @@ def make_prior(
         return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
 
     elif method == "CustomZeolite":
-        prior = zeolite_prior(all_data_df, feature, file_name=file_name).to_numpy()
+        prior = zeolite_prior(all_data_df, prior_map, file_name=file_name).to_numpy()
         return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
 
     # This one is for the failed experiment
@@ -400,7 +415,10 @@ def make_prior(
 
     # This is the one for really skinny Matrices
     elif method == "CustomOSDAandZeoliteAsRows":
-        prior = osda_zeolite_combined_prior(all_data_df, normalize=True)
+        prior = csc_matrix(osda_zeolite_combined_prior(all_data_df, normalize=True))
+        return sp.sparse.hstack(
+            [prior, normalization_factor * sp.sparse.identity(all_data.shape[0])]
+        )
 
     elif method == "random":
         dim = 100

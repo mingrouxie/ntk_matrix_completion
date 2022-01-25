@@ -10,7 +10,8 @@ from tqdm import tqdm
 from path_constants import ZEOLITE_PRIOR_FILE
 from utilities import save_matrix
 
-def scrape(url):
+
+def scrape_main_page(url):
     properties = {}
     page = requests.get(url)
 
@@ -40,10 +41,10 @@ def scrape(url):
     properties["td"] = re.sub("[^0-9|.]", "", densities[3].text)
 
     ring_sizes = top_table[7].find_all("td")[2]
-    if len(ring_sizes) >= 3:
-        properties["ring_size_1"] = ring_sizes.text.split("\xa0\xa0")[0]
-        properties["ring_size_2"] = ring_sizes.text.split("\xa0\xa0")[1]
-        properties["ring_size_3"] = ring_sizes.text.split("\xa0\xa0")[2]
+    ring_sizes_array = ring_sizes.text.split("\xa0\xa0")
+    ring_sizes_array.remove("")
+    for index, ring_size in enumerate(ring_sizes_array):
+        properties["ring_size_" + str(index)] = ring_size
 
     properties["included_sphere_diameter"] = re.sub(
         "[^0-9|.]", "", top_table[10].find_all("td")[2].text
@@ -63,6 +64,24 @@ def scrape(url):
     properties["accessible_volume"] = re.sub("[^0-9|.]", "", top_table[12].text)
     return properties
 
+
+def scrape_framework_cs(url):
+    # TODO: ask if we should be treating these as ordinal...
+    # or if these are rightfully one hot encodings.
+    properties = {}
+    page = requests.get(url)
+
+    soup = BeautifulSoup(page.content, "html.parser")
+    results = soup.find(id="containerbody")
+    divs = results.find_all("tr")[2].find_all("div")
+    properties["T_atom_name"] = divs[0].text
+    for index, div in enumerate(divs[1:13]):
+        properties["N_" + str(index + 1)] = div.text
+    # FYI: this ignores </sub> tags so '4·6·4·6·6·8<sub>2</sub>' will be saved as '4·6·4·6·6·82'
+    properties["vertex_symbol"] = divs[13].text
+    return properties
+
+
 TABLE = "https://america.iza-structure.org/IZA-SC/ftc_table.php"
 URL_STEM = "https://america.iza-structure.org/IZA-SC/"
 
@@ -75,7 +94,12 @@ zeolite_data = pd.DataFrame()
 for zeolite in tqdm(all_zeolites):
     code = zeolite.find("a").text.replace(" ", "")
     url = URL_STEM + zeolite.find("a")["href"]
-    properties = scrape(url)
+    properties = scrape_main_page(url)
+    # This .replace() call is a bit hacky... but it works so...
+    framework_url = URL_STEM + zeolite.find("a")["href"].replace(
+        "framework.php", "framework_cs.php"
+    )
+    properties.update(scrape_framework_cs(framework_url))
     series = pd.Series(properties)
     series.name = code
     zeolite_data = zeolite_data.append(series)

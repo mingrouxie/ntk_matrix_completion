@@ -23,7 +23,6 @@ def plot_matrix(M, file_name, mask=None, vmin=16, vmax=23):
         masked_M = M
     im = ax.imshow(masked_M, interpolation="nearest", cmap=cmap, vmin=vmin, vmax=vmax)
     fig.colorbar(im)
-    pdb.set_trace()
     fig.savefig(file_name + ".png", dpi=150)
 
 

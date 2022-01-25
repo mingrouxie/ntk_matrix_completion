@@ -90,18 +90,32 @@ def calculate_row_metrics(true, pred, metrics_mask=None):
     return cosims, r2_scores, rmse_scores, spearman_scores
 
 
-def calculate_metrics(pred, true, mask=None, energy_type=Energy_Type.TEMPLATING, verbose=True):
+def calculate_metrics(
+    pred, true, mask=None, energy_type=Energy_Type.TEMPLATING, verbose=True, meta=None
+):
     """
     All metrics as calculated by ROW
     """
-    cosims, r2_scores, rmse_scores, spearman_scores = calculate_row_metrics(
-        true, pred, mask
-    )
+    try:
+        cosims, r2_scores, rmse_scores, spearman_scores = calculate_row_metrics(
+            true, pred, mask
+        )
+    except:
+        breakpoint()
     top_1 = calculate_top_k_accuracy(true, pred, 1)
     top_3 = calculate_top_k_accuracy(true, pred, 3)
     top_5 = calculate_top_k_accuracy(true, pred, 5)
     top_20_accuracies = [calculate_top_k_accuracy(true, pred, k) for k in range(0, 21)]
-    
+    results = {
+        "cosim": np.mean(np.mean(cosims).round(4)),
+        "r2_scores": np.mean(np.mean(r2_scores).round(4)),
+        "rmse_scores": np.mean(np.mean(rmse_scores).round(4)),
+        "spearman_scores": np.mean(np.mean(spearman_scores).round(4)),
+        "top_1_accuracy": top_1.round(4),
+        "top_3_accuracy": top_3.round(4),
+        "top_5_accuracy": top_5.round(4),
+        "top_20_accuracies": top_20_accuracies,
+    }
     if verbose:
         print(
             "\ncosim: ",
@@ -128,7 +142,7 @@ def calculate_metrics(pred, true, mask=None, energy_type=Energy_Type.TEMPLATING,
             vmax = 23
         plot_matrix(true, "regression_truth", vmin=vmin, vmax=vmax)
         plot_matrix(pred, "regression_prediction", vmin=vmin, vmax=vmax)
-    return top_20_accuracies
+    return results
 
 
 def calculate_top_k_accuracy(all_true, ntk_predictions, k, by_row=True):

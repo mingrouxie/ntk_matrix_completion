@@ -10,9 +10,14 @@ import numpy as np
 import pandas as pd
 from auto_tqdm import tqdm
 from precompute_osda_priors import smile_to_property
+from scipy.sparse import csc_matrix
+import scipy as sp
+import time
+from utilities import plot_matrix
 
 from prior import zeolite_prior
 from analysis_utilities import calculate_top_k_accuracy
+from ooc_matrix_multiplication import ooc_dot
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 
@@ -43,7 +48,7 @@ sys.path.insert(
 )
 
 SEED = 5
-NORM_FACTOR = 0.001
+NORM_FACTOR = 0.5
 PI = np.pi
 
 
@@ -53,11 +58,16 @@ def kappa(x):
     ) / PI
 
 
-def predict(all_data, mask, num_test_rows, X):
+def predict(all_data, mask, num_test_rows, X, reduce_footprint=False):
     """
     Run the NTK Matrix Completion Algorithm
     https://arxiv.org/abs/2108.00131
     """
+    if reduce_footprint:
+        # For whatever reason this throws everything off...
+        X = X.astype(np.float32)
+        all_data = all_data.astype(np.float32)
+        mask = mask.astype(np.float32)
     all_data = all_data.T
     mask = mask.T
     num_observed = int(np.sum(mask[0:1, :]))
@@ -82,6 +92,52 @@ def predict(all_data, mask, num_test_rows, X):
     return results.T
 
 
+def kappa_with_clip(sparse_matrix):
+    x = np.clip(sparse_matrix.data, -1, 1)
+    sparse_matrix.data = (x * (PI - np.arccos(x)) + np.sqrt(1 - np.square(x))) / PI + (
+        x * (PI - np.arccos(x))
+    ) / PI
+    return sparse_matrix
+
+
+def sparse_predict(all_data, mask, num_test_rows, X):
+    """
+    Run the NTK Matrix Completion Algorithm with sparse matrices
+    https://arxiv.org/abs/2108.00131
+    """
+    start = time.time()
+    X = csc_matrix(X)
+    all_data = all_data.T
+    mask = mask.T
+    num_observed = int(np.sum(mask[0:1, :]))
+    num_missing = mask[0:1, :].shape[-1] - num_observed
+    K_matrix = csc_matrix((num_observed, num_observed))
+    k_matrix = csc_matrix((num_observed, num_missing))
+    observed_data = all_data[:, :num_observed]
+    pdb.set_trace()
+    X_cross_terms = kappa_with_clip(X @ X.T)
+    X_cross_terms_ooc = ooc_dot(X, X.T)
+    pdb.set_trace()
+    K_matrix[:, :] = X_cross_terms[:num_observed, :num_observed]
+    k_matrix[:, :] = X_cross_terms[
+        :num_observed, num_observed : num_observed + num_missing
+    ]
+    print("kernel construction took: ", time.time() - start)
+    # plot_matrix(X_cross_terms, 'X_cross_terms', vmin=0, vmax=2)
+    # plot_matrix(k_matrix, 'little_k', vmin=0, vmax=2)
+    # plot_matrix(K_matrix, 'big_K', vmin=0, vmax=2)
+    # plot_matrix(X, 'X', vmin=0, vmax=1)
+    # plot_matrix(X[0:50,0:50], 'close_up_X', vmin=0, vmax=0.05)
+
+    # https://gssc.esa.int/navipedia//index.php/Block-Wise_Weighted_Least_Square
+    # ^this looks like it's the answer...
+    results = sp.sparse.linalg.spsolve(K_matrix, observed_data.T).T @ k_matrix
+    print("linear regression took: ", time.time() - start)
+    pdb.set_trace()
+    assert results.shape == (all_data.shape[0], num_test_rows), "Results malformed"
+    return results.T
+
+
 def run_ntk(
     all_data,
     prior,
@@ -89,6 +145,8 @@ def run_ntk(
     shuffled_iterator=True,
     k_folds=10,
     SEED=SEED,
+    prior_map=None,
+    norm_factor=NORM_FACTOR,
 ):
     if shuffled_iterator:
         # The iterator shuffles the data which is why we need to pass in metrics_mask together.
@@ -121,7 +179,8 @@ def run_ntk(
             train,
             test,
             prior,
-            normalization_factor=NORM_FACTOR,
+            normalization_factor=norm_factor,
+            prior_map=prior_map,
         )
         all_data = pd.concat([train, test]).to_numpy()
         ##### SAFETY
@@ -129,7 +188,6 @@ def run_ntk(
         ##### SAFETY
         mask = np.ones_like(all_data)
         mask[len(train) :, :] = 0
-
         # The bottom 1/10 of mask and all_data are just all zeros.
         results_ntk = predict(all_data, mask, len(test), X=X)
 
@@ -161,15 +219,8 @@ def calculate_energies_for_78K_osdas():
     training_data, _binary_data = get_ground_truth_energy_matrix(
         energy_type=Energy_Type.BINDING  # TEMPLATING or BINDING
     )
-
-    # These are predictions according to Daniel's per Zeolite ML model for 78K OSDAs
-    daniel_energies = pd.read_pickle(
-        "data/daniels_data/precomputed_energies_78616by196.pkl"
-    )
-    # These are precomputed priors for those 78K OSDAs
-    precomputed_priors = pd.read_pickle(
-        "data/daniels_data/precomputed_energies_78616by196WithWhims.pkl"
-    )
+    daniel_energies = pd.read_csv(HYPOTHETICAL_OSDA_ENERGIES)
+    precomputed_priors = pd.read_csv(OSDA_HYPOTHETICAL_PRIOR_FILE)
     daniel_energies = daniel_energies.reindex(precomputed_priors.index)
     truth = daniel_energies.to_numpy()
     # We need to dedup indices so we're not testing on training samples. (only 2 overlap??? crazy)
@@ -218,11 +269,7 @@ def calculate_energies_for_78K_osdas():
 
 # This method is pure mess. but it's just examining the predicted energies for daniel's 78K new OSDAs
 def lets_look_at_predicted_energies():
-
-    HYPOTHETICAL_OSDA_ENERGIES,
-    HYPOTHETICAL_OSDA_BOXES,
-    OSDA_HYPOTHETICAL_PRIOR_FILE,
-    daniel_energies = pd.read_pickle(HYPOTHETICAL_OSDA_ENERGIES)
+    daniel_energies = pd.read_csv(HYPOTHETICAL_OSDA_ENERGIES)
     predicted_energies = pd.read_pickle(OSDA_HYPOTHETICAL_PREDICTED_ENERGIES)
     training_data, _binary_data = get_ground_truth_energy_matrix()
     sorted_training_data_by_column = pd.DataFrame()
@@ -319,26 +366,26 @@ def calculate_energies_for_new_zeolite(name, parameter_file):
     ground_truth, binary_data = get_ground_truth_energy_matrix(
         energy_type=Energy_Type.BINDING, transpose=True
     )
-    num_new_zeolites = 1
+    # num_new_zeolites = 1
 
-    # add new zeolite to training data
-    new = pd.Series([])
-    new.name = name
-    td = ground_truth.append(new)
+    # # add new zeolite to training data
+    # new = pd.Series([])
+    # new.name = name
+    # td = ground_truth.append(new)
 
-    X = make_prior(
-        None,
-        None,
-        method="CustomZeolite",
-        normalization_factor=NORM_FACTOR,
-        all_data=td,
-        file_name=parameter_file,
-    )
-    all_data = td.to_numpy()
-    mask = np.ones_like(all_data)
-    mask[len(all_data) - num_new_zeolites :, :] = 0
-    results = predict(all_data, mask, num_new_zeolites, X)
-    save_matrix(results, ZEOLITE_HYPOTHETICAL_PREDICTED_ENERGIES)
+    # X = make_prior(
+    #     None,
+    #     None,
+    #     method="CustomZeolite",
+    #     normalization_factor=NORM_FACTOR,
+    #     all_data=td,
+    #     file_name=parameter_file,
+    # )
+    # all_data = td.to_numpy()
+    # mask = np.ones_like(all_data)
+    # mask[len(all_data) - num_new_zeolites :, :] = 0
+    # results = predict(all_data, mask, num_new_zeolites, X)
+    # save_matrix(results, ZEOLITE_HYPOTHETICAL_PREDICTED_ENERGIES)
 
     # Now let's test the accuracy of this new zeolite data...
     pred, true, mask = run_ntk(
@@ -377,6 +424,23 @@ def calculate_energies_for_new_zeolite(name, parameter_file):
     x_val = [x[0] for x in volume_accuracy_pairs]
     y_val = [x[1] for x in volume_accuracy_pairs]
     plt.scatter(x_val, y_val)
+    plt.savefig("k_accuracy_vs_cell_volume.png", dpi=150)
+
+    # volume vs. included_sphere_diameter
+
+    # x_val_volume = [
+    #     zeolite_priors.iloc[i]["volume"] for i in range(zeolite_priors.shape[0])
+    # ]
+    # y_val_included_sphere_diameter = [
+    #     zeolite_priors.iloc[i]["included_sphere_diameter"]
+    #     for i in range(zeolite_priors.shape[0])
+    # ]
+    # plt.scatter(x_val_volume, y_val_included_sphere_diameter)
+    # plt.savefig("volume(x-axis)_vs_included_sphere_diameter(y-axis).png", dpi=150)
+    # from sklearn.metrics import r2_score
+    # r2_score(x_val_volume, y_val_included_sphere_diameter)
+    # import scipy as sp
+    # slope, intercept, r_value, p_value, std_err = sp.stats.linregress(x_val_volume, y_val_included_sphere_diameter)
 
     breakpoint()
     calculate_metrics(pred.to_numpy(), true.to_numpy(), mask.to_numpy())
@@ -387,9 +451,10 @@ def skinny_ntk():
     This method runs 10-fold cross validation on the 1194x209 Ground Truth matrix made SKINNY
     """
     # Make sure the row # for desired_shape is modulo 10 (aka our k_folds size)
+    # # ground_truth, binary_data = get_ground_truth_energy_matrix(desired_shape=(1180, 200))
+    # ground_truth, binary_data = get_ground_truth_energy_matrix(desired_shape=(100, 200))
     ground_truth, binary_data = get_ground_truth_energy_matrix(desired_shape=(100, 30))
     skinny_ground_truth = make_skinny(ground_truth)
-
     skinny_pred, _t, _m = run_ntk(
         skinny_ground_truth,
         prior="CustomOSDAandZeoliteAsRows",
@@ -399,20 +464,130 @@ def skinny_ntk():
     pred = unmake_skinny(skinny_pred)
     calculate_metrics(pred.to_numpy(), ground_truth.to_numpy(), binary_data.to_numpy())
 
+def buisness_as_normal_transposed():
+    """
+    This method runs 10-fold cross validation on the 209x1194 Ground Truth matrix.
+    """
+    ground_truth, binary_data = get_ground_truth_energy_matrix(transpose=True)
+    # identity_pred, identity_true, mask = run_ntk(
+    #     ground_truth,
+    #     prior="identity",
+    #     metrics_mask=binary_data,
+    # )
+    # identity_metrics = calculate_metrics(
+    #     identity_pred.to_numpy(),
+    #     identity_true.to_numpy(),
+    #     mask.to_numpy(),
+    #     verbose=False,
+    # )
+    # # pdb.set_trace()
+    # priors_to_test = [
+    #     "a",
+    #     "b",
+    #     "c",
+    #     "alpha",
+    #     "betta",
+    #     "gamma",
+    #     "volume",
+    #     "rdls",
+    #     "framework_density",
+    #     "td_10",
+    #     "td",
+    #     "included_sphere_diameter",
+    #     "diffused_sphere_diameter_a",
+    #     "diffused_sphere_diameter_b",
+    #     "diffused_sphere_diameter_c",
+    #     "accessible_volume",
+    #     "ring_size_0",
+    #     "ring_size_1",
+    #     "ring_size_2",
+    #     "ring_size_3",
+    #     "ring_size_4",
+    #     "ring_size_5",
+    #     "N_1",
+    #     "N_2",
+    #     "N_3",
+    #     "N_4",
+    #     "N_5",
+    #     "N_6",
+    #     "N_7",
+    #     "N_8",
+    #     "N_9",
+    #     "N_10",
+    #     "N_11",
+    #     "N_12",
+    # ]
+    # results = []
+    # for prior_to_test in priors_to_test:
+    #     pred, true, mask = run_ntk(
+    #         ground_truth,
+    #         prior="CustomZeolite",
+    #         metrics_mask=binary_data,
+    #         prior_map={prior_to_test: 1.0},
+    #     )
+    #     metrics = calculate_metrics(
+    #         pred.to_numpy(),
+    #         true.to_numpy(),
+    #         mask.to_numpy(),
+    #         verbose=False,
+    #         meta=prior_to_test,
+    #     )
+    #     results.append((prior_to_test, metrics))
+    # results.append(('identity', identity_metrics))
+    # results.sort(key=lambda x: x[1]["rmse_scores"])
+    # results.sort(key=lambda x: -x[1]["top_1_accuracy"])
+
+    # results_print_out = [
+    #     r[0]
+    #     + "\t"
+    #     + str(r[1]["rmse_scores"])
+    #     + "\t"
+    #     + str(r[1]["spearman_scores"])
+    #     + "\t"
+    #     + str(r[1]["top_1_accuracy"])
+    #     + "\t"
+    #     + str(r[1]["top_3_accuracy"])
+    #     + "\t"
+    #     + str(r[1]["top_5_accuracy"])
+    #     for r in results
+    # ]
+    # print("here are the results sorted by rmse & top_1_accuracy ", results_print_out)
+
+    ## Test all the priors together...
+    full_pred, full_true, mask = run_ntk(
+        ground_truth, prior="identity", metrics_mask=binary_data, norm_factor=0.1
+    )
+    full_metrics = calculate_metrics(
+        full_pred.to_numpy(),
+        full_true.to_numpy(),
+        mask.to_numpy(),
+        verbose=False,
+    )
+    pdb.set_trace()
+    plot_matrix(full_pred, 'full_pred')#, vmin=0, vmax=2)
+    plot_matrix(full_true, 'full_true')#, vmin=0, vmax=2)
+    from analysis_utilities import plot_top_k_curves
+    plot_top_k_curves(full_metrics['top_20_accuracies'])
+    print("full metrics run: ", full_metrics)
+
 
 def buisness_as_normal():
     """
     This method runs 10-fold cross validation on the 1194x209 Ground Truth matrix.
     """
-    ground_truth, binary_data = get_ground_truth_energy_matrix()
+    ground_truth, binary_data = get_ground_truth_energy_matrix(arbitrary_high_energy=30)
     pred, true, mask = run_ntk(
-        ground_truth, prior="CustomOSDAVector", metrics_mask=binary_data
+        ground_truth, prior="identity", metrics_mask=binary_data
     )
-    calculate_metrics(pred.to_numpy(), true.to_numpy(), mask.to_numpy())
+    calculate_metrics(pred.to_numpy(), true.to_numpy(), mask.to_numpy(), verbose=True)
+    pdb.set_trace()
     save_matrix(pred, TEN_FOLD_CROSS_VALIDATION_ENERGIES)
 
 
 if __name__ == "__main__":
+    # calculate_energies_for_new_zeolite()
+    # buisness_as_normal_transposed()
+
     buisness_as_normal()
     # calculate_energies_for_new_zeolite(name="ZEO1", parameter_file="data/zeo_1.pkl")
     # skinny_ntk()
