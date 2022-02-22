@@ -2,6 +2,8 @@ from statistics import mode
 import sys
 import pathlib
 import os
+from tabnanny import verbose
+import scipy as sp
 
 from pandas.core.frame import DataFrame
 from prior import make_prior
@@ -82,11 +84,12 @@ def calculate_row_metrics(true, pred, metrics_mask=None):
         rmse_scores.append(
             [math.sqrt(mean_squared_error(i, j, multioutput="raw_values"))]
         )
-    print(
-        "Hey, just a heads up the min row_length is "
-        + str(min_row_len)
-        + ".\n Keep that in mind, how valid is r2_score & spearman_scores? ",
-    )
+    if verbose:
+        print(
+            "Hey, just a heads up the min row_length is "
+            + str(min_row_len)
+            + ".\n Keep that in mind, how valid is r2_score & spearman_scores? ",
+        )
     return cosims, r2_scores, rmse_scores, spearman_scores
 
 
@@ -155,3 +158,48 @@ def calculate_top_k_accuracy(all_true, ntk_predictions, k, by_row=True):
         _col_nums, top_indices = np.where(lowest_mask)
         pred = -ntk_predictions.T
     return top_k_accuracy_score(top_indices, pred, k=k, labels=range(pred.shape[1]))
+
+
+# Useful for plotting two histograms of energy distributions together.
+def plot_double_histogram(ground_truth, predicted_energies, name="Zeo-1"):
+    bins = np.linspace(0, 40, 50)
+    plt.hist(ground_truth, bins=bins, alpha=0.5, label="ground_truth")
+    plt.hist(predicted_energies, bins=bins, alpha=0.5, label=name)
+    plt.title("Ground Truth & Hypothetical Templating Energies for " + name)
+    plt.legend(loc="upper right")
+    plt.yscale("log")
+    plt.show()
+
+
+# Plot zeolites by volume
+def plot_volume(zeolite_priors):
+    # bins = np.linspace(0, 40, 50)
+    plt.hist(zeolite_priors["volume"], bins=30, label="ground_truth")
+    plt.title("Zeolites Binned by Volume ")
+    plt.xlabel("Angstroms Cubed")
+    plt.ylabel("Zeolite Frequency")
+    plt.show()
+
+
+# This method is to try and determine which priors in osda correlate with predicted 
+# energies. Pretty caveman stuff. Used it once & not sure if it was actually helpful.
+def examine_osda_feature_causes(prediction_ntk):
+    from prior import osda_prior
+    osda_priors = osda_prior(prediction_ntk.T, normalize=False, identity_weight=0.0)
+    feature_to_regression = {}
+    # now time to find correlation for each of the potential priors...
+    for col in osda_priors.columns:
+        feature = osda_priors[col]
+        predicted_templating = prediction_ntk.T[0]
+        slope, intercept, r_value, p_value, std_err = sp.stats.linregress(
+            feature, predicted_templating
+        )
+        feature_to_regression[col] = {
+            "slope": slope,
+            "intercept": intercept,
+            "r_value": r_value,
+            "p_value": p_value,
+            "std_err": std_err,
+        }
+    print(feature_to_regression)
+    print("all done")

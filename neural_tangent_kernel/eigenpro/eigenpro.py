@@ -1,13 +1,44 @@
+# https://web.mit.edu/modernml/course/
+# https://web.mit.edu/modernml/course/homeworks/PSET2.pdf
+
 '''Construct kernel model with EigenPro optimizer.'''
 import collections
 import time
 import torch
+import scipy.linalg as linalg
 
 import torch.nn as nn
 import numpy as np
+import torch
+import pdb
 
-import svd
-import utils
+
+def float_x(data):
+    '''Set data array precision.'''
+    return np.float32(data)
+
+
+def nystrom_kernel_svd(samples, kernel_fn, top_q):
+    """Compute top eigensystem of kernel matrix using Nystrom method.
+    Arguments:
+        samples: data matrix of shape (n_sample, n_feature).
+        kernel_fn: tensor function k(X, Y) that returns kernel matrix.
+        top_q: top-q eigensystem.
+    Returns:
+        eigvals: top eigenvalues of shape (top_q).
+        eigvecs: (rescaled) top eigenvectors of shape (n_sample, top_q).
+    """
+
+    n_sample, _ = samples.shape
+    pdb.set_trace()
+    kmat = kernel_fn(samples, samples).cpu().data.numpy()
+    scaled_kmat = kmat / n_sample
+    vals, vecs = linalg.eigh(scaled_kmat,
+                             eigvals=(n_sample - top_q, n_sample - 1))
+    eigvals = vals[::-1][:top_q]
+    eigvecs = vecs[:, ::-1][:, :top_q] / np.sqrt(n_sample)
+
+    return float_x(eigvals), float_x(eigvecs)
 
 
 def asm_eigenpro_fn(samples, map_fn, top_q, bs_gpu, alpha, min_q=5, seed=1):
@@ -40,7 +71,7 @@ def asm_eigenpro_fn(samples, map_fn, top_q, bs_gpu, alpha, min_q=5, seed=1):
     else:
         svd_q = top_q
 
-    eigvals, eigvecs = svd.nystrom_kernel_svd(samples, map_fn, svd_q)
+    eigvals, eigvecs = nystrom_kernel_svd(samples, map_fn, svd_q)
 
     # Choose k such that the batch size is bounded by
     #   the subsample size and the memory size.
@@ -58,11 +89,12 @@ def asm_eigenpro_fn(samples, map_fn, top_q, bs_gpu, alpha, min_q=5, seed=1):
     eigvecs_t = torch.tensor(eigvecs).to(device)
     tail_eigval_t = torch.tensor(tail_eigval, dtype=torch.float).to(device)
 
-    scale = utils.float_x(np.power(eigvals[0] / tail_eigval, alpha))
+    scale = float_x(np.power(eigvals[0] / tail_eigval, alpha))
     diag_t = (1 - torch.pow(tail_eigval_t / eigvals_t, alpha)) / eigvals_t
 
     def eigenpro_fn(grad, kmat):
         '''Function to apply EigenPro preconditioner.'''
+
         return torch.mm(eigvecs_t * diag_t,
                         torch.t(torch.mm(torch.mm(torch.t(grad),
                                                   kmat),
@@ -74,7 +106,7 @@ def asm_eigenpro_fn(samples, map_fn, top_q, bs_gpu, alpha, min_q=5, seed=1):
     knorms = 1 - np.sum(eigvecs ** 2, axis=1) * n_sample
     beta = np.max(knorms)
 
-    return eigenpro_fn, scale, eigvals[0], utils.float_x(beta)
+    return eigenpro_fn, scale, eigvals[0], float_x(beta)
 
 
 class FKR_EigenPro(nn.Module):
@@ -109,6 +141,7 @@ class FKR_EigenPro(nn.Module):
         if weight is None:
             weight = self.weight
         kmat = self.kernel_matrix(samples)
+        breakpoint()
         pred = kmat.mm(weight)
         return pred
 
@@ -126,12 +159,15 @@ class FKR_EigenPro(nn.Module):
             eta = bs / beta
         else:
             eta = 0.99 * 2 * bs / (beta + (bs - 1) * top_eigval)
-        return bs, utils.float_x(eta)
+        return bs, float_x(eta)
 
     def eigenpro_iterate(self, samples, x_batch, y_batch, eigenpro_fn,
                          eta, sample_ids, batch_ids):
         # update random coordiate block (for mini-batch)
         grad = self.primal_gradient(x_batch, y_batch, self.weight)
+        # Yitong added this...
+        grad = float_x(grad)
+
         self.weight.index_add_(0, batch_ids, -eta * grad)
 
         # update fixed coordinate block (for EigenPro)

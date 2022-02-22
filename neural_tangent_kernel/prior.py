@@ -19,12 +19,14 @@ from sklearn.preprocessing import normalize, OneHotEncoder
 VALID_METHODS = {
     "identity",
     "CustomOSDA",
+    "OldCustomOSDA",
     "CustomZeolite",
     "random",
     "CustomOSDAandZeolite",
     "CustomOSDAandZeoliteAsRows",
     "CustomOSDAVector",
     "ManualZeolite",
+    "CustomOSDAandZeoliteAsSparseMatrix",
 }
 
 ZEOLITE_PRIOR_LOOKUP = {
@@ -87,6 +89,7 @@ from path_constants import (
     OSDA_PRIOR_FILE,
     OSDA_HYPOTHETICAL_PRIOR_FILE,
     OSDA_CONFORMER_PRIOR_FILE,
+    ZEO_1_PRIOR,
 )
 
 
@@ -108,9 +111,10 @@ def save_matrix(matrix, file_name):
 
 
 # Turns out conformers are not very useful at all...
+# So this function is not being used right now...
 def load_conformer_priors(
     target_index,
-    precomputed_file_name,
+    precomputed_file_name=OSDA_CONFORMER_PRIOR_FILE,
     identity_weight=0.01,
     normalize=True,
 ):
@@ -120,11 +124,11 @@ def load_conformer_priors(
     exploded_prior = pd.DataFrame(
         columns=[
             "num_conformers",
-            # "mean_volume",
-            # "min_volume",
+            "mean_volume",
+            "min_volume",
             "std_dev_volume",
-            # "mean_energy",
-            # "min_energy",
+            "mean_energy",
+            "min_energy",
             "std_dev_energy",
         ]
     )
@@ -138,11 +142,11 @@ def load_conformer_priors(
             series = pd.Series(
                 {
                     "num_conformers": 1.0,
-                    # "mean_volume": 0.0,
-                    # "min_volume": 0.0,
+                    "mean_volume": 0.0,
+                    "min_volume": 0.0,
                     "std_dev_volume": 0.0,
-                    # "mean_energy": 0.0,
-                    # "min_energy": 0.0,
+                    "mean_energy": 0.0,
+                    "min_energy": 0.0,
                     "std_dev_energy": 0.0,
                 }
             )
@@ -153,10 +157,10 @@ def load_conformer_priors(
                     "num_conformers": len(conformer_properties["volumes"]),
                     # "mean_volume": np.mean(conformer_properties["volumes"]),
                     # "min_volume": min(conformer_properties["volumes"]),
-                    "std_dev_volume": np.std(conformer_properties["volumes"]),
+                    # "std_dev_volume": np.std(conformer_properties["volumes"]),
                     # "mean_energy": np.mean(conformer_properties["energies"]),
                     # "min_energy": min(conformer_properties["energies"]),
-                    "std_dev_energy": np.std(conformer_properties["energies"]),
+                    # "std_dev_energy": np.std(conformer_properties["energies"]),
                 }
             )
         series.name = index
@@ -225,31 +229,33 @@ def load_prior(
     precomputed_prior = precomputed_prior.filter(items=list(column_weights.keys()))
     precomputed_prior = precomputed_prior.apply(pd.to_numeric)
     precomputed_prior = precomputed_prior.fillna(0.0)
+    results = precomputed_prior
 
-    # Normalize down each column to between 0 & 1
     if normalize:
+        # Normalize down each column to between 0 & 1
         precomputed_prior = precomputed_prior.apply(lambda x: x / x.max(), axis=0)
-    # Now time to weigh each column, taking into account identity_weight to make sure
-    # later when we add the identity matrix we don't go over 1.0 total per row...
-    normalization_factor = sum(column_weights.values()) + identity_weight
-    results = precomputed_prior.apply(
-        lambda x: x * column_weights[x.name] / normalization_factor, axis=0
-    )
-    return results
+        # Now time to weigh each column, taking into account identity_weight to make sure
+        # later when we add the identity matrix we don't go over 1.0 total per row...
+        normalization_factor = sum(column_weights.values())
+        results = precomputed_prior.apply(
+            lambda x: x * column_weights[x.name] / normalization_factor, axis=0
+        )
+    return (1 - identity_weight) * results
 
 
 def osda_prior(
     all_data_df,
     identity_weight=0.01,
+    prior_map=None,
     normalize=True,
 ):
     return load_prior(
         all_data_df.index,
-        OSDA_PRIOR_LOOKUP,
+        prior_map if prior_map is not None else OSDA_PRIOR_LOOKUP,
         OSDA_PRIOR_FILE,
         identity_weight,
         normalize,
-    ).to_numpy()
+    )
 
 
 def osda_vector_prior(
@@ -257,16 +263,16 @@ def osda_vector_prior(
     vector_feature="getaway",
     identity_weight=0.01,
     normalize=True,
+    other_prior_to_concat=None,
 ):
-    prior = osda_prior(all_data_df, identity_weight)
+    prior = osda_prior(all_data_df, identity_weight).to_numpy()
     getaway_prior = load_vector_priors(
         all_data_df.index,
         vector_feature,
         OSDA_PRIOR_FILE,
         identity_weight,
         normalize,
-        # TODO: change me...
-        other_prior_to_concat=None
+        other_prior_to_concat=other_prior_to_concat,
     ).to_numpy()
     # Splitting the original prior and the vector prior 50-50
     normalized_getaway_prior = getaway_prior / (2 * max(getaway_prior, key=sum).sum())
@@ -279,7 +285,10 @@ def osda_vector_prior(
 
 
 def zeolite_prior(
-    all_data_df, feature_lookup, identity_weight=0.01, normalize=True, file_name=None
+    all_data_df,
+    feature_lookup,
+    identity_weight=0.01,
+    normalize=True,
 ):
     return load_prior(
         all_data_df.index,
@@ -288,7 +297,7 @@ def zeolite_prior(
         identity_weight,
         normalize,
         ZEOLITE_PRIOR_MAP,
-        other_prior_to_concat=file_name,
+        other_prior_to_concat=ZEO_1_PRIOR,
     )
 
 
@@ -355,12 +364,35 @@ def make_prior(
     train,
     test,
     method="identity",
-    normalization_factor=1.5,
-    test_train_axis=0,
+    normalization_factor=0.001,
     prior_map=None,
     all_data=None,
-    file_name=None,
+    test_train_axis=0,
 ):
+    """
+    train: training set
+
+    test: test set
+
+    method: which prior do you want to use? Hint: probably CustomOSDAVector or CustomZeolite
+
+    normalization_factor: what to normalize the identity matrix we concat to. This is necessary
+    to specify since we need all rows in the prior to sum to 1 & if the identity matrix is going to have
+    value 0.001 then the rest of the row must sum to at most 0.999.
+
+    prior_map: For CustomZeolite, CustomOSDA, and CustomOSDAVector: how do you want to weight the
+    individual descriptors? Default is to weight all descriptors equally (check out ZEOLITE_PRIOR_LOOKUP &
+    OSDA_PRIOR_LOOKUP). This might be a good thing to tweak for calibrated ensemble uncertainty.
+
+    all_data: This is gross, but you also have the option to just give all the data instead
+    of separately specifying test & train sets. This is for when you're no longer testing with
+    10-fold cross validation; when you are ready to take your method and infer energies
+    on a new distribution & want to use all of your data to train the NTK.
+
+    test_train_axis: kinda no longer useful, but originally created if you want to join
+    test or train by row or column. I don't think you'll ever need to change this.
+    prior_map:
+    """
     assert method in VALID_METHODS, f"Invalid method used, pick one of {VALID_METHODS}"
     if all_data is not None:
         all_data_df = all_data
@@ -378,26 +410,35 @@ def make_prior(
     prior = None
 
     if method == "identity":
+        # This is our baseline prior.
         prior = np.eye(all_data.shape[0])
         return prior
 
     elif method == "CustomOSDA":
-        prior = osda_prior(all_data_df, normalization_factor)
+        # CustomOSDA uses only the handcrafted OSDA descriptors
+        prior = osda_prior(
+            all_data_df=all_data_df,
+            identity_weight=normalization_factor,
+            prior_map=prior_map,
+        ).to_numpy()
         return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
 
     elif method == "CustomOSDAVector":
+        # CustomOSDAVector takes all of the handcrafted OSDA descriptors
+        # and appends it to the GETAWAY prior
         prior = osda_vector_prior(all_data_df, "getaway", normalization_factor)
         return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
 
     elif method == "CustomZeolite":
-        prior = zeolite_prior(all_data_df, prior_map, file_name=file_name).to_numpy()
+        # CustomZeolite takes all of the handcrafted Zeolite descriptors
+        prior = zeolite_prior(all_data_df, prior_map).to_numpy()
         return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
 
     # This one is for the failed experiment
     elif method == "CustomOSDAandZeolite":
         osda_axis1_lengths = osda_prior(
             all_data_df, column_name="Axis 1 (Angstrom)", normalize=False
-        )
+        ).to_numpy()
         zeolite_sphere_diameters = zeolite_prior(all_data_df).to_numpy()
 
         prior = np.zeros((len(osda_axis1_lengths), len(zeolite_sphere_diameters)))
@@ -415,6 +456,12 @@ def make_prior(
 
     # This is the one for really skinny Matrices
     elif method == "CustomOSDAandZeoliteAsRows":
+        prior = osda_zeolite_combined_prior(all_data_df, normalize=True)
+        # For now remove the identity concat to test eigenpro
+        return prior  # np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
+
+    # This is the one for really skinny Matrices with sparse matrices.
+    elif method == "CustomOSDAandZeoliteAsSparseMatrix":
         prior = csc_matrix(osda_zeolite_combined_prior(all_data_df, normalize=True))
         return sp.sparse.hstack(
             [prior, normalization_factor * sp.sparse.identity(all_data.shape[0])]

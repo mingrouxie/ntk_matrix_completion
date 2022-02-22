@@ -17,6 +17,7 @@ HYPOTHETICAL_OSDA_BOXES = "data/daniels_data/211221_boxes.csv"
 GENERATED PRIORS
 """
 ZEOLITE_PRIOR_FILE = "data/scraped_zeolite_data.pkl"
+ZEO_1_PRIOR = 'data/zeo_1.pkl'
 OSDA_PRIOR_FILE = "data/precomputed_OSDA_prior_10_with_whims.pkl"
 OSDA_CONFORMER_PRIOR_FILE = "data/OSDA_priors_with_conjugates.pkl"
 OSDA_HYPOTHETICAL_PRIOR_FILE = (

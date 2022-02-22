@@ -72,17 +72,15 @@ def get_conformers(smile, debug=False, number_of_conformers=2000):
         print(round(time.time() - start, 3))
     return conformer_features
 
-
-# TODO: Conformers, WHIM PCA, GetMorganFingerprint, bertz_ct
-# Also TODO: figure out how to get deterministic results or at least less variance...
-# Also also TODO: cache this.
-def smile_to_property(smile, process_conformers=False, debug=False):
+# TODO: we want to 
+def smile_to_property(smile, process_conformers=False, debug=False, save_file=None):
     properties = {}
     m = Chem.MolFromSmiles(smile)
     num_bonds = len(Chem.RemoveAllHs(m).GetBonds())
-    if debug:
+    if save_file is not None:
         m2 = Chem.RemoveAllHs(m)
-        Draw.MolToFile(m2, "test3.o.png")
+        Draw.MolToFile(m2, save_file + ".png")
+        return
     m2 = Chem.AddHs(m)
     rc = AllChem.EmbedMolecule(m2)
     if rc < 0:
@@ -123,7 +121,6 @@ def smile_to_property(smile, process_conformers=False, debug=False):
             properties["formal_charge"],
         )
 
-    # these may be useless.
     # 0.5 * ((pm3-pm2)**2 + (pm3-pm1)**2 + (pm2-pm1)**2)/(pm1**2+pm2**2+pm3**2)
     properties["asphericity"] = Descriptors3D.Asphericity(m2)
     # sqrt(pm3**2 -pm1**2) / pm3**2
@@ -175,12 +172,11 @@ def smile_to_property(smile, process_conformers=False, debug=False):
     if debug:
         print("free_sas ", properties["free_sas"])
 
-    # this quantifies the complexity of a molecule?
+    # bertz_ct quantifies the complexity of a molecule? vague...
     properties["bertz_ct"] = Chem.GraphDescriptors.BertzCT(m2)
     # do we want other weird things like HallKierAlpha?
     # I want some measure of flexibility. It seems like they calculated that by taking all the conformers.
     # https://pubs.acs.org/doi/pdf/10.1021/acs.jcim.6b00565?rand=xovj8tmp
-    # pdb.set_trace()
     return properties
 
 
@@ -191,7 +187,6 @@ def average_properties(smile, num_runs=1):
     )
     meaned_df = df.mean(numeric_only=True)
     # Pretty certain it's okay to take the average over WHIMs and GETAWAY...
-    # But maybe good to double check...
     # Now let's take care of the columns that are not numeric.
     for col in df.columns:
         if df.dtypes[col] in (np.dtype("float64"), np.dtype("int64")):
@@ -228,12 +223,15 @@ def osda_prior_helper(all_data_df, num_runs, save_file=None):
         " check them out: ",
         bad_apples,
     )
-    # Drop molecules which couldn't be embedded.
+    # Drop bad apples aka molecules which couldn't be embedded.
     return prior.dropna()
 
 
+# Depends upon daniel's 78K hypothetical OSDA list (ask him for it)
 def precompute_priors_for_780K_Osdas():
     num_runs = 4
+    # sample_size is archaic & was just used to test scaling.
+    # this is probably a code smell and should be removed if not helpful.
     sample_size = 78616
 
     input = HYPOTHETICAL_OSDA_ENERGIES
