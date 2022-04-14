@@ -52,7 +52,7 @@ def buisness_as_normal_transposed():
     pred, true, mask = run_ntk(
         ground_truth, prior="CustomZeolite", metrics_mask=binary_data
     )
-    breakpoint()
+    # breakpoint()
     calculate_metrics(pred.to_numpy(), true.to_numpy(), mask.to_numpy(), verbose=True)
     pdb.set_trace()
 

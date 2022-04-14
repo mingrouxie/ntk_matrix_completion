@@ -159,7 +159,7 @@ def calculate_top_k_accuracy(all_true, ntk_predictions, k, by_row=True):
         pred = -ntk_predictions.T
     # breakpoint()
     print(top_indices.shape, pred.shape, k, range(pred.shape[1]))
-    breakpoint()
+    # breakpoint()
     return top_k_accuracy_score(top_indices, pred, k=k, labels=range(pred.shape[1]))
 
 

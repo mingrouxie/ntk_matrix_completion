@@ -3,7 +3,7 @@
 """
 INPUT DATA
 """
-# Format binding.csv from Schwalbe Coda's work: https://github.com/learningmatter-mit/Zeolite-Phase-Competition/blob/main/data/binding.csv
+# Format binding.csv from Schwalbe Koda's work: https://github.com/learningmatter-mit/Zeolite-Phase-Competition/blob/main/data/binding.csv
 BINDING_CSV = "data/binding.csv"
 BINDING_GROUND_TRUTH = "data/BindingSiO2GroundTruth.pkl"
 TEMPLATING_GROUND_TRUTH = "data/TemplatingGroundTruth.pkl"
@@ -19,6 +19,7 @@ GENERATED PRIORS
 ZEOLITE_PRIOR_FILE = "data/scraped_zeolite_data.pkl"
 # PERSISTENCE_ZEOLITE_PRIOR_FILE = '/Users/mr/Documents/Work/MIT/PhD/projects/matrix_completion/persistent_homology/20220412_nick/handcraft_persistent.pkl'
 PERSISTENCE_ZEOLITE_PRIOR_FILE = '/Users/mr/Documents/Work/MIT/PhD/projects/matrix_completion/persistent_homology/20220412_nick/numeric_zeolite_df_edited.pkl'
+PERSISTENCE_ZEOLITE_PRIOR_FILE = '/Users/mr/Documents/Work/MIT/PhD/projects/matrix_completion/persistent_homology/20220412_nick/no_edits.pkl'
 ZEO_1_PRIOR = 'data/zeo_1.pkl'
 OSDA_PRIOR_FILE = "data/precomputed_OSDA_prior_10_with_whims.pkl"
 OSDA_CONFORMER_PRIOR_FILE = "data/OSDA_priors_with_conjugates.pkl"
