@@ -75,14 +75,15 @@ def predict(all_data, mask, num_test_rows, X, reduce_footprint=False):
         X = X.astype(np.float32)
         all_data = all_data.astype(np.float32)
         mask = mask.astype(np.float32)
-    all_data = all_data.T
-    mask = mask.T
-    num_observed = int(np.sum(mask[0:1, :]))
+    all_data = all_data.T 
+    mask = mask.T 
+    num_observed = int(np.sum(mask[0:1, :])) 
     num_missing = mask[0:1, :].shape[-1] - num_observed
 
     K_matrix = np.zeros((num_observed, num_observed))
     k_matrix = np.zeros((num_observed, num_missing))
     observed_data = all_data[:, :num_observed]
+    observed_data = observed_data.astype('float64')
     X_cross_terms = kappa(np.clip(X @ X.T, -1, 1))
     K_matrix[:, :] = X_cross_terms[:num_observed, :num_observed]
     k_matrix[:, :] = X_cross_terms[
@@ -92,6 +93,7 @@ def predict(all_data, mask, num_test_rows, X, reduce_footprint=False):
     # plot_matrix(k_matrix, 'little_k', vmin=0, vmax=2)
     # plot_matrix(K_matrix, 'big_K', vmin=0, vmax=2)
     # plot_matrix(X, 'X', vmin=0, vmax=1)
+    # breakpoint()
     results = np.linalg.solve(K_matrix, observed_data.T).T @ k_matrix
     assert results.shape == (all_data.shape[0], num_test_rows), "Results malformed"
     return results.T
@@ -108,6 +110,7 @@ def run_ntk(
     norm_factor=NORM_FACTOR,
     use_eigenpro=False,
 ):
+    breakpoint()
     if shuffled_iterator:
         # The iterator shuffles the data which is why we need to pass in metrics_mask together.
         iterator = tqdm(

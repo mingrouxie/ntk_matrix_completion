@@ -52,6 +52,7 @@ def buisness_as_normal_transposed():
     pred, true, mask = run_ntk(
         ground_truth, prior="CustomZeolite", metrics_mask=binary_data
     )
+    breakpoint()
     calculate_metrics(pred.to_numpy(), true.to_numpy(), mask.to_numpy(), verbose=True)
     pdb.set_trace()
 
@@ -169,7 +170,7 @@ def buisness_as_normal_transposed_over_many_priors():
 
 
 if __name__ == "__main__":
-    buisness_as_normal()
-    # buisness_as_normal_transposed()
+    # buisness_as_normal()
+    buisness_as_normal_transposed()
     # buisness_as_normal_skinny()
     # buisness_as_normal_transposed_over_many_priors()

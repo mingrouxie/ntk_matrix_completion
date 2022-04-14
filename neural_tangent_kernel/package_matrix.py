@@ -91,17 +91,21 @@ def get_ground_truth_energy_matrix(
         ), "Can't be asking for a shape bigger than the full matrix"
     else:
         desired_shape = ground_truth.shape
-
-    shaped_ground_truth = pd.DataFrame()
-    for _index, row in ground_truth.iterrows():
-        if shaped_ground_truth.shape >= desired_shape:
-            break
-        shaped_row = row[: desired_shape[1]]
-        if len(shaped_row.dropna()) < minimum_row_length:
-            continue
-        shaped_ground_truth = shaped_ground_truth.append(shaped_row)
-    shaped_ground_truth.index.name = "SMILES"
-    ground_truth = shaped_ground_truth
+    #TODO(Yitong): this is probably not useful, delete it.
+    # shaped_ground_truth = pd.DataFrame()
+    # rows = []
+    # for _index, row in ground_truth.iterrows():
+    #     if shaped_ground_truth.shape >= desired_shape:
+    #         break
+    #     shaped_row = row[: desired_shape[1]]
+    #     if len(shaped_row.dropna()) < minimum_row_length:
+    #         continue
+    #     rows.append(shaped_row)
+    # pdb.set_trace()
+    # shaped_ground_truth = pd.concat(rows, axis=1)
+    #     # shaped_ground_truth = shaped_ground_truth.append(shaped_row)
+    # shaped_ground_truth.index.name = "SMILES"
+    # ground_truth = shaped_ground_truth
     binary_data = ground_truth.fillna(0)
     binary_data[binary_data != 0] = 1
 
