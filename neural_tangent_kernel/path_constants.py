@@ -20,6 +20,7 @@ ZEOLITE_PRIOR_FILE = "data/scraped_zeolite_data.pkl"
 # PERSISTENCE_ZEOLITE_PRIOR_FILE = '/Users/mr/Documents/Work/MIT/PhD/projects/matrix_completion/persistent_homology/20220412_nick/handcraft_persistent.pkl'
 PERSISTENCE_ZEOLITE_PRIOR_FILE = '/Users/mr/Documents/Work/MIT/PhD/projects/matrix_completion/persistent_homology/20220412_nick/numeric_zeolite_df_edited.pkl'
 PERSISTENCE_ZEOLITE_PRIOR_FILE = '/Users/mr/Documents/Work/MIT/PhD/projects/matrix_completion/persistent_homology/20220412_nick/no_edits.pkl'
+GCNN_ZEOLITE_PRIOR_FILE = '/Users/mr/Documents/Work/MIT/PhD/projects/matrix_completion/gcnn_zeolite_priors/gcnn_priors.pkl'
 ZEO_1_PRIOR = 'data/zeo_1.pkl'
 OSDA_PRIOR_FILE = "data/precomputed_OSDA_prior_10_with_whims.pkl"
 OSDA_CONFORMER_PRIOR_FILE = "data/OSDA_priors_with_conjugates.pkl"
