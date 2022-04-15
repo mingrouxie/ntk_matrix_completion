@@ -6,8 +6,8 @@ from tabnanny import verbose
 import scipy as sp
 
 from pandas.core.frame import DataFrame
-from prior import make_prior
-from cli import validate_zeolite_inputs
+# from prior import make_prior
+# from cli import validate_zeolite_inputs
 
 import math
 import matplotlib.pyplot as plt
@@ -157,6 +157,9 @@ def calculate_top_k_accuracy(all_true, ntk_predictions, k, by_row=True):
         lowest_mask = all_true == all_true.min(axis=0)
         _col_nums, top_indices = np.where(lowest_mask)
         pred = -ntk_predictions.T
+    # breakpoint()
+    print(top_indices.shape, pred.shape, k, range(pred.shape[1]))
+    # breakpoint()
     return top_k_accuracy_score(top_indices, pred, k=k, labels=range(pred.shape[1]))
 
 

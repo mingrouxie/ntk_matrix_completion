@@ -60,11 +60,14 @@ sys.path.insert(
 def calculate_energies_for_78K_osdas():
     # training_data ends up as 1190 rows x 209 columns
     training_data, _binary_data = get_ground_truth_energy_matrix(
-        energy_type=Energy_Type.BINDING  # TEMPLATING or BINDING
+        energy_type=Energy_Type.BINDING,  # TEMPLATING or BINDING
     )
     daniel_energies = pd.read_csv(HYPOTHETICAL_OSDA_ENERGIES)
-    precomputed_priors = pd.read_csv(OSDA_HYPOTHETICAL_PRIOR_FILE)
-    daniel_energies = daniel_energies.reindex(precomputed_priors.index)
+    precomputed_priors = pd.read_pickle(OSDA_HYPOTHETICAL_PRIOR_FILE)
+    # TODO(YITONG): look up all the columns that are not in the intersection with training_data
+    # Drop those columns.
+    daniel_energies = daniel_energies.reindex(precomputed_priors.index).drop('inchi', axis =1)
+
     truth = daniel_energies.to_numpy()
     # We need to dedup indices so we're not testing on training samples. (only 2 overlap??? crazy)
     daniel_energies = daniel_energies.drop(
@@ -79,7 +82,12 @@ def calculate_energies_for_78K_osdas():
     predicted_energies = pd.DataFrame()
     for _train_chunk, chunk, _none in iterator:
         daniel_energies_chunk = daniel_energies.iloc[chunk, :]
+        # TODO: there is "inchi" as a column in daniel_energies_chunk which is not in training_data
+        # TODO: remove inchi_key
         all_data = pd.concat([training_data, daniel_energies_chunk])
+        all_data_indices = all_data.index
+        all_data_columns = all_data.columns
+        # breakpoint()
         X = make_prior(
             None,
             None,
@@ -95,10 +103,11 @@ def calculate_energies_for_78K_osdas():
         predicted_energies = predicted_energies.append( 
             pd.DataFrame(
                 results,
+                columns=all_data_columns,
                 index=daniel_energies_chunk.index,
-                columns=training_data.columns,
             )
         )
+
     save_matrix(predicted_energies, OSDA_HYPOTHETICAL_PREDICTED_ENERGIES)
 
 
