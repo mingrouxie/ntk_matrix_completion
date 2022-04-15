@@ -5,7 +5,7 @@ import pdb
 from utilities import plot_matrix
 from analysis_utilities import plot_top_k_curves
 
-from ntk import run_ntk
+from ntk import run_ntk, skinny_ntk_sampled_not_sliced
 
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
@@ -38,7 +38,6 @@ def buisness_as_normal():
         use_eigenpro=False,
     )
     calculate_metrics(pred.to_numpy(), true.to_numpy(), mask.to_numpy(), verbose=True)
-    pdb.set_trace()
     plot_matrix(pred, "pred")
     save_matrix(pred, TEN_FOLD_CROSS_VALIDATION_ENERGIES)
 
@@ -49,10 +48,12 @@ def buisness_as_normal_transposed():
     With Zeolites as rows (aka using Zeolite priors to predict energies for new Zeolites)
     """
     ground_truth, binary_data = get_ground_truth_energy_matrix(transpose=True)
+    # pred, true, mask = run_ntk(
+    #     ground_truth, prior="CustomZeoliteEmbeddings", metrics_mask=binary_data
+    # )
     pred, true, mask = run_ntk(
         ground_truth, prior="CustomZeolite", metrics_mask=binary_data
     )
-    # breakpoint()
     calculate_metrics(pred.to_numpy(), true.to_numpy(), mask.to_numpy(), verbose=True)
     pdb.set_trace()
 
@@ -170,7 +171,10 @@ def buisness_as_normal_transposed_over_many_priors():
 
 
 if __name__ == "__main__":
-    # buisness_as_normal()
+    buisness_as_normal()
     buisness_as_normal_transposed()
+    # skinny_ntk_sampled_not_sliced()
     # buisness_as_normal_skinny()
+    # buisness_as_normal()
+    # buisness_as_normal_transposed()
     # buisness_as_normal_transposed_over_many_priors()

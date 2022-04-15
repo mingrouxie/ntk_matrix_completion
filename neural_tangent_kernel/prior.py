@@ -28,6 +28,7 @@ VALID_METHODS = {
     "CustomOSDAVector",
     "ManualZeolite",
     "CustomOSDAandZeoliteAsSparseMatrix",
+    "CustomZeoliteEmbeddings",
 }
 
 ZEOLITE_PRIOR_LOOKUP = {
@@ -693,7 +694,10 @@ from path_constants import (
     OSDA_CONFORMER_PRIOR_FILE,
     ZEO_1_PRIOR,
     PERSISTENCE_ZEOLITE_PRIOR_FILE,
-    GCNN_ZEOLITE_PRIOR_FILE
+    ZEOLITE_GCNN_EMBEDDINGS_FILE,
+    ZEOLITE_GCNN_EMBEDDINGS_FILE,
+    ZEOLITE_GCNN_EMBEDDINGS_CSV_FILE,
+    OSDA_ZEO1_PRIOR_FILE,
 )
 
 
@@ -783,8 +787,9 @@ def load_vector_priors(
     precomputed_file_name=OSDA_PRIOR_FILE,
     identity_weight=0.01,
     normalize=True,
-    other_prior_to_concat=OSDA_HYPOTHETICAL_PRIOR_FILE,
+    other_prior_to_concat=OSDA_HYPOTHETICAL_PRIOR_FILE,  # OSDA_ZEO1_PRIOR_FILE
     replace_nan=0.0,
+    already_exploded=False,
 ):
     precomputed_prior = pd.read_pickle(precomputed_file_name)
     if other_prior_to_concat:
@@ -793,12 +798,18 @@ def load_vector_priors(
         precomputed_prior = precomputed_prior[
             ~precomputed_prior.index.duplicated(keep="first")
         ]
-    vector_explode = lambda x: pd.Series(x[vector_feature])
-    precomputed_prior = precomputed_prior.apply(vector_explode, axis=1)
+    if not already_exploded:
+        vector_explode = lambda x: pd.Series(x[vector_feature])
+        precomputed_prior = precomputed_prior.apply(vector_explode, axis=1)
     exploded_prior = precomputed_prior.reindex(target_index)
 
     if replace_nan is not None:
         exploded_prior = exploded_prior.fillna(replace_nan)
+    # Check & normalize if anything is negative
+    lowest_value = exploded_prior.min().min()
+    if lowest_value < 0:
+        exploded_prior += -lowest_value
+
     # Normalize across the whole thing...
     # Normalize to the biggest value & across all of the elements
     biggest_value = exploded_prior.max().max()
@@ -903,13 +914,38 @@ def zeolite_prior(
         all_data_df.index,
         ZEOLITE_PRIOR_LOOKUP if not feature_lookup else feature_lookup,
         # PERSISTENCE_ZEOLITE_PRIOR_FILE,  
-        GCNN_ZEOLITE_PRIOR_FILE,
+        ZEOLITE_GCNN_EMBEDDINGS_FILE,
         # ZEOLITE_PRIOR_FILE,
         identity_weight,
         normalize,
         ZEOLITE_PRIOR_MAP,
         other_prior_to_concat=ZEO_1_PRIOR,
     )
+
+
+def zeolite_vector_prior(
+    all_data_df,
+    prior_map,
+    identity_weight=0.01,
+    normalize=True,
+):
+    # TODO: do we want to add the other manually curated zeolite priors too?
+    gcnn_priors = load_vector_priors(
+        target_index=all_data_df.index,
+        vector_feature="feature_set",
+        precomputed_file_name=ZEOLITE_GCNN_EMBEDDINGS_FILE,
+        normalize=normalize,
+        other_prior_to_concat=None,
+        already_exploded=True,
+        identity_weight=identity_weight,
+    ).to_numpy()
+    handcrafted_zeolite_priors = zeolite_prior(all_data_df, prior_map).to_numpy()
+    normalized_gcnn_priors = gcnn_priors / (2 * max(gcnn_priors, key=sum).sum())
+    normalized_handcrafted_priors = handcrafted_zeolite_priors / (
+        2 * max(handcrafted_zeolite_priors, key=sum).sum()
+    )
+    stacked = np.hstack([normalized_gcnn_priors, normalized_handcrafted_priors])
+    return (1 - identity_weight) * stacked
 
 
 def osda_zeolite_combined_prior(
@@ -1043,6 +1079,12 @@ def make_prior(
     elif method == "CustomZeolite":
         # CustomZeolite takes all of the handcrafted Zeolite descriptors
         prior = zeolite_prior(all_data_df, prior_map).to_numpy()
+        return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
+
+    elif method == "CustomZeoliteEmbeddings":
+        prior = zeolite_vector_prior(
+            all_data_df, prior_map, identity_weight=normalization_factor
+        )
         return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
 
     # This one is for the failed experiment

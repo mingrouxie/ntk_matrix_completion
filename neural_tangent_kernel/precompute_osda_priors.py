@@ -258,6 +258,16 @@ def precompute_priors_for_780K_Osdas():
     all_data_df.index = all_data_df.index.rename("SMILES")
     save_matrix(all_data_df, save_file)
 
+def precompute_prior_for_zeo1():
+    zeo1_osda_smile = '[CH3][P+](C1CCCCC1)(C2CCCCC2)(C3CCCCC3)'
+    properties = average_properties(zeo1_osda_smile, 10)
+    series = pd.Series(properties)
+    series.name = zeo1_osda_smile
+    prior = pd.DataFrame()
+    prior = prior.append(series)
+    save_matrix(prior, 'tricyclohexylmethylphosphonium_prior.pkl')
+    return prior.dropna()
 
 if __name__ == "__main__":
-    precompute_priors_for_780K_Osdas()
+    precompute_prior_for_zeo1()
+    # precompute_priors_for_780K_Osdas()

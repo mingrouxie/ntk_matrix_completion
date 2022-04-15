@@ -6,8 +6,6 @@ from tabnanny import verbose
 import scipy as sp
 
 from pandas.core.frame import DataFrame
-# from prior import make_prior
-# from cli import validate_zeolite_inputs
 
 import math
 import matplotlib.pyplot as plt

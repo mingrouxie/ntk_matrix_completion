@@ -205,6 +205,40 @@ def lets_look_at_predicted_energies():
     print("hello")
 
 
+# This method calculates binding energies for the 78K new OSDAs
+# using the Ground truth set of 1.19K x 200 matrix
+def calculate_energies_for_tricyclohexylmethylphosphonium():
+    # training_data ends up as 1190 rows x 209 columns
+    training_data, _binary_data = get_ground_truth_energy_matrix(
+        energy_type=Energy_Type.TEMPLATING  # TEMPLATING or BINDING
+    )
+
+    predicted_energies = pd.DataFrame()
+    pdb.set_trace()
+    all_data = pd.concat([training_data, daniel_energies_chunk])
+    X = make_prior(
+        None,
+        None,
+        method="CustomOSDA",
+        normalization_factor=NORM_FACTOR,
+        all_data=all_data,
+    )
+    all_data = all_data.to_numpy()
+    mask = np.ones_like(all_data)
+    mask[len(all_data) - len(chunk) :, :] = 0
+    results = predict(all_data, mask, len(chunk), X)
+    # predict energies for the OSDAs of chunk_size & append predictions to our growing list
+    predicted_energies = predicted_energies.append( 
+        pd.DataFrame(
+            results,
+            index=daniel_energies_chunk.index,
+            columns=training_data.columns,
+        )
+    )
+    save_matrix(predicted_energies, OSDA_HYPOTHETICAL_PREDICTED_ENERGIES)
+
+
+
 def calculate_energies_for_new_zeolite():
     """
     Calculate energies for Zeo-1 using our ground truth matrix.
@@ -353,7 +387,8 @@ def calculate_energies_for_new_zeolite_skinny_style():
 
 
 if __name__ == "__main__":
-    calculate_energies_for_78K_osdas()
+    calculate_energies_for_tricyclohexylmethylphosphonium()
+    # calculate_energies_for_78K_osdas()
     # lets_look_at_predicted_energies()
     # calculate_energies_for_new_zeolite()
     # calculate_energies_for_new_zeolite_skinny_style()

@@ -30,7 +30,6 @@ def nystrom_kernel_svd(samples, kernel_fn, top_q):
     """
 
     n_sample, _ = samples.shape
-    pdb.set_trace()
     kmat = kernel_fn(samples, samples).cpu().data.numpy()
     scaled_kmat = kmat / n_sample
     vals, vecs = linalg.eigh(scaled_kmat,
@@ -94,7 +93,6 @@ def asm_eigenpro_fn(samples, map_fn, top_q, bs_gpu, alpha, min_q=5, seed=1):
 
     def eigenpro_fn(grad, kmat):
         '''Function to apply EigenPro preconditioner.'''
-
         return torch.mm(eigvecs_t * diag_t,
                         torch.t(torch.mm(torch.mm(torch.t(grad),
                                                   kmat),
@@ -117,7 +115,6 @@ class FKR_EigenPro(nn.Module):
         self.n_centers, self.x_dim = centers.shape
         self.device = device
         self.pinned_list = []
-
         self.centers = self.tensor(centers, release=True)
         self.weight = self.tensor(torch.zeros(
             self.n_centers, y_dim), release=True)
@@ -141,8 +138,8 @@ class FKR_EigenPro(nn.Module):
         if weight is None:
             weight = self.weight
         kmat = self.kernel_matrix(samples)
-        breakpoint()
         pred = kmat.mm(weight)
+        breakpoint()
         return pred
 
     def primal_gradient(self, samples, labels, weight):
@@ -165,8 +162,6 @@ class FKR_EigenPro(nn.Module):
                          eta, sample_ids, batch_ids):
         # update random coordiate block (for mini-batch)
         grad = self.primal_gradient(x_batch, y_batch, self.weight)
-        # Yitong added this...
-        grad = float_x(grad)
 
         self.weight.index_add_(0, batch_ids, -eta * grad)
 

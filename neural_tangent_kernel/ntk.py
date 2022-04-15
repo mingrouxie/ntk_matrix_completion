@@ -22,7 +22,6 @@ from eigenpro.eigenpro import FKR_EigenPro
 import torch
 
 
-
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 
 from package_matrix import (
@@ -61,9 +60,11 @@ def kappa(x):
         x * (PI - np.arccos(x))
     ) / PI
 
-def kappa_with_clip(X_0, X_1):
+
+def kappa_with_clip(X_0, X_1, device):
     # torch.float32 TODO: make this torch.float32 like gaussian does....
-    return np.float32(kappa(np.clip(X_0 @ X_1.T, -1, 1)).float())
+    return torch.tensor(kappa(np.clip(X_0 @ X_1.T, -1, 1)), device=device)
+
 
 def predict(all_data, mask, num_test_rows, X, reduce_footprint=False):
     """
@@ -138,7 +139,7 @@ def run_ntk(
         )
     aggregate_pred = None  # Predictions for all fold(s)
     aggregate_true = None  # Ground truths for all fold(s)
-    aggregate_mask = None  # Non-binding masks for all fold(s) 
+    aggregate_mask = None  # Non-binding masks for all fold(s)
 
     # Iterate over all predictions and populate metrics matrices
     for train, test, test_mask_chunk in iterator:
@@ -178,16 +179,61 @@ def run_ntk(
             else test_mask_chunk
         )
     # We return aggregate_pred, aggregate_true, aggregate_mask.
-    # Aggregate_mask is necessary to keep track of which cells in the matrix are 
+    # Aggregate_mask is necessary to keep track of which cells in the matrix are
     # non-binding (for spearman & rmse calculation) when shuffled_iterator=True
     # breakpoint()
     return aggregate_pred, aggregate_true, aggregate_mask
 
 
+def euclidean_distances(samples, centers, squared=True):
+    """Calculate the pointwise distance.
+    Args:
+        samples: of shape (n_sample, n_feature).
+        centers: of shape (n_center, n_feature).
+        squared: boolean.
+    Returns:
+        pointwise distances (n_sample, n_center).
+    """
+    samples_norm = torch.sum(samples ** 2, dim=1, keepdim=True)
+    if samples is centers:
+        centers_norm = samples_norm
+    else:
+        centers_norm = torch.sum(centers ** 2, dim=1, keepdim=True)
+    centers_norm = torch.reshape(centers_norm, (1, -1))
+
+    distances = samples.mm(torch.t(centers))
+    distances.mul_(-2)
+    distances.add_(samples_norm)
+    distances.add_(centers_norm)
+    if not squared:
+        distances.clamp_(min=0)
+        distances.sqrt_()
+
+    return distances
+
+
+def gaussian(samples, centers, bandwidth):
+    """Gaussian kernel.
+    Args:
+        samples: of shape (n_sample, n_feature).
+        centers: of shape (n_center, n_feature).
+        bandwidth: kernel bandwidth.
+    Returns:
+        kernel matrix of shape (n_sample, n_center).
+    """
+    assert bandwidth > 0
+    kernel_mat = euclidean_distances(samples, centers)
+    kernel_mat.clamp_(min=0)
+    gamma = 1.0 / (2 * bandwidth ** 2)
+    kernel_mat.mul_(-gamma)
+    kernel_mat.exp_()
+    return kernel_mat
+
+
 # TODO: This is in development and pretty god awful.
 # TODO: make sample_size bigger, maybe 10K?
 def skinny_ntk_sampled_not_sliced(
-    sample_size=100, num_splits=10, seed=SEED, use_eigenpro=True
+    sample_size=1000, num_splits=10, seed=SEED, use_eigenpro=True
 ):
     """
     This method runs 10-fold cross validation on the 1194x209 Ground Truth matrix made SKINNY
@@ -225,16 +271,29 @@ def skinny_ntk_sampled_not_sliced(
             # take the X with no eye
             # reduced_X = X[:, : X.shape[1] - X.shape[0]]
             # reduced_X = reduced_X / (max(reduced_X, key=sum).sum())
-            x_train = X[: sampled_skinny_train.shape[0]].astype('float32')
-            y_train = sampled_skinny_train.to_numpy().astype('float32')
-            x_test = X[sampled_skinny_train.shape[0] :].astype('float32')
-            y_test = skinny_test.to_numpy().astype('float32')
             # We'll probably need to chop X into test (# samples by dimensions), and train (# samples by dimensions)
             device = torch.device("cpu")
-            kernel_fn = lambda x,y: gaussian(x, y, bandwidth=5)
-            # model = FKR_EigenPro(kappa_with_clip, x_train, 289, device=device)
-            model = FKR_EigenPro(kernel_fn, x_train, 289, device=device)
+
+            x_train = torch.tensor(
+                X[: sampled_skinny_train.shape[0]].astype("float32"), device=device
+            )
+            y_train = torch.tensor(
+                sampled_skinny_train.to_numpy().astype("float32"), device=device
+            )
+            x_test = torch.tensor(
+                X[sampled_skinny_train.shape[0] :].astype("float32"), device=device
+            )
+            y_test = torch.tensor(
+                skinny_test.to_numpy().astype("float32"), device=device
+            )
+            pdb.set_trace()
+            kernel_fn = lambda x, y: kappa_with_clip(x, y, device)
+            # model = FKR_EigenPro(kappa_with_clip, x_train, 1, device=device)
+            # TODO: What's up with 289 here? looks like 'y_dim' = 298? that's very very arbitrary.
+            model = FKR_EigenPro(kernel_fn, x_train, 1, device=device)
             _ = model.fit(x_train, y_train, x_test, y_test, epochs=[1, 2, 5], mem_gb=10)
+            pdb.set_trace()
+            print('he;o')
 
         results_ntk = predict(all_data, mask, len(skinny_test), X=X)
 
