@@ -2,9 +2,15 @@ import sys
 import pathlib
 import os
 import pdb
+import torch
+import numpy as np
 import pandas as pd
 from enum import Enum
 from path_constants import BINDING_GROUND_TRUTH, TEMPLATING_GROUND_TRUTH, BINDING_CSV
+from sklearn.model_selection import train_test_split
+from prior import make_prior
+from torch.utils.data import TensorDataset
+
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 from utilities import (
@@ -91,7 +97,7 @@ def get_ground_truth_energy_matrix(
         ), "Can't be asking for a shape bigger than the full matrix"
     else:
         desired_shape = ground_truth.shape
-    #TODO(Yitong): this is probably not useful, delete it.
+    # TODO(Yitong): this is probably not useful, delete it.
     # shaped_ground_truth = pd.DataFrame()
     # rows = []
     # for _index, row in ground_truth.iterrows():
@@ -129,7 +135,7 @@ def get_ground_truth_energy_matrix(
 
 def make_skinny(all_data, col_1="variable", col_2="SMILES"):
     """
-        Take a 2D array and make it 1D by stacking each column.
+    Take a 2D array and make it 1D by stacking each column.
     """
     reset_all_data = all_data.reset_index()
     melted_matrix = pd.melt(
@@ -142,7 +148,7 @@ def make_skinny(all_data, col_1="variable", col_2="SMILES"):
 
 def unmake_skinny(skinny_pred):
     """
-        Take a 1D array and make it 2D by unstacking each column.
+    Take a 1D array and make it 2D by unstacking each column.
     """
     predicted_zeolites_per_osda = {}
     for index in range(len(skinny_pred)):
@@ -153,6 +159,94 @@ def unmake_skinny(skinny_pred):
         predicted_zeolites_per_osda[zeolite][osda] = pred_value
     return pd.DataFrame.from_dict(predicted_zeolites_per_osda)
 
+# TODO(yitong): Big Big Big Ginormous TODO is to do a structural split
+# or at least make sure that all train osda don't appear in test and vice versa
+# TODO(yitong): y_nan_fill is a bad solution. think more about this.
+# BIG TODO(yitong): Need to get lowest energy conformer for the osda molecules...
+# TODO: we probably want to fill nan values in the X priors too...
+# TODO: NORMALIZE THE EMBEDDINGS!!!!!
+# TODO: Do k-cross validation same as we did for NTK so we can benchmark.
+def package_dataloader(
+    device,
+    energy_type=Energy_Type.BINDING,
+    y_nan_fill=30,
+    batch_size=256,
+    test_proportion=0.1,
+    random_seed=5,
+):
+    if energy_type == Energy_Type.TEMPLATING:
+        ground_truth = pd.read_pickle(TEMPLATING_GROUND_TRUTH)
+    elif energy_type == Energy_Type.BINDING:
+        ground_truth = pd.read_pickle(BINDING_GROUND_TRUTH)
+    else:
+        raise ValueError(
+            "Sorry, but if you want to use a different ground truth for the energy then create the matrix first."
+        )
+    skinny_ground_truth = make_skinny(ground_truth, col_1="Zeolite", col_2="SMILES")
+
+    # TODO(Yitong): We're going with an arbitrary high energy which is gross.
+    # But We almost certainly certainly don't want to take the row mean anymore...
+    # For the sake of comparison maybe we should? How do we handle the non-binding cases now???
+    skinny_ground_truth = skinny_ground_truth.fillna(y_nan_fill)
+    X = skinny_ground_truth.index.to_numpy()
+    y = skinny_ground_truth["value"].to_numpy()
+
+    # We call prior in this method! Just an FYI.
+    # Necessary because torch tensors cannot be strings
+    X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior = make_prior(
+        test=None,
+        train=None,
+        method="CustomOSDAandZeoliteAsRows",
+        normalization_factor=0,
+        all_data=skinny_ground_truth,
+        stack_combined_priors=False,
+    )
+    # This is taking advantage of the fact that embedding_shapes
+    # contains information for the shape of zeolite & osda priors
+    X_osda_prior = np.hstack([X_osda_getaway_prior, X_osda_handcrafted_prior])
+    (
+        X_osda_train,
+        X_osda_test,
+        X_zeolite_train,
+        X_zeolite_test,
+        y_train,
+        y_test,
+    ) = train_test_split(
+        X_osda_prior,
+        X_zeolite_prior,
+        y,
+        test_size=test_proportion,
+        shuffle=True,
+        random_state=random_seed,
+    )
+    X_osda_train = torch.tensor(X_osda_train, device=device).float()
+    X_osda_test = torch.tensor(X_osda_test, device=device).float()
+    X_zeolite_train = torch.tensor(X_zeolite_train, device=device).float()
+    X_zeolite_test = torch.tensor(X_zeolite_test, device=device).float()
+    y_train = torch.tensor(y_train, device=device).float()
+    y_test = torch.tensor(y_test, device=device).float()
+
+
+    train_dataset = TensorDataset(X_osda_train, X_zeolite_train, y_train)
+    test_dataset = TensorDataset(X_osda_test, X_zeolite_test, y_test)
+    train_loader = torch.utils.data.DataLoader(
+        dataset=train_dataset,
+        batch_size=batch_size,  # shuffle=True
+    )
+    test_loader = torch.utils.data.DataLoader(
+        dataset=test_dataset,
+        batch_size=batch_size,  # shuffle=True
+    )
+    # Make fully sure train & test are disjoint...
+    # TODO(yitong): We might want to be checking that X_osda_train & X_osda_test 
+    # contain distinct OSDAs.... I'm actually pretty sure they're not right now
+    # That's some structure bleed right there...
+    assert set(train_dataset).isdisjoint(set(test_dataset))
+    return (train_dataset, test_dataset, train_loader, test_loader)
+
 
 if __name__ == "__main__":
     format_ground_truth_pkl()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    package_dataloader(device)
+    # format_ground_truth_pkl()

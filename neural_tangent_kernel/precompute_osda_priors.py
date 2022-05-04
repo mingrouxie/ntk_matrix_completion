@@ -15,8 +15,10 @@ import pathlib
 import time
 
 from path_constants import (
+    TEMPLATING_GROUND_TRUTH,
     HYPOTHETICAL_OSDA_ENERGIES,
     HYPOTHETICAL_OSDA_BOXES,
+    OSDA_PRIOR_FILE,
     OSDA_HYPOTHETICAL_PRIOR_FILE,
 )
 from utilities import save_matrix
@@ -72,7 +74,8 @@ def get_conformers(smile, debug=False, number_of_conformers=2000):
         print(round(time.time() - start, 3))
     return conformer_features
 
-# TODO: we want to 
+
+# TODO: we want to
 def smile_to_property(smile, process_conformers=False, debug=False, save_file=None):
     properties = {}
     m = Chem.MolFromSmiles(smile)
@@ -227,6 +230,15 @@ def osda_prior_helper(all_data_df, num_runs, save_file=None):
     return prior.dropna()
 
 
+def prior_from_ground_truth_matrix():
+    num_runs = 10
+    all_data_df = pd.read_pickle(TEMPLATING_GROUND_TRUTH)
+    save_file = OSDA_PRIOR_FILE
+    all_data_df.reset_index(inplace=True)
+    prior = osda_prior_helper(all_data_df, num_runs, save_file)
+    save_matrix(prior, save_file)
+
+
 # Depends upon daniel's 78K hypothetical OSDA list (ask him for it)
 def precompute_priors_for_780K_Osdas():
     num_runs = 4
@@ -258,16 +270,19 @@ def precompute_priors_for_780K_Osdas():
     all_data_df.index = all_data_df.index.rename("SMILES")
     save_matrix(all_data_df, save_file)
 
+
 def precompute_prior_for_zeo1():
-    zeo1_osda_smile = '[CH3][P+](C1CCCCC1)(C2CCCCC2)(C3CCCCC3)'
+    zeo1_osda_smile = "[CH3][P+](C1CCCCC1)(C2CCCCC2)(C3CCCCC3)"
     properties = average_properties(zeo1_osda_smile, 10)
     series = pd.Series(properties)
     series.name = zeo1_osda_smile
     prior = pd.DataFrame()
     prior = prior.append(series)
-    save_matrix(prior, 'tricyclohexylmethylphosphonium_prior.pkl')
+    save_matrix(prior, "tricyclohexylmethylphosphonium_prior.pkl")
     return prior.dropna()
 
+
 if __name__ == "__main__":
-    precompute_prior_for_zeo1()
+    prior_from_ground_truth_matrix()
+    # precompute_prior_for_zeo1()
     # precompute_priors_for_780K_Osdas()
