@@ -123,6 +123,9 @@ def get_ground_truth_energy_matrix(
     else:
         # Set all empty spots in the matrix to be the row mean
         ground_truth = ground_truth.apply(lambda row: row.fillna(row.mean()), axis=1)
+        # ground_truth = ground_truth.apply(lambda row: row.fillna(row.max()*0.01), axis=1) # TODO: Mingrou comment out
+        # ground_truth = ground_truth.apply(lambda row: row.fillna(30), axis=1) # TODO: Mingrou comment out
+        # ground_truth = ground_truth.apply(lambda row: row.fillna(row.mean()+5), axis=1) # TODO: Mingrou comment out
     ground_truth = ground_truth.dropna(thresh=1)
     # Let's take out rows that have just no  energies at all...
     # They are only in the dataset since literature reports values for them...

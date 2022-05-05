@@ -4,7 +4,7 @@ import pathlib
 import os
 from tabnanny import verbose
 import scipy as sp
-
+import pandas as pd
 from pandas.core.frame import DataFrame
 
 import math
@@ -17,6 +17,7 @@ from scipy.stats import spearmanr
 from sklearn.metrics import top_k_accuracy_score
 
 from package_matrix import Energy_Type
+from path_constants import PERFORMANCE_METRICS
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 from utilities import (
@@ -92,7 +93,15 @@ def calculate_row_metrics(true, pred, metrics_mask=None):
 
 
 def calculate_metrics(
-    pred, true, mask=None, energy_type=Energy_Type.TEMPLATING, verbose=True, meta=None
+    pred,
+    true,
+    mask=None,
+    energy_type=Energy_Type.TEMPLATING,
+    verbose=True,
+    meta=None,
+    method="top_k_in_top_k",
+    to_write=False,
+    to_plot=False,
 ):
     """
     All metrics as calculated by ROW
@@ -103,19 +112,49 @@ def calculate_metrics(
         )
     except:
         breakpoint()
-    top_1 = calculate_top_k_accuracy(true, pred, 1)
-    top_3 = calculate_top_k_accuracy(true, pred, 3)
-    top_5 = calculate_top_k_accuracy(true, pred, 5)
-    top_20_accuracies = [calculate_top_k_accuracy(true, pred, k) for k in range(0, 21)]
+    if method == "top_n_in_top_k":
+        top_1 = []
+        top_3 = []
+        top_5 = []
+        top_20_accuracies = []
+        for n in range(1, 1195):
+            top_1.append(calculate_top_n_in_top_k_accuracy(true, pred, k=1, n=n))
+            top_3.append(calculate_top_n_in_top_k_accuracy(true, pred, k=3, n=n))
+            top_5.append(calculate_top_n_in_top_k_accuracy(true, pred, k=5, n=n))
+            top_20.append(calculate_top_n_in_top_k_accuracy(true, pred, k=20, n=n))
+            # top_20_accuracies.append(
+            #     [
+            #         calculate_top_n_in_top_k_accuracy(true, pred, k=k, n=n)
+            #         for k in range(1, 21)  # cannot do 0 because of division by k
+            #     ]
+            # )
+    elif method == "top_k_in_top_k":
+        top_1 = calculate_top_n_in_top_k_accuracy(true, pred, k=1)
+        top_3 = calculate_top_n_in_top_k_accuracy(true, pred, k=3)
+        top_5 = calculate_top_n_in_top_k_accuracy(true, pred, k=5)
+        top_20 = calculate_top_n_in_top_k_accuracy(true, pred, k=20)
+        # top_20_accuracies = [
+        #     calculate_top_n_in_top_k_accuracy(true, pred, k=k) for k in range(0, 21)
+        # ]
+    elif method == "top_k":
+        top_1 = calculate_top_k_accuracy(true, pred, 1)
+        top_3 = calculate_top_k_accuracy(true, pred, 3)
+        top_5 = calculate_top_k_accuracy(true, pred, 5)
+        top_20 = calculate_top_k_accuracy(true, pred, 20)
+        # top_20_accuracies = [
+        #     calculate_top_k_accuracy(true, pred, k) for k in range(0, 21)
+        # ]
+
     results = {
         "cosim": np.mean(np.mean(cosims).round(4)),
         "r2_scores": np.mean(np.mean(r2_scores).round(4)),
         "rmse_scores": np.mean(np.mean(rmse_scores).round(4)),
         "spearman_scores": np.mean(np.mean(spearman_scores).round(4)),
-        "top_1_accuracy": top_1.round(4),
-        "top_3_accuracy": top_3.round(4),
-        "top_5_accuracy": top_5.round(4),
-        "top_20_accuracies": top_20_accuracies,
+        "top_1_accuracy": np.array(top_1).round(4),
+        "top_3_accuracy": np.array(top_3).round(4),
+        "top_5_accuracy": np.array(top_5).round(4),
+        # "top_20_accuracies": top_20_accuracies,
+        "top_20_accuracy": np.array(top_20).round(4),
     }
     if verbose:
         print(
@@ -128,25 +167,35 @@ def calculate_metrics(
             "\nspearman_scores: ",
             np.mean(np.mean(spearman_scores).round(4)),
             "\ntop_1_accuracy: ",
-            top_1.round(4),
+            np.array(top_1).mean().round(4),
             "\ntop_3_accuracy: ",
-            top_3.round(4),
+            np.array(top_3).mean().round(4),
             "\ntop_5_accuracy: ",
-            top_5.round(4),
+            np.array(top_5).mean().round(4),
         )
-        plot_top_k_curves(top_20_accuracies)
-        if energy_type == Energy_Type.BINDING:
-            vmin = -30
-            vmax = 5
-        else:
-            vmin = 16
-            vmax = 23
-        plot_matrix(true, "regression_truth", vmin=vmin, vmax=vmax)
-        plot_matrix(pred, "regression_prediction", vmin=vmin, vmax=vmax)
+
+        if to_plot:
+            plot_top_k_curves(top_20_accuracies[0])
+            if energy_type == Energy_Type.BINDING:
+                vmin = -30
+                vmax = 5
+            else:
+                vmin = 16
+                vmax = 23
+            plot_matrix(true, "regression_truth", vmin=vmin, vmax=vmax)
+            plot_matrix(pred, "regression_prediction", vmin=vmin, vmax=vmax)
+
+        if to_write:
+            df = pd.DataFrame(top_20_accuracies).T
+            df.to_csv(PERFORMANCE_METRICS)
     return results
 
 
-def calculate_top_k_accuracy(all_true, ntk_predictions, k, by_row=True):
+def calculate_top_k_accuracy(all_true, ntk_predictions, k, by_row=True, verbose=False):
+    """
+    Note that -ntk_predictions is used because for both templating and binding energies,
+    lower is better, but top_k_accuracy_score looks at, well, the top scores
+    """
     if by_row:
         lowest_mask = (all_true.T == all_true.min(axis=1)).T
         _col_nums, top_indices = np.where(lowest_mask)
@@ -155,10 +204,44 @@ def calculate_top_k_accuracy(all_true, ntk_predictions, k, by_row=True):
         lowest_mask = all_true == all_true.min(axis=0)
         _col_nums, top_indices = np.where(lowest_mask)
         pred = -ntk_predictions.T
-    # breakpoint()
-    print(top_indices.shape, pred.shape, k, range(pred.shape[1]))
-    # breakpoint()
-    return top_k_accuracy_score(top_indices, pred, k=k, labels=range(pred.shape[1]))
+    score = top_k_accuracy_score(top_indices, pred, k=k, labels=range(pred.shape[1]))
+    if verbose:
+        print(k, score)
+    return score
+
+
+def calculate_top_n_in_top_k_accuracy(
+    all_true, ntk_predictions, k, by_row=True, n=None, verbose=False
+):
+    """
+    Note that for both templating and binding energies, lower is better
+    """
+    ### FOR DEBUGGING ###
+    # rng = np.random.default_rng(12345)
+    # ntk_predictions = rng.integers(low=0, high=1194, size=ntk_predictions.shape)
+    ### FOR DEBUGGING ###
+    if not by_row:
+        all_true = all_true.T
+        ntk_predictions = ntk_predictions.T
+
+    if not n:
+        top_indices = np.argsort(all_true, axis=1)[
+            :, :k
+        ]  # return indices that sorts an array in ascending order e.g. [4,2,1,5]-->[2,1,0,3]
+    else:
+        top_indices = np.argsort(all_true, axis=1)[:, :n]
+    pred = np.argsort(ntk_predictions, axis=1)[:, :k]
+    common = [
+        len(np.intersect1d(top_indices[row, :], pred[row, :]))
+        for row, _ in enumerate(top_indices)
+    ]
+    if not n:
+        score = sum(common) / k / all_true.shape[0]
+    else:
+        score = sum(common) / n / all_true.shape[0]
+    if verbose:
+        print(n, k, score)
+    return score
 
 
 # Useful for plotting two histograms of energy distributions together.
@@ -182,10 +265,11 @@ def plot_volume(zeolite_priors):
     plt.show()
 
 
-# This method is to try and determine which priors in osda correlate with predicted 
+# This method is to try and determine which priors in osda correlate with predicted
 # energies. Pretty caveman stuff. Used it once & not sure if it was actually helpful.
 def examine_osda_feature_causes(prediction_ntk):
     from prior import osda_prior
+
     osda_priors = osda_prior(prediction_ntk.T, normalize=False, identity_weight=0.0)
     feature_to_regression = {}
     # now time to find correlation for each of the potential priors...
