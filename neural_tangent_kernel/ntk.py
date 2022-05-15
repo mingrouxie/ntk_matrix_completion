@@ -72,12 +72,12 @@ def predict(all_data, mask, num_test_rows, X, reduce_footprint=False):
     Run the NTK Matrix Completion Algorithm
     https://arxiv.org/abs/2108.00131
     """
-    if reduce_footprint:
+    if reduce_footprint: 
         # For whatever reason this throws everything off...
         X = X.astype(np.float32)
         all_data = all_data.astype(np.float32)
         mask = mask.astype(np.float32)
-    all_data = all_data.T
+    all_data = all_data.T # columns are being filled in
     mask = mask.T
     num_observed = int(np.sum(mask[0:1, :]))
     num_missing = mask[0:1, :].shape[-1] - num_observed
@@ -86,7 +86,7 @@ def predict(all_data, mask, num_test_rows, X, reduce_footprint=False):
     k_matrix = np.zeros((num_observed, num_missing))
     observed_data = all_data[:, :num_observed]
     observed_data = observed_data.astype("float64")
-    X_cross_terms = kappa(np.clip(X @ X.T, -1, 1))
+    X_cross_terms = kappa(np.clip(X @ X.T, -1, 1)) # kernel
     K_matrix[:, :] = X_cross_terms[:num_observed, :num_observed]
     k_matrix[:, :] = X_cross_terms[
         :num_observed, num_observed : num_observed + num_missing
@@ -96,7 +96,7 @@ def predict(all_data, mask, num_test_rows, X, reduce_footprint=False):
     # plot_matrix(K_matrix, 'big_K', vmin=0, vmax=2)
     # plot_matrix(X, 'X', vmin=0, vmax=1)
 
-    results = np.linalg.solve(K_matrix, observed_data.T).T @ k_matrix
+    results = np.linalg.solve(K_matrix, observed_data.T).T @ k_matrix #pg21 in paper
     assert results.shape == (all_data.shape[0], num_test_rows), "Results malformed"
 
     assert np.any(np.isnan(results)) == False
@@ -147,11 +147,11 @@ def run_ntk(
         X = make_prior(
             train,
             test,
-            prior,
+            method=prior,
             normalization_factor=norm_factor,
             prior_map=prior_map,
         )
-
+        # breakpoint()
         all_data = pd.concat([train, test]).to_numpy()
         ##### SAFETY
         all_data[train.shape[0] :, :] = 0

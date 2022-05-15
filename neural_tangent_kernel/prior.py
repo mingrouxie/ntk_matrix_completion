@@ -178,8 +178,11 @@ def load_vector_priors(
     return exploded_prior
 
 
-# TODO(Yitong): Cache this
-# @lru_cache(maxsize=32)
+# TODO(Yitong): Cache this. Mingrou add on: target_index is of type 'pandas.core.indexes.base.Index', not hashable
+# snakeviz showing the reading of the prior file is taking the bulk of the time (and for some reason is alot slower on hartree than locally)
+# TODO MINGROU need to find a way to cache this without breaking everything
+# Index is not hashable (can use tuple), dict is not hashable (try frozendict, but first exam revision)
+# @lru_cache(maxsize=128)
 def load_prior(
     target_index,
     column_weights,
@@ -196,11 +199,10 @@ def load_prior(
         precomputed_prior = precomputed_prior[
             ~precomputed_prior.index.duplicated(keep="first")
         ]
-    # breakpoint()
     if prior_index_map:  # zeolite prior lookup
         x = lambda i: prior_index_map[i] if i in prior_index_map else i
         precomputed_prior.index = precomputed_prior.index.map(x)
-    precomputed_prior = precomputed_prior.reindex(target_index)
+    precomputed_prior = precomputed_prior.reindex(target_index) # keeps rows with index in target_index, assigns NaN to other indices in target_index
     precomputed_prior = precomputed_prior.filter(items=list(column_weights.keys()))
     precomputed_prior = precomputed_prior.apply(pd.to_numeric)
     precomputed_prior = precomputed_prior.fillna(0.0)
@@ -226,7 +228,7 @@ def osda_prior(
     normalize=True,
 ):
     return load_prior(
-        all_data_df.index,
+        tuple(all_data_df.index),
         prior_map if prior_map is not None else OSDA_PRIOR_LOOKUP,
         OSDA_PRIOR_FILE,
         identity_weight,
@@ -272,7 +274,7 @@ def zeolite_prior(
     """
     # breakpoint()
     return load_prior(
-        all_data_df.index,
+        tuple(all_data_df.index),
         ZEOLITE_PRIOR_LOOKUP if not feature_lookup else feature_lookup,
         # PERSISTENCE_ZEOLITE_PRIOR_FILE,
         # ZEOLITE_GCNN_EMBEDDINGS_FILE,
@@ -282,8 +284,9 @@ def zeolite_prior(
         identity_weight,
         normalize,
         ZEOLITE_PRIOR_MAP,
+        other_prior_to_concat=None,
         # other_prior_to_concat=ZEO_1_PRIOR,
-    ) # TODO: Mingrou, note that the full prior is called repeatedly, which might not be great when we have a full matrix
+    )
 
 
 def zeolite_vector_prior(
@@ -322,7 +325,7 @@ def osda_zeolite_combined_prior(
     all_data_df, identity_weight=0.01, normalize=True, stack=True
 ):
     osda_prior = load_prior(
-        [i[0] for i in all_data_df.index],
+        tuple([i[0] for i in all_data_df.index]),
         OSDA_PRIOR_LOOKUP,
         OSDA_PRIOR_FILE,
         identity_weight,
@@ -337,7 +340,7 @@ def osda_zeolite_combined_prior(
         other_prior_to_concat=None,
     ).to_numpy()
     zeolite_prior = load_prior(
-        [i[1] for i in all_data_df.index],
+        tuple([i[1] for i in all_data_df.index]),
         ZEOLITE_PRIOR_LOOKUP,
         ZEOLITE_PRIOR_FILE,
         identity_weight,
@@ -453,6 +456,7 @@ def make_prior(
     elif method == "CustomZeolite":
         # CustomZeolite takes all of the priors from the data file specified in zeolite_prior()
         prior = zeolite_prior(all_data_df, prior_map).to_numpy()
+        # breakpoint()
         return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
 
     elif method == "CustomZeoliteEmbeddings":

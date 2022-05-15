@@ -23,7 +23,7 @@ def plot_matrix(M, file_name, mask=None, vmin=16, vmax=23):
         masked_M = M
     im = ax.imshow(masked_M, interpolation="nearest", cmap=cmap, vmin=vmin, vmax=vmax)
     fig.colorbar(im)
-    fig.savefig(file_name + ".png", dpi=150)
+    fig.savefig("data/output/" + file_name + ".png", dpi=150)
 
 
 def plot_two_matrices(
@@ -55,7 +55,7 @@ def plot_two_matrices(
     ax2.set_title(M2_title)
     fig.text(0.6, 0.04, "Zeolites", ha="center", va="center")
     fig.colorbar(im)
-    fig.savefig(file_name + ".png", dpi=150)
+    fig.savefig("../data/output/" + file_name + ".png", dpi=150)
 
 
 def chunks(lst, n, chunk_train=False, chunk_metrics=None):

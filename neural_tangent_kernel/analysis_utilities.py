@@ -29,15 +29,15 @@ sys.path.insert(
 )
 
 
-def plot_top_k_curves(top_accuracies):
+def plot_top_k_curves(top_accuracies, method):
     plt.plot(top_accuracies)
-    plt.title("Top K Accuracy for Zeolites per OSDA")
+    plt.title(f"{method} Accuracy")
     plt.xlabel("K")
     plt.ylabel("Accuracy")
     plt.xticks(np.arange(0, len(top_accuracies) + 1, step=5))
     plt.show()
     plt.draw()
-    plt.savefig("top_k_accuracies.png", dpi=100)
+    plt.savefig(f"data/output/{method}_accuracies.png", dpi=100)
 
 
 def get_cosims(true, pred, bypass_epsilon_check=False, filter_value=None):
@@ -96,7 +96,7 @@ def calculate_metrics(
     pred,
     true,
     mask=None,
-    energy_type=Energy_Type.TEMPLATING,
+    energy_type=Energy_Type.BINDING,
     verbose=True,
     meta=None,
     method="top_k_in_top_k",
@@ -122,29 +122,31 @@ def calculate_metrics(
             top_3.append(calculate_top_n_in_top_k_accuracy(true, pred, k=3, n=n))
             top_5.append(calculate_top_n_in_top_k_accuracy(true, pred, k=5, n=n))
             top_20.append(calculate_top_n_in_top_k_accuracy(true, pred, k=20, n=n))
-            # top_20_accuracies.append(
-            #     [
-            #         calculate_top_n_in_top_k_accuracy(true, pred, k=k, n=n)
-            #         for k in range(1, 21)  # cannot do 0 because of division by k
-            #     ]
-            # )
+            if to_plot:
+                top_20_accuracies.append(
+                    [
+                        calculate_top_n_in_top_k_accuracy(true, pred, k=k, n=n)
+                        for k in range(1, 21)  # cannot do 0 because of division by k
+                    ]
+                )
     elif method == "top_k_in_top_k":
         top_1 = calculate_top_n_in_top_k_accuracy(true, pred, k=1)
         top_3 = calculate_top_n_in_top_k_accuracy(true, pred, k=3)
         top_5 = calculate_top_n_in_top_k_accuracy(true, pred, k=5)
         top_20 = calculate_top_n_in_top_k_accuracy(true, pred, k=20)
-        # top_20_accuracies = [
-        #     calculate_top_n_in_top_k_accuracy(true, pred, k=k) for k in range(0, 21)
-        # ]
+        if to_plot:
+            top_20_accuracies = [
+                calculate_top_n_in_top_k_accuracy(true, pred, k=k) for k in range(0, 21)
+            ]
     elif method == "top_k":
         top_1 = calculate_top_k_accuracy(true, pred, 1)
         top_3 = calculate_top_k_accuracy(true, pred, 3)
         top_5 = calculate_top_k_accuracy(true, pred, 5)
         top_20 = calculate_top_k_accuracy(true, pred, 20)
-        # top_20_accuracies = [
-        #     calculate_top_k_accuracy(true, pred, k) for k in range(0, 21)
-        # ]
-
+        if to_plot:
+            top_20_accuracies = [
+                calculate_top_k_accuracy(true, pred, k) for k in range(0, 21)
+            ]
     results = {
         "cosim": np.mean(np.mean(cosims).round(4)),
         "r2_scores": np.mean(np.mean(r2_scores).round(4)),
@@ -153,8 +155,8 @@ def calculate_metrics(
         "top_1_accuracy": np.array(top_1).round(4),
         "top_3_accuracy": np.array(top_3).round(4),
         "top_5_accuracy": np.array(top_5).round(4),
-        # "top_20_accuracies": top_20_accuracies,
         "top_20_accuracy": np.array(top_20).round(4),
+        # "top_20_accuracies": top_20_accuracies,
     }
     if verbose:
         print(
@@ -172,22 +174,22 @@ def calculate_metrics(
             np.array(top_3).mean().round(4),
             "\ntop_5_accuracy: ",
             np.array(top_5).mean().round(4),
+            "\ntop_20_accuracy: ",
+            np.array(top_20).mean().round(4),
         )
-
-        if to_plot:
-            plot_top_k_curves(top_20_accuracies[0])
-            if energy_type == Energy_Type.BINDING:
-                vmin = -30
-                vmax = 5
-            else:
-                vmin = 16
-                vmax = 23
-            plot_matrix(true, "regression_truth", vmin=vmin, vmax=vmax)
-            plot_matrix(pred, "regression_prediction", vmin=vmin, vmax=vmax)
-
-        if to_write:
-            df = pd.DataFrame(top_20_accuracies).T
-            df.to_csv(PERFORMANCE_METRICS)
+    if to_plot:
+        plot_top_k_curves(top_20_accuracies, method)
+        if energy_type == Energy_Type.BINDING:
+            vmin = -30
+            vmax = 5
+        else:
+            vmin = 16
+            vmax = 23
+        plot_matrix(true, "regression_truth", vmin=vmin, vmax=vmax)
+        plot_matrix(pred, "regression_prediction", vmin=vmin, vmax=vmax)
+    if to_write:
+        df = pd.DataFrame(top_20_accuracies).T
+        df.to_pickle(PERFORMANCE_METRICS)
     return results
 
 
