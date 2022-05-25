@@ -55,6 +55,7 @@ SEED = 5
 NORM_FACTOR = 0.001
 PI = np.pi
 
+
 def kappa(x):
     return (x * (PI - np.arccos(x)) + np.sqrt(1 - np.square(x))) / PI + (
         x * (PI - np.arccos(x))
@@ -76,15 +77,15 @@ def predict(all_data, mask, num_test_rows, X, reduce_footprint=False):
         X = X.astype(np.float32)
         all_data = all_data.astype(np.float32)
         mask = mask.astype(np.float32)
-    all_data = all_data.T 
-    mask = mask.T 
-    num_observed = int(np.sum(mask[0:1, :])) 
+    all_data = all_data.T
+    mask = mask.T
+    num_observed = int(np.sum(mask[0:1, :]))
     num_missing = mask[0:1, :].shape[-1] - num_observed
 
     K_matrix = np.zeros((num_observed, num_observed))
     k_matrix = np.zeros((num_observed, num_missing))
     observed_data = all_data[:, :num_observed]
-    observed_data = observed_data.astype('float64')
+    observed_data = observed_data.astype("float64")
     X_cross_terms = kappa(np.clip(X @ X.T, -1, 1))
     K_matrix[:, :] = X_cross_terms[:num_observed, :num_observed]
     k_matrix[:, :] = X_cross_terms[
@@ -94,11 +95,11 @@ def predict(all_data, mask, num_test_rows, X, reduce_footprint=False):
     # plot_matrix(k_matrix, 'little_k', vmin=0, vmax=2)
     # plot_matrix(K_matrix, 'big_K', vmin=0, vmax=2)
     # plot_matrix(X, 'X', vmin=0, vmax=1)
-    # breakpoint()
+
     results = np.linalg.solve(K_matrix, observed_data.T).T @ k_matrix
     assert results.shape == (all_data.shape[0], num_test_rows), "Results malformed"
-    # breakpoint()
-    assert (np.any(np.isnan(results)) == False)
+
+    assert np.any(np.isnan(results)) == False
     return results.T
 
 
@@ -113,7 +114,7 @@ def run_ntk(
     norm_factor=NORM_FACTOR,
     use_eigenpro=False,
 ):
-    # breakpoint()
+
     if shuffled_iterator:
         # The iterator shuffles the data which is why we need to pass in metrics_mask together.
         iterator = tqdm(
@@ -150,6 +151,7 @@ def run_ntk(
             normalization_factor=norm_factor,
             prior_map=prior_map,
         )
+
         all_data = pd.concat([train, test]).to_numpy()
         ##### SAFETY
         all_data[train.shape[0] :, :] = 0
@@ -157,14 +159,16 @@ def run_ntk(
         mask = np.ones_like(all_data)
         mask[len(train) :, :] = 0
         # The bottom 1/10 of mask and all_data are just all zeros.
-        # breakpoint()
-        assert(np.any(np.isnan(X)==False))
-        X = np.nan_to_num(X, copy=True, nan=0.0) 
+
+        assert np.any(np.isnan(X) == False)
+        X = np.nan_to_num(X, copy=True, nan=0.0)
         # TODO (Mingrou): Check with Yitong why the code worked before without this line
+
         results_ntk = predict(all_data, mask, len(test), X=X)
         prediction_ntk = pd.DataFrame(
             data=results_ntk, index=test.index, columns=test.columns
         )
+
         aggregate_pred = (
             prediction_ntk
             if aggregate_pred is None
@@ -181,7 +185,7 @@ def run_ntk(
     # We return aggregate_pred, aggregate_true, aggregate_mask.
     # Aggregate_mask is necessary to keep track of which cells in the matrix are
     # non-binding (for spearman & rmse calculation) when shuffled_iterator=True
-    # breakpoint()
+
     return aggregate_pred, aggregate_true, aggregate_mask
 
 
@@ -194,11 +198,11 @@ def euclidean_distances(samples, centers, squared=True):
     Returns:
         pointwise distances (n_sample, n_center).
     """
-    samples_norm = torch.sum(samples ** 2, dim=1, keepdim=True)
+    samples_norm = torch.sum(samples**2, dim=1, keepdim=True)
     if samples is centers:
         centers_norm = samples_norm
     else:
-        centers_norm = torch.sum(centers ** 2, dim=1, keepdim=True)
+        centers_norm = torch.sum(centers**2, dim=1, keepdim=True)
     centers_norm = torch.reshape(centers_norm, (1, -1))
 
     distances = samples.mm(torch.t(centers))
@@ -224,7 +228,7 @@ def gaussian(samples, centers, bandwidth):
     assert bandwidth > 0
     kernel_mat = euclidean_distances(samples, centers)
     kernel_mat.clamp_(min=0)
-    gamma = 1.0 / (2 * bandwidth ** 2)
+    gamma = 1.0 / (2 * bandwidth**2)
     kernel_mat.mul_(-gamma)
     kernel_mat.exp_()
     return kernel_mat
@@ -293,7 +297,7 @@ def skinny_ntk_sampled_not_sliced(
             model = FKR_EigenPro(kernel_fn, x_train, 1, device=device)
             _ = model.fit(x_train, y_train, x_test, y_test, epochs=[1, 2, 5], mem_gb=10)
             pdb.set_trace()
-            print('he;o')
+            print("he;o")
 
         results_ntk = predict(all_data, mask, len(skinny_test), X=X)
 
