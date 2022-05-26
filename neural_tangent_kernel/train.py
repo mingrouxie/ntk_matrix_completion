@@ -2,6 +2,8 @@ import sys
 import pathlib
 import pandas as pd
 import io
+import os
+from sklearn.model_selection import train_test_split
 
 import pdb
 from utilities import plot_matrix
@@ -26,7 +28,10 @@ from utilities import (
 from analysis_utilities import calculate_metrics
 from path_constants import (
     TEN_FOLD_CROSS_VALIDATION_ENERGIES,
+    ZEOLITE_PRIOR_SELECTION_FILE,
 )
+
+TEST_SEED = 424956
 
 
 def buisness_as_normal():
@@ -66,7 +71,7 @@ def buisness_as_normal_transposed(
     #     ground_truth, prior="CustomZeoliteEmbeddings", metrics_mask=binary_data
     # )
     pred, true, mask = run_ntk(ground_truth, prior=prior, metrics_mask=binary_data)
-    breakpoint()
+    # breakpoint()
     results = calculate_metrics(
         pred.to_numpy(),
         true.to_numpy(),
@@ -75,7 +80,7 @@ def buisness_as_normal_transposed(
         verbose=verbose,
         method=method,
         to_write=to_write,
-        to_plot=to_plot
+        to_plot=to_plot,
     )
     pdb.set_trace()
 
@@ -134,7 +139,10 @@ def buisness_as_normal_transposed_over_many_priors(transpose=False, to_write=Fal
             "bertz_ct",
         ]
     else:
-        print("Some temporary stuff going on here please check you are calling the right thing")
+        print(
+            "Some temporary stuff going on here please check you are calling the right thing"
+        )
+        breakpoint()
         prior = "CustomZeolite"  # "CustomZeoliteEmbeddings"
         priors_to_test = ZEOLITE_PRIOR_LOOKUP.keys()
         priors_to_test = [  # TODO: Mingrou temporary, just to test the 0D
@@ -242,7 +250,7 @@ def select_zeolite_priors(
     metrics_method,
     n_features_to_select=10,
     direction="forward",
-    best_feature="rmse",
+    best_feature="top_20_accuracy",
 ):
     """
     This method recursively chooses zeolites features to form a set of features that gives the best
@@ -252,22 +260,37 @@ def select_zeolite_priors(
     This method runs 10-fold cross validation on the 1194x209 Ground Truth matrix.
     With Zeolites as rows (aka using Zeolite priors to predict energies for new Zeolites)
     """
+    prior_map = np.array(list(ZEOLITE_PRIOR_LOOKUP.keys()))
+    with open(ZEOLITE_PRIOR_SELECTION_FILE, "a") as csv_file:
+        np.savetxt(csv_file, np.expand_dims(prior_map, axis=0), delimiter=",", fmt="%s")
+    # breakpoint()
+
     ground_truth, binary_data = get_ground_truth_energy_matrix(
         transpose=True, energy_type=energy_type
     )
-    # pred, true, mask = run_ntk(
-    #     ground_truth, prior="CustomZeoliteEmbeddings", metrics_mask=binary_data
-    # )
-    # breakpoint()
-    prior_map = np.array(list(ZEOLITE_PRIOR_LOOKUP.keys()))
-    # prior_map[:, 1] = 0.0  # set everything as zero first
-    current_mask = np.zeros(shape=prior_map.shape[0], dtype=bool) #sq matrix?????
-    scores = np.zeros(shape=(n_features_to_select, 1), dtype=bool)
-    # breakpoint()
+    row_indices = np.arange(ground_truth.shape[0])
+    ###### shuffle data and put aside a test set
+    (
+        ground_truth_train,
+        ground_truth_test,
+        binary_data_train,
+        binary_data_test,
+        row_indices_train,
+        row_indices_test,
+    ) = train_test_split(
+        ground_truth, binary_data, row_indices, test_size=0.1, random_state=TEST_SEED
+    )
+    ######
+
+    current_mask = np.zeros(shape=prior_map.shape[0], dtype=bool)
+    scores = pd.DataFrame(
+        index=np.arange(n_features_to_select), columns=["feature", "score"]
+    )
+
     for i in range(n_features_to_select):
-        new_feature_idx, score = get_best_new_feature(
-            ground_truth=ground_truth,
-            binary_data=binary_data,
+        new_feature_idx, new_feature, score = get_best_new_feature(
+            ground_truth=ground_truth_train,  # note it is train set here only
+            binary_data=binary_data_train,
             prior=prior,
             prior_map=prior_map,
             current_mask=current_mask,
@@ -276,15 +299,19 @@ def select_zeolite_priors(
             best_feature=best_feature,
         )
         current_mask[new_feature_idx] = True
-        scores[i] = score
+        scores[i, 0] = new_feature
+        scores[i, 1] = score
+    
     print(f"chosen priors based on {best_feature} are {prior_map[current_mask]}")
-    print("final metrics are")
-    # breakpoint()
-    chosen_prior_map = dict(zip(prior_map, np.ones(prior_map.shape)))
+    print("final performance is")
+
+    chosen_prior_map = dict(
+        zip(prior_map[current_mask], np.ones(prior_map[current_mask].shape))
+    )
     pred, true, mask = run_ntk(
-        ground_truth,
+        ground_truth_train,
         prior=prior,
-        metrics_mask=binary_data,
+        metrics_mask=binary_data_train,
         prior_map=chosen_prior_map,
     )
     results = calculate_metrics(
@@ -294,6 +321,9 @@ def select_zeolite_priors(
         verbose=True,
         method=metrics_method,
     )
+
+    print(f"Test set indices are {row_indices_test}")
+    # breakpoint()
     return prior_map[current_mask]
 
 
@@ -306,9 +336,11 @@ def get_best_new_feature(
     metrics_method,
     direction,
     best_feature,
+    to_write=True,
 ):
     candidate_feature_indices = np.flatnonzero(~current_mask)
     scores = {}
+
     for feature_idx in candidate_feature_indices:
         candidate_mask = current_mask.copy()
         candidate_mask[feature_idx] = True
@@ -333,39 +365,55 @@ def get_best_new_feature(
             method=metrics_method,
         )
         scores[feature_idx] = results[best_feature]
-    best_feature_idx = max(scores, key=lambda feature_idx: scores[feature_idx])
-    print(best_feature_idx, scores[best_feature_idx])
-    return best_feature_idx, scores[best_feature_idx]
+    
+    if best_feature in ["rmse_scores"]:
+        best_feature_idx = min(scores, key=lambda feature_idx: scores[feature_idx])
+    else:
+        print('here')
+        best_feature_idx = max(scores, key=lambda feature_idx: scores[feature_idx])
+    print(
+        f"New chosen feature is {prior_map[best_feature_idx]} with score {scores[best_feature_idx]}"
+    )
+
+    if to_write:
+        with open(ZEOLITE_PRIOR_SELECTION_FILE, "a") as csv_file:
+            score_values = np.zeros(current_mask.shape)
+            score_values[list(scores.keys())] = np.array(list(scores.values()))
+            score_values[current_mask] = np.nan
+            score_values = np.expand_dims(score_values, axis=0)
+            np.savetxt(csv_file, score_values, delimiter=",")
+
+    return best_feature_idx, prior_map[best_feature_idx], scores[best_feature_idx]
 
 
 if __name__ == "__main__":
-    start = time.time() 
-    # for best_feature in [
-    #     # "rmse_scores",
-    #     # "spearman_scores",
-    #     "top_1_accuracy",
-    #     # "top_3_accuracy",
-    #     # "top_5_accuracy",
-    #     # "top_20_accuracy",
-    # ]:
-    #     selected_priors = select_zeolite_priors(
-    #         energy_type=Energy_Type.BINDING,
-    #         prior="CustomZeolite",
-    #         metrics_method="top_k",
-    #         n_features_to_select=1,
-    #         direction="forward",
-    #         best_feature=best_feature,
-    #     )
+    start = time.time()
+    for best_feature in [
+        # "rmse_scores", 
+        "spearman_scores",
+        # "top_1_accuracy",
+        # "top_3_accuracy",
+        # "top_5_accuracy",
+        # "top_20_accuracy",
+    ]:
+        selected_priors = select_zeolite_priors(
+            energy_type=Energy_Type.BINDING,
+            prior="CustomZeolite",
+            metrics_method="top_k_in_top_k",
+            n_features_to_select=10,
+            direction="forward",
+            best_feature=best_feature,
+        )
     # breakpoint()
     # buisness_as_normal()
     # buisness_as_normal_transposed()
-    buisness_as_normal_transposed(
-        energy_type=Energy_Type.BINDING,
-        prior="CustomZeolite",
-        verbose=True,
-        to_write=False,
-        to_plot=True
-    )
+    # buisness_as_normal_transposed(
+    #     energy_type=Energy_Type.BINDING,
+    #     prior="CustomZeolite",
+    #     verbose=True,
+    #     to_write=False,
+    #     to_plot=True
+    # )
     # skinny_ntk_sampled_not_sliced()
     # buisness_as_normal_skinny()
     # buisness_as_normal()
@@ -375,3 +423,5 @@ if __name__ == "__main__":
     # )
     # print(len(results_print_out))
     print(f"{(time.time() - start)/60} minutes taken")
+
+

@@ -85,3 +85,13 @@ def get_splits_in_zeolite_type(allData, metrics_mask, k=10, seed=5, shuffle=True
         yield allData.iloc[train_idx], allData.iloc[test_idx], metrics_mask.iloc[
             test_idx
         ]
+
+
+def plot_binding_energies(datas):
+    print(f"plot_binding_energies not coded yet")
+    return
+
+
+def plot_spheres(datas):
+    print("plot_spheres not coded yet")
+    return

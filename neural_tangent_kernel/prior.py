@@ -34,6 +34,7 @@ VALID_METHODS = {
 from weights import ZEOLITE_PRIOR_LOOKUP, OSDA_PRIOR_LOOKUP
 from path_constants import (
     ZEOLITE_PRIOR_FILE,
+    HANDCRAFTED_ZEOLITE_PRIOR_FILE,
     OSDA_PRIOR_FILE,
     OSDA_HYPOTHETICAL_PRIOR_FILE,
     OSDA_CONFORMER_PRIOR_FILE,
@@ -41,7 +42,7 @@ from path_constants import (
     PERSISTENCE_ZEOLITE_PRIOR_FILE,
     ZEOLITE_GCNN_EMBEDDINGS_FILE,
     ZEOLITE_ALL_PRIOR_FILE,
-    TEMP_0D_PRIOR_FILE,
+    # TEMP_0D_PRIOR_FILE,
     OSDA_ZEO1_PRIOR_FILE,
 )
 
@@ -199,7 +200,7 @@ def load_prior(
         precomputed_prior = precomputed_prior[
             ~precomputed_prior.index.duplicated(keep="first")
         ]
-    if prior_index_map:  # zeolite prior lookup
+    if prior_index_map:  # rename some zeolites
         x = lambda i: prior_index_map[i] if i in prior_index_map else i
         precomputed_prior.index = precomputed_prior.index.map(x)
     precomputed_prior = precomputed_prior.reindex(target_index) # keeps rows with index in target_index, assigns NaN to other indices in target_index
@@ -276,10 +277,11 @@ def zeolite_prior(
     return load_prior(
         tuple(all_data_df.index),
         ZEOLITE_PRIOR_LOOKUP if not feature_lookup else feature_lookup,
-        # PERSISTENCE_ZEOLITE_PRIOR_FILE,
+        PERSISTENCE_ZEOLITE_PRIOR_FILE, # includes handcrafted
         # ZEOLITE_GCNN_EMBEDDINGS_FILE,
-        ZEOLITE_PRIOR_FILE,
-        # ZEOLITE_ALL_PRIOR_FILE,
+        # ZEOLITE_PRIOR_FILE, # includes handcrafted but missing a few features
+        # HANDCRAFTED_ZEOLITE_PRIOR_FILE, 
+        # ZEOLITE_ALL_PRIOR_FILE, # handcraft, persistent, gcnn
         # TEMP_0D_PRIOR_FILE,
         identity_weight,
         normalize,
@@ -342,7 +344,8 @@ def osda_zeolite_combined_prior(
     zeolite_prior = load_prior(
         tuple([i[1] for i in all_data_df.index]),
         ZEOLITE_PRIOR_LOOKUP,
-        ZEOLITE_PRIOR_FILE,
+        # ZEOLITE_PRIOR_FILE,
+        HANDCRAFTED_ZEOLITE_PRIOR_FILE,
         identity_weight,
         normalize,
         ZEOLITE_PRIOR_MAP,

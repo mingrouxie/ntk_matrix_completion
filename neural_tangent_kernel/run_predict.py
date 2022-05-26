@@ -57,11 +57,17 @@ sys.path.insert(
 
 # This method calculates binding energies for the 78K new OSDAs
 # using the Ground truth set of 1.19K x 200 matrix
-def calculate_energies_for_78K_osdas():
+def calculate_energies_for_78K_osdas(energy='binding'):
     # training_data ends up as 1190 rows x 209 columns
-    training_data, _binary_data = get_ground_truth_energy_matrix(
-        energy_type=Energy_Type.BINDING,  # TEMPLATING or BINDING
-    )
+    if energy == 'binding':
+        training_data, _binary_data = get_ground_truth_energy_matrix(
+            energy_type=Energy_Type.BINDING,
+        )
+    elif energy == 'templating':
+        training_data, _binary_data = get_ground_truth_energy_matrix(
+            energy_type=Energy_Type.TEMPLATING,
+        )
+    # breakpoint()
     daniel_energies = pd.read_csv(HYPOTHETICAL_OSDA_ENERGIES)
     precomputed_priors = pd.read_pickle(OSDA_HYPOTHETICAL_PRIOR_FILE)
     # TODO(YITONG): look up all the columns that are not in the intersection with training_data
@@ -77,7 +83,8 @@ def calculate_energies_for_78K_osdas():
     # Chunking by 10K to get around how bad matrix multiplication scales with memory...
     # This won't actually make our results any less accurate since we're only training with the 1190x209 samples in training_data
     # and just extending the results to the 10K next samples.
-    chunk_size = 10000
+    # breakpoint()
+    chunk_size = 1000
     iterator = tqdm(chunks(range(len(daniel_energies.index)), chunk_size))
     predicted_energies = pd.DataFrame()
     for _train_chunk, chunk, _none in iterator:
@@ -98,6 +105,7 @@ def calculate_energies_for_78K_osdas():
         all_data = all_data.to_numpy()
         mask = np.ones_like(all_data)
         mask[len(all_data) - len(chunk) :, :] = 0
+        # breakpoint()
         results = predict(all_data, mask, len(chunk), X)
         # predict energies for the OSDAs of chunk_size & append predictions to our growing list
         predicted_energies = predicted_energies.append( 
@@ -387,8 +395,8 @@ def calculate_energies_for_new_zeolite_skinny_style():
 
 
 if __name__ == "__main__":
-    calculate_energies_for_tricyclohexylmethylphosphonium()
-    # calculate_energies_for_78K_osdas()
+    # calculate_energies_for_tricyclohexylmethylphosphonium()
+    calculate_energies_for_78K_osdas(energy='binding')
     # lets_look_at_predicted_energies()
     # calculate_energies_for_new_zeolite()
     # calculate_energies_for_new_zeolite_skinny_style()
