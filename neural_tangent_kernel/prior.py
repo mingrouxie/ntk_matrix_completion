@@ -150,11 +150,11 @@ def load_vector_priors(
     if not already_exploded:  # grab just the embedding priors from the data
         vector_explode = lambda x: pd.Series(x[vector_feature])
         precomputed_prior = precomputed_prior.apply(vector_explode, axis=1)
-    # breakpoint()
-    exploded_prior = precomputed_prior.loc[target_index] # target_index=all_data_df.index for gcnn embeddings
-    # exploded_prior = precomputed_prior.reindex(
-    #     target_index
-    # )  
+    # TODO(Yitong): 'CC[N+]12C[N@]3C[N@@](C1)C[N@](C2)C3'
+    # it seems we are missing precomputed priors for one energy OSDAs...
+    exploded_prior = precomputed_prior.reindex(target_index)
+    # TODO(Yitong): Exchanged .loc[] with .reindex() to fix a break. Was there a reason to use loc[]?
+    # exploded_prior = precomputed_prior.loc[target_index] # target_index=all_data_df.index for gcnn embeddings
 
     if replace_nan is not None:
         exploded_prior = exploded_prior.fillna(replace_nan)
@@ -164,17 +164,17 @@ def load_vector_priors(
         exploded_prior += (
             -lowest_value
         )  # TODO: Mingrou ask Yitong, is it safe to do this translation?
+        # Response(Yitong): Lolol, great question. I did it for the sake of the NTK algorithm
+        # Which can only take positive values in its priors.
+        # I can't think of why it would be an issue regarding the algorithm which only
+        # finds a separating hyperplane (linear translation should not be an issue)
+        # It does probably take away some of the literal interpretability of the priors, but 
+        # does that matter so much?
 
-    # Normalize across the whole thing...
-    # Normalize to the biggest value & across all of the elements
-    biggest_value = exploded_prior.max().max()
-    normalization_factor = (
-        biggest_value * precomputed_prior.shape[1] + identity_weight
-    )  # TODO: Mingrou ask Yitong, why +identity_weight?
+    # Normalize by the largest row sum
     if normalize:
-        exploded_prior = exploded_prior.apply(
-            lambda x: x / normalization_factor, axis=0
-        )
+        exploded_prior = exploded_prior / max(exploded_prior, key=sum).sum()
+        exploded_prior = (1 - identity_weight) * exploded_prior
     return exploded_prior
 
 
@@ -215,7 +215,6 @@ def load_prior(
         results = precomputed_prior.apply(
             lambda x: x * column_weights[x.name] / normalization_factor, axis=0
         )
-    # breakpoint()
     return (1 - identity_weight) * results
 
 
@@ -238,19 +237,19 @@ def osda_vector_prior(
     all_data_df,
     vector_feature="getaway",
     identity_weight=0.01,
-    normalize=True,
     other_prior_to_concat=None,
 ):
-    prior = osda_prior(all_data_df, identity_weight).to_numpy()
+    prior = osda_prior(all_data_df, identity_weight, normalize=False).to_numpy()
     getaway_prior = load_vector_priors(
         all_data_df.index,
         vector_feature,
         OSDA_PRIOR_FILE,
         identity_weight,
-        normalize,
+        normalize=False,
         other_prior_to_concat=other_prior_to_concat,
     ).to_numpy()
     # Splitting the original prior and the vector prior 50-50
+    # And a quick normalization by dividing by the sum of the row
     normalized_getaway_prior = getaway_prior / (2 * max(getaway_prior, key=sum).sum())
     normalized_prior = prior / (2 * max(prior, key=sum).sum())
     stacked = np.hstack([normalized_prior, normalized_getaway_prior])

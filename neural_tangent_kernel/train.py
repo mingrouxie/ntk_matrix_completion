@@ -7,7 +7,8 @@ import pdb
 from utilities import plot_matrix
 from analysis_utilities import plot_top_k_curves
 from weights import ZEOLITE_PRIOR_LOOKUP, OSDA_PRIOR_LOOKUP
-from ntk import run_ntk, skinny_ntk_sampled_not_sliced
+from ntk import run_ntk, skinny_ntk_sampled_not_sliced, SplitType
+from precompute_osda_priors import smile_to_property
 
 import numpy as np
 
@@ -28,7 +29,7 @@ from path_constants import (
 )
 
 
-def buisness_as_normal():
+def buisness_as_normal(split_type=SplitType.NAIVE_SPLITS, debug=False):
     """
     This method runs 10-fold cross validation on the 1194x209 Ground Truth matrix.
     With OSDAs as rows (aka using OSDA priors to predict energies for new OSDAs)
@@ -39,15 +40,24 @@ def buisness_as_normal():
         prior="CustomOSDAVector",
         metrics_mask=binary_data,
         use_eigenpro=False,
+        split_type=split_type
     )
     calculate_metrics(
         pred.to_numpy(),
         true.to_numpy(),
         mask.to_numpy(),
         verbose=True,
+        # method="top_k",
         method="top_k_in_top_k",
     )
-    plot_matrix(pred, "pred")
+    plot_matrix(pred, "pred", vmin=-30, vmax=5)
+    if debug:
+        # Quick investigation of top 10 OSDAs
+        top_osdas = ((true - pred) ** 2).T.sum().sort_values()[:10]
+        pdb.set_trace()
+        # Let's print the renders of the top_osdas
+        [smile_to_property(osda, save_file=osda) for osda in top_osdas.index]
+
     save_matrix(pred, TEN_FOLD_CROSS_VALIDATION_ENERGIES)
 
 
@@ -336,6 +346,9 @@ def get_best_new_feature(
 
 
 if __name__ == "__main__":
+    buisness_as_normal(split_type=SplitType.OSDA_ISOMER_SPLITS, debug=True)
+    pdb.set_trace()
+
     for best_feature in [
         # "rmse_scores",
         "spearman_scores",

@@ -1,8 +1,6 @@
 import numpy as np
 from numpy.linalg import norm
 import pandas as pd
-import pdb
-import os
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import pdb
@@ -75,15 +73,27 @@ def get_conformers(smile, debug=False, number_of_conformers=2000):
     return conformer_features
 
 
-# TODO: we want to
-def smile_to_property(smile, process_conformers=False, debug=False, save_file=None):
+# Big TODO: Get the lowest energy conformers for each molecule
+# This will take a while. Should maybe run on server.
+def smile_to_property(
+    smile,
+    process_conformers=False,
+    debug=False,
+    save_file=None,
+    struggle_against_bad_conformer_errors=False,
+):
+    """
+    process_conformers: Generate priors for 2,000 conformers (too slow)
+    save_file: If supplied then we save the molecule's render
+    struggle_against_bad_conformer_errors: If the smile is a bad conformer id then generate
+    100 other conformers on the hope that one of them will actually embed (be warned: slow).
+    """
     properties = {}
     m = Chem.MolFromSmiles(smile)
     num_bonds = len(Chem.RemoveAllHs(m).GetBonds())
     if save_file is not None:
         m2 = Chem.RemoveAllHs(m)
         Draw.MolToFile(m2, save_file + ".png")
-        return
     m2 = Chem.AddHs(m)
     rc = AllChem.EmbedMolecule(m2)
     if rc < 0:
@@ -95,9 +105,22 @@ def smile_to_property(smile, process_conformers=False, debug=False, save_file=No
         )
     try:
         AllChem.MMFFOptimizeMolecule(m2)
-    except:
-        # Some molecules just can't be embedded it seems
-        return properties
+    except ValueError as e:
+        if str(e) == "Bad Conformer Id" and struggle_against_bad_conformer_errors:
+            print(
+                "we ran into an issue with a bad conformer for ",
+                smile,
+                " spawning 100 conformers that hopefully work, this may take some time...",
+            )
+            conformers = AllChem.EmbedMultipleConfs(
+                m2, numConfs=100, pruneRmsThresh=0.5, numThreads=10
+            )
+            if len(conformers) > 0:
+                m2 = conformers[0]
+            else:
+                return properties
+        else:
+            return properties
     # WHIMs and GETAWAY are the big ones I think...
     properties["whims"] = Chem.rdMolDescriptors.CalcWHIM(m2)
     properties["getaway"] = Chem.rdMolDescriptors.CalcGETAWAY(m2)
@@ -192,16 +215,17 @@ def average_properties(smile, num_runs=1):
     # Pretty certain it's okay to take the average over WHIMs and GETAWAY...
     # Now let's take care of the columns that are not numeric.
     for col in df.columns:
+        scrubbed_col = df[col].dropna()
         if df.dtypes[col] in (np.dtype("float64"), np.dtype("int64")):
             continue
-        if isinstance(df[col][0], list):
+        if all([isinstance(i, list) for i in scrubbed_col]):
             meaned_df[col] = np.mean(
-                np.array([np.array(v) for v in df[col].values]), axis=0
+                np.array([np.array(v) for v in scrubbed_col.values]), axis=0
             )
-        elif isinstance(df[col][0], dict):
+        elif all([isinstance(i, dict) for i in scrubbed_col]):
             # For now since only conformers are lists and because all conformer requests are
             # cached and identical, let's just pick one at random.
-            meaned_df[col] = df[col].sample()
+            meaned_df[col] = scrubbed_col.sample()
     return dict(meaned_df)
 
 
@@ -271,18 +295,39 @@ def precompute_priors_for_780K_Osdas():
     save_matrix(all_data_df, save_file)
 
 
-def precompute_prior_for_zeo1():
-    zeo1_osda_smile = "[CH3][P+](C1CCCCC1)(C2CCCCC2)(C3CCCCC3)"
-    properties = average_properties(zeo1_osda_smile, 10)
+# zeo1_osda_smile = "[CH3][P+](C1CCCCC1)(C2CCCCC2)(C3CCCCC3)"
+def precompute_oneoff_prior(
+    osda_smile="[CH3][P+](C1CCCCC1)(C2CCCCC2)(C3CCCCC3)",
+    save_name="tricyclohexylmethylphosphonium_prior.pkl",
+    num_runs=10,
+):
+    properties = average_properties(osda_smile, num_runs)
     series = pd.Series(properties)
-    series.name = zeo1_osda_smile
+    series.name = osda_smile
     prior = pd.DataFrame()
     prior = prior.append(series)
-    save_matrix(prior, "tricyclohexylmethylphosphonium_prior.pkl")
+    save_matrix(prior, save_name)
     return prior.dropna()
 
 
+# TODO: This method is pretty jank, we should destroy later
+# Only call this method if you know what you're sure
+def append_oneoff_prior(
+    precomputed_file_name="data/precomputed_OSDA_prior_10_with_whims.pkl",
+    addendum_file_name="missing_OSDA_2.pkl",
+):
+    precomputed_prior = pd.read_pickle(precomputed_file_name)
+    other_osda_df = pd.read_pickle(addendum_file_name)
+    concatted_prior = pd.concat([precomputed_prior, other_osda_df])
+    concatted_prior = concatted_prior[~concatted_prior.index.duplicated(keep="first")]
+    concatted_prior.to_pickle(precomputed_file_name)
+
+
 if __name__ == "__main__":
+    # precompute_oneoff_prior("CC[N+]12C[N@]3C[N@@](C1)C[N@](C2)C3", "missing_OSDA_1.pkl", 150)
+    # precompute_oneoff_prior(
+    #     "C[C@H]1CC[N+](C)(C)[C@@H]2C[C@@H]1C2(C)C", "missing_OSDA_2.pkl"
+    # )
     prior_from_ground_truth_matrix()
-    # precompute_prior_for_zeo1()
+    # precompute_oneoff_prior()
     # precompute_priors_for_780K_Osdas()

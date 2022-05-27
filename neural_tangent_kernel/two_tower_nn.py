@@ -48,7 +48,7 @@ class MLP(nn.Module):
             input_size = layer_sizes[i]
             curr_size = layer_sizes[i + 1]
             layer_list.append(nn.Linear(input_size, curr_size))
-            if i <= final_relu_layer - 1:
+            if i <= final_relu_layer:
                 layer_list.append(nn.ReLU(inplace=False))
         self.net = nn.Sequential(*layer_list)
         self.last_linear = self.net[-1]
@@ -75,9 +75,6 @@ def loss(zeolite_encoding, osda_encoding, true, loss=nn.MSELoss()):
     # of each zeolite and each OSDA)
     products = torch.matmul(osda_encoding, zeolite_encoding.T)
     pred = torch.diagonal(products)
-    # TODO(Yitong): weight each loss by 1/true, to give more precedence to the lower energies
-    # This is good for testing with top K accuracy
-    # When we add, we still track loss without the 1/true.
     return loss(true, pred)
 
 
@@ -127,14 +124,12 @@ def main():
     writer = SummaryWriter()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # TODO: Normalize the input
+    # BIG TODO: Implement the isomeric test / train split in the NN package loader too!
     train_dataset, _test_dataset, train_loader, test_loader = package_dataloader(device)
     # TODO: really make the zeolite input embeddings larger...
-
     # OSDA input embedding dim right now is 289... 273 from GETAWAY and 16 handcrafted descriptors
     osda_dim = [train_dataset[0][0].shape[0], 128, 64, 32]
     # zeolite input embedding dim right now is 15...
-    # TODO(Mingrou): Increase the zeolite embeddings from 15 -> > 200
     zeolite_dim = [train_dataset[0][1].shape[0], 128, 64, 32]
 
     model = TwoTowerNN(
@@ -150,10 +145,9 @@ def main():
     optimizer = torch.optim.Adam(
         list(model.zeolite_encoder.parameters())
         + list(model.osda_encoder.parameters()),
-        lr=0.01,
+        lr=0.005,
     )
-    pdb.set_trace()
-    num_epochs = 50
+    num_epochs = 20
     for epoch in range(num_epochs):
         run(
             train_loader,
