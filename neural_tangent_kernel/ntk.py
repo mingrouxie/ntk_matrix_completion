@@ -30,11 +30,8 @@ from package_matrix import (
     make_skinny,
     unmake_skinny,
 )
-from utilities import (
-    get_splits_in_zeolite_type,
-    save_matrix,
-    chunks,
-)
+from utilities import get_splits_in_zeolite_type, save_matrix, chunks, get_isomer_chunks
+from enum import Enum
 from analysis_utilities import calculate_metrics
 from path_constants import (
     HYPOTHETICAL_OSDA_ENERGIES,
@@ -54,6 +51,12 @@ sys.path.insert(
 SEED = 5
 NORM_FACTOR = 0.001
 PI = np.pi
+
+
+class SplitType(Enum):
+    NAIVE_SPLITS = 1
+    ZEOLITE_SPLITS = 2
+    OSDA_ISOMER_SPLITS = 3
 
 
 def kappa(x):
@@ -103,25 +106,14 @@ def predict(all_data, mask, num_test_rows, X, reduce_footprint=False):
     return results.T
 
 
-def run_ntk(
-    all_data,
-    prior,
-    metrics_mask,
-    shuffled_iterator=True,
-    k_folds=10,
-    SEED=SEED,
-    prior_map=None,
-    norm_factor=NORM_FACTOR,
-    use_eigenpro=False,
-):
-
-    if shuffled_iterator:
+def create_iterator(split_type, all_data, metrics_mask, k_folds, seed):
+    if split_type == SplitType.NAIVE_SPLITS:
         # The iterator shuffles the data which is why we need to pass in metrics_mask together.
         iterator = tqdm(
-            get_splits_in_zeolite_type(all_data, metrics_mask, k=k_folds, seed=SEED),
+            get_splits_in_zeolite_type(all_data, metrics_mask, k=k_folds, seed=seed),
             total=k_folds,
         )
-    else:
+    elif split_type == SplitType.ZEOLITE_SPLITS:
         # This branch is only for skinny matrix which require that
         # we chunk by folds to be sure we don't spill zeolites/OSDA rows
         # between training & test sets
@@ -138,6 +130,34 @@ def run_ntk(
             ),
             total=k_folds,
         )
+    elif split_type == SplitType.OSDA_ISOMER_SPLITS:
+        assert (
+            all_data.index.name == "SMILES"
+        ), "The OSDA isomer split is currently only implemented for OSDAs as rows"
+        iterator = tqdm(
+            get_isomer_chunks(
+                all_data,
+                metrics_mask,
+                k_folds,
+            )
+        )
+    else:
+        raise Exception("Need to provide a SplitType for run_ntk()")
+    return iterator
+
+
+def run_ntk(
+    all_data,
+    prior,
+    metrics_mask,
+    split_type=SplitType.NAIVE_SPLITS,
+    k_folds=10,
+    seed=SEED,
+    prior_map=None,
+    norm_factor=NORM_FACTOR,
+    use_eigenpro=False,
+):
+    iterator = create_iterator(split_type, all_data, metrics_mask, k_folds, seed)
     aggregate_pred = None  # Predictions for all fold(s)
     aggregate_true = None  # Ground truths for all fold(s)
     aggregate_mask = None  # Non-binding masks for all fold(s)
@@ -198,11 +218,11 @@ def euclidean_distances(samples, centers, squared=True):
     Returns:
         pointwise distances (n_sample, n_center).
     """
-    samples_norm = torch.sum(samples**2, dim=1, keepdim=True)
+    samples_norm = torch.sum(samples ** 2, dim=1, keepdim=True)
     if samples is centers:
         centers_norm = samples_norm
     else:
-        centers_norm = torch.sum(centers**2, dim=1, keepdim=True)
+        centers_norm = torch.sum(centers ** 2, dim=1, keepdim=True)
     centers_norm = torch.reshape(centers_norm, (1, -1))
 
     distances = samples.mm(torch.t(centers))
@@ -228,12 +248,13 @@ def gaussian(samples, centers, bandwidth):
     assert bandwidth > 0
     kernel_mat = euclidean_distances(samples, centers)
     kernel_mat.clamp_(min=0)
-    gamma = 1.0 / (2 * bandwidth**2)
+    gamma = 1.0 / (2 * bandwidth ** 2)
     kernel_mat.mul_(-gamma)
     kernel_mat.exp_()
     return kernel_mat
 
 
+# TODO: Please please delete me before releasing this code.
 # TODO: This is in development and pretty god awful.
 # TODO: make sample_size bigger, maybe 10K?
 def skinny_ntk_sampled_not_sliced(
@@ -245,7 +266,7 @@ def skinny_ntk_sampled_not_sliced(
     """
     ground_truth, binary_data = get_ground_truth_energy_matrix(desired_shape=(100, 30))
     iterator = tqdm(
-        get_splits_in_zeolite_type(ground_truth, binary_data, k=num_splits, seed=SEED),
+        get_splits_in_zeolite_type(ground_truth, binary_data, k=num_splits, seed=seed),
         total=num_splits,
     )
     aggregate_pred = None  # Predictions for all fold(s)

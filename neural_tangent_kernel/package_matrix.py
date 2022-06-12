@@ -71,7 +71,7 @@ If nothing is given then it takes the row mean.
 """
 # minimum_row_length default set to 2 so we can perform rmse and Spearman correlation.
 def get_ground_truth_energy_matrix(
-    energy_type=Energy_Type.TEMPLATING,
+    energy_type=Energy_Type.BINDING,
     desired_shape=None,
     minimum_row_length=2,
     transpose=False,
@@ -97,21 +97,22 @@ def get_ground_truth_energy_matrix(
         ), "Can't be asking for a shape bigger than the full matrix"
     else:
         desired_shape = ground_truth.shape
-    # TODO(Yitong): this is probably not useful, delete it.
-    # shaped_ground_truth = pd.DataFrame()
-    # rows = []
-    # for _index, row in ground_truth.iterrows():
-    #     if shaped_ground_truth.shape >= desired_shape:
-    #         break
-    #     shaped_row = row[: desired_shape[1]]
-    #     if len(shaped_row.dropna()) < minimum_row_length:
-    #         continue
-    #     rows.append(shaped_row)
-    # pdb.set_trace()
-    # shaped_ground_truth = pd.concat(rows, axis=1)
-    #     # shaped_ground_truth = shaped_ground_truth.append(shaped_row)
-    # shaped_ground_truth.index.name = "SMILES"
-    # ground_truth = shaped_ground_truth
+
+    # Reshape ground_truth & enforce minimum_row_length
+    shaped_ground_truth = pd.DataFrame()
+    shaped_rows = []
+    for _index, row in ground_truth.iterrows():
+        if len(shaped_rows) >= desired_shape[0]:
+            break
+        shaped_row = row[: desired_shape[1]]
+        if len(shaped_row.dropna()) < minimum_row_length:
+            continue
+        shaped_rows.append(shaped_row)
+    shaped_ground_truth = pd.concat(shaped_rows, axis=1).T
+    shaped_ground_truth.index.name = ground_truth.index.name
+    ground_truth = shaped_ground_truth
+
+    # Create the mask (binary_data) for binding_energies
     binary_data = ground_truth.fillna(0)
     binary_data[binary_data != 0] = 1
 
@@ -162,8 +163,11 @@ def unmake_skinny(skinny_pred):
         predicted_zeolites_per_osda[zeolite][osda] = pred_value
     return pd.DataFrame.from_dict(predicted_zeolites_per_osda)
 
+
 # TODO(yitong): Big Big Big Ginormous TODO is to do a structural split
 # or at least make sure that all train osda don't appear in test and vice versa
+# We can use the isomeric split we already created! utililties.get_isomer_chunks()
+
 # TODO(yitong): y_nan_fill is a bad solution. think more about this.
 # BIG TODO(yitong): Need to get lowest energy conformer for the osda molecules...
 # TODO: we probably want to fill nan values in the X priors too...
@@ -229,7 +233,6 @@ def package_dataloader(
     y_train = torch.tensor(y_train, device=device).float()
     y_test = torch.tensor(y_test, device=device).float()
 
-
     train_dataset = TensorDataset(X_osda_train, X_zeolite_train, y_train)
     test_dataset = TensorDataset(X_osda_test, X_zeolite_test, y_test)
     train_loader = torch.utils.data.DataLoader(
@@ -241,7 +244,7 @@ def package_dataloader(
         batch_size=batch_size,  # shuffle=True
     )
     # Make fully sure train & test are disjoint...
-    # TODO(yitong): We might want to be checking that X_osda_train & X_osda_test 
+    # TODO(yitong): We might want to be checking that X_osda_train & X_osda_test
     # contain distinct OSDAs.... I'm actually pretty sure they're not right now
     # That's some structure bleed right there...
     assert set(train_dataset).isdisjoint(set(test_dataset))

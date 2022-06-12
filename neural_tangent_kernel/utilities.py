@@ -6,6 +6,8 @@ import pdb
 from sklearn.model_selection import KFold
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from rdkit import Chem
+import random
 
 
 def plot_matrix(M, file_name, mask=None, vmin=16, vmax=23):
@@ -60,12 +62,43 @@ def plot_two_matrices(
 
 def chunks(lst, n, chunk_train=False, chunk_metrics=None):
     """Yield successive n-sized chunks from lst."""
-    for i in range(0, len(lst), n):
-        train_chunk = pd.concat([lst[:i], lst[i + n :]]) if chunk_train else None
-        test_chunk = lst[i : i + n]
-        metrics_chunk = chunk_metrics[i : i + n] if chunk_metrics is not None else None
+    for i in range(0, len(lst) - n, n):
+        leftside_index = i
+        rightside_index = i + n
+        if i == len(lst) - n:
+            # Throw all the crumbs (i.e., last < 2n datapoints) into the final split
+            rightside_index = len(lst)
+        train_chunk = (
+            pd.concat([lst[:leftside_index], lst[rightside_index:]])
+            if chunk_train
+            else None
+        )
+        test_chunk = lst[leftside_index:rightside_index]
+        metrics_chunk = (
+            chunk_metrics[leftside_index:rightside_index]
+            if chunk_metrics is not None
+            else None
+        )
         yield train_chunk, test_chunk, metrics_chunk
 
+
+def get_isomer_chunks(all_data, metrics_mask, k_folds, random_seed=5):
+    random.seed(random_seed)
+    clustered_isomers = pd.Series(cluster_isomers(all_data.index).values())
+    clustered_isomers = clustered_isomers.sample(frac=1, random_state=random_seed)
+    # Chunk by the isomer sets (train / test sets will not be balanced perfectly)
+    nested_iterator = chunks(
+        lst=clustered_isomers,
+        n=int(len(clustered_isomers) / k_folds),
+        chunk_train=True,
+    )
+    # Now flatten the iterated isomer train / test sets
+    for train, test, _ in nested_iterator:
+        train_osdas = list(set().union(*train))
+        test_osdas = list(set().union(*test))
+        yield all_data.loc[train_osdas], all_data.loc[test_osdas], metrics_mask.loc[
+            test_osdas
+        ]
 
 def save_matrix(matrix, file_name, overwrite=True):
     file = os.path.abspath("")
@@ -95,3 +128,23 @@ def plot_binding_energies(datas):
 def plot_spheres(datas):
     print("plot_spheres not coded yet")
     return
+    
+def cluster_isomers(smiles):
+    """
+    Take the SMILES of our OSDAs and cluster all isomers for train / test / eval split
+    using their iupac_name which should be stereo-isomer invariant.
+    Test me with 'python tests/cluster_isomers_test.py'
+    """
+    nonisomeric_smiles_lookup = {}
+    for smile in smiles:
+        m = Chem.MolFromSmiles(smile)
+        m = Chem.RemoveAllHs(m)
+        # Remove isomeric information
+        relaxed_smiles = Chem.rdmolfiles.MolToSmiles(m, isomericSmiles=False)
+        smiles_set = nonisomeric_smiles_lookup.get(relaxed_smiles, set())
+        smiles_set.add(smile)
+        nonisomeric_smiles_lookup[relaxed_smiles] = smiles_set
+    # bins = np.linspace(0, 60, 60)
+    # plt.hist([len(c) for c in nonisomeric_smiles_lookup], bins=bins, alpha=0.5, label="isomer set sizes")
+    # plt.title("OSDA Isomer Set Sizes")
+    return nonisomeric_smiles_lookup
