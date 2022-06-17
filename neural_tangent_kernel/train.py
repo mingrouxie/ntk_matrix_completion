@@ -43,7 +43,7 @@ def buisness_as_normal(split_type=SplitType.NAIVE_SPLITS, debug=False):
     ground_truth, binary_data = get_ground_truth_energy_matrix()
     pred, true, mask = run_ntk(
         ground_truth,
-        prior="CustomOSDAVector",
+        prior="CustomConformerOSDA", #"CustomOSDAVector",
         metrics_mask=binary_data,
         use_eigenpro=False,
         split_type=split_type
@@ -402,8 +402,8 @@ if __name__ == "__main__":
     start = time.time()
     for best_feature in [
         # "rmse_scores", 
-        "spearman_scores",
-        # "top_1_accuracy",
+        # "spearman_scores",
+        "top_1_accuracy",
         # "top_3_accuracy",
         # "top_5_accuracy",
         # "top_20_accuracy",

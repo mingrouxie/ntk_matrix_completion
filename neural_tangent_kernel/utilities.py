@@ -7,6 +7,8 @@ from sklearn.model_selection import KFold
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from rdkit import Chem
+from rdkit.Chem import RemoveAllHs, AddHs
+# from rdkit.Chem import RemoveAllHs
 import random
 
 
@@ -138,7 +140,7 @@ def cluster_isomers(smiles):
     nonisomeric_smiles_lookup = {}
     for smile in smiles:
         m = Chem.MolFromSmiles(smile)
-        m = Chem.RemoveAllHs(m)
+        m = RemoveAllHs(m)
         # Remove isomeric information
         relaxed_smiles = Chem.rdmolfiles.MolToSmiles(m, isomericSmiles=False)
         smiles_set = nonisomeric_smiles_lookup.get(relaxed_smiles, set())

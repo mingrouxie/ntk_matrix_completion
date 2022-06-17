@@ -29,6 +29,7 @@ VALID_METHODS = {
     "ManualZeolite",
     "CustomOSDAandZeoliteAsSparseMatrix",
     "CustomZeoliteEmbeddings",
+    "CustomConformerOSDA",
 }
 
 from weights import ZEOLITE_PRIOR_LOOKUP, OSDA_PRIOR_LOOKUP
@@ -169,7 +170,7 @@ def load_vector_priors(
         # Which can only take positive values in its priors.
         # I can't think of why it would be an issue regarding the algorithm which only
         # finds a separating hyperplane (linear translation should not be an issue)
-        # It does probably take away some of the literal interpretability of the priors, but 
+        # It does probably take away some of the literal interpretability of the priors, but
         # does that matter so much?
 
     # Normalize by the largest row sum
@@ -192,6 +193,7 @@ def load_prior(
     normalize=True,
     prior_index_map=None,
     other_prior_to_concat=OSDA_HYPOTHETICAL_PRIOR_FILE,
+    conformer_collapse_function=None,
 ):
     precomputed_prior = pd.read_pickle(precomputed_file_name)
     if other_prior_to_concat:
@@ -203,10 +205,20 @@ def load_prior(
     if prior_index_map:  # rename some zeolites
         x = lambda i: prior_index_map[i] if i in prior_index_map else i
         precomputed_prior.index = precomputed_prior.index.map(x)
-    precomputed_prior = precomputed_prior.reindex(target_index) # keeps rows with index in target_index, assigns NaN to other indices in target_index
+    precomputed_prior = precomputed_prior.reindex(
+        target_index
+    )  # keeps rows with index in target_index, assigns NaN to other indices in target_index
     precomputed_prior = precomputed_prior.filter(items=list(column_weights.keys()))
+    if conformer_collapse_function is not None:
+        # TODO: check if the conformer priors are even arrays at all
+        precomputed_prior = precomputed_prior.apply(conformer_collapse_function)
+        pdb.set_trace()
+        pass
+
     precomputed_prior = precomputed_prior.apply(pd.to_numeric)
     precomputed_prior = precomputed_prior.fillna(0.0)
+
+    
     results = precomputed_prior
 
     if normalize:
@@ -224,16 +236,36 @@ def load_prior(
 def osda_prior(
     all_data_df,
     identity_weight=0.01,
+    osda_prior=OSDA_PRIOR_FILE,
     prior_map=None,
     normalize=True,
+    conformer_collapse_function=None,
 ):
     return load_prior(
         tuple(all_data_df.index),
         prior_map if prior_map is not None else OSDA_PRIOR_LOOKUP,
-        OSDA_PRIOR_FILE,
+        osda_prior,
         identity_weight,
         normalize,
+        conformer_collapse_function=conformer_collapse_function,
     )
+
+
+# TODO: FINISH ME!!
+def get_osda_conformer_prior_filename():
+    precomputed_file_name = "/home/mrx/general/zeolite/queries/output_files/20220612/conformers_from_20220525_affs/priors/conformers_281_priors.pkl"
+    for i in range(300):
+        precomputed_file_name = (
+            "/home/mrx/general/zeolite/queries/output_files/20220612/conformers_from_20220525_affs/priors/conformers_"
+            + str(i)
+            + "_priors.pkl"
+        )
+    precomputed_prior = pd.read_pickle(precomputed_file_name)
+
+        # TODO: this is not done yet...
+
+    # TODO: collapse all of the prior files together...
+    return precomputed_file_name
 
 
 def osda_vector_prior(
@@ -241,12 +273,21 @@ def osda_vector_prior(
     vector_feature="getaway",
     identity_weight=0.01,
     other_prior_to_concat=None,
+    osda_prior=OSDA_PRIOR_FILE,
+    conformer_collapse_function=None,
 ):
-    prior = osda_prior(all_data_df, identity_weight, normalize=False).to_numpy()
+    prior = osda_prior(
+        all_data_df,
+        identity_weight,
+        osda_prior=osda_prior,
+        conformer_collapse_function=conformer_collapse_function,
+        normalize=False,
+    ).to_numpy()
+    # TODO(Mingrou 6/17/22): Add the conformer_collapse_function to load_vector_priors
     getaway_prior = load_vector_priors(
         all_data_df.index,
         vector_feature,
-        OSDA_PRIOR_FILE,
+        osda_prior,
         identity_weight,
         normalize=False,
         other_prior_to_concat=other_prior_to_concat,
@@ -276,10 +317,10 @@ def zeolite_prior(
     return load_prior(
         tuple(all_data_df.index),
         ZEOLITE_PRIOR_LOOKUP if not feature_lookup else feature_lookup,
-        PERSISTENCE_ZEOLITE_PRIOR_FILE, # includes handcrafted
+        PERSISTENCE_ZEOLITE_PRIOR_FILE,  # includes handcrafted
         # ZEOLITE_GCNN_EMBEDDINGS_FILE,
         # ZEOLITE_PRIOR_FILE, # includes handcrafted but missing a few features
-        # HANDCRAFTED_ZEOLITE_PRIOR_FILE, 
+        # HANDCRAFTED_ZEOLITE_PRIOR_FILE,
         # ZEOLITE_ALL_PRIOR_FILE, # handcraft, persistent, gcnn
         # TEMP_0D_PRIOR_FILE,
         identity_weight,
@@ -323,19 +364,23 @@ def zeolite_vector_prior(
 
 
 def osda_zeolite_combined_prior(
-    all_data_df, identity_weight=0.01, normalize=True, stack=True
+    all_data_df,
+    identity_weight=0.01,
+    normalize=True,
+    stack=True,
+    osda_prior=OSDA_PRIOR_FILE,
 ):
     osda_prior = load_prior(
         tuple([i[0] for i in all_data_df.index]),
         OSDA_PRIOR_LOOKUP,
-        OSDA_PRIOR_FILE,
+        osda_prior,
         identity_weight,
         normalize,
     ).to_numpy()
     osda_vector_prior = load_vector_priors(
         target_index=[i[0] for i in all_data_df.index],
         vector_feature="getaway",
-        precomputed_file_name=OSDA_PRIOR_FILE,
+        precomputed_file_name=osda_prior,
         identity_weight=identity_weight,
         normalize=normalize,
         other_prior_to_concat=None,
@@ -501,6 +546,19 @@ def make_prior(
         return sp.sparse.hstack(
             [prior, normalization_factor * sp.sparse.identity(all_data.shape[0])]
         )
+
+    elif method == "CustomConformerOSDA":
+        osda_conformer_prior_filename = get_osda_conformer_prior_filename()
+        # TODO: should we try std deviation for some ? or minimum?
+        prior = osda_prior(
+            all_data_df=all_data_df,
+            identity_weight=normalization_factor,
+            prior_map=prior_map,
+            conformer_collapse_function=np.mean,
+            osda_prior=osda_conformer_prior_filename,
+        )
+
+        return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
 
     elif method == "random":
         dim = 100

@@ -1,5 +1,5 @@
 ZEOLITE_PRIOR_LOOKUP = {
-    "a": 1.0,   
+    "a": 1.0,
     "b": 1.0,
     "c": 1.0,
     "alpha": 1.0,
