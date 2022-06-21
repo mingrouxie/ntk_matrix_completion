@@ -30,6 +30,7 @@ from analysis_utilities import calculate_metrics
 from path_constants import (
     TEN_FOLD_CROSS_VALIDATION_ENERGIES,
     ZEOLITE_PRIOR_SELECTION_FILE,
+    OUTPUT_DIR,
 )
 
 TEST_SEED = 424956
@@ -62,7 +63,8 @@ def buisness_as_normal(split_type=SplitType.NAIVE_SPLITS, debug=False):
         top_osdas = ((true - pred) ** 2).T.sum().sort_values()[:10]
         pdb.set_trace()
         # Let's print the renders of the top_osdas
-        [smile_to_property(osda, save_file=osda) for osda in top_osdas.index]
+        print(top_osdas.index)
+        [smile_to_property(osda, save_file=os.path.join(OUTPUT_DIR, osda)) for osda in top_osdas.index]
 
     save_matrix(pred, TEN_FOLD_CROSS_VALIDATION_ENERGIES)
 
@@ -397,26 +399,29 @@ def get_best_new_feature(
 
 
 if __name__ == "__main__":
+    start = time.time()
     buisness_as_normal(split_type=SplitType.OSDA_ISOMER_SPLITS, debug=True)
     pdb.set_trace()
-    start = time.time()
-    for best_feature in [
-        # "rmse_scores", 
-        # "spearman_scores",
-        "top_1_accuracy",
-        # "top_3_accuracy",
-        # "top_5_accuracy",
-        # "top_20_accuracy",
-    ]:
-        selected_priors = select_zeolite_priors(
-            energy_type=Energy_Type.BINDING,
-            prior="CustomZeolite",
-            metrics_method="top_k_in_top_k",
-            n_features_to_select=10,
-            direction="forward",
-            best_feature=best_feature,
-        )
+
+    # for best_feature in [
+    #     # "rmse_scores", 
+    #     # "spearman_scores",
+    #     "top_1_accuracy",
+    #     # "top_3_accuracy",
+    #     # "top_5_accuracy",
+    #     # "top_20_accuracy",
+    # ]:
+    #     selected_priors = select_zeolite_priors(
+    #         energy_type=Energy_Type.BINDING,
+    #         prior="CustomZeolite",
+    #         metrics_method="top_k_in_top_k",
+    #         n_features_to_select=10,
+    #         direction="forward",
+    #         best_feature=best_feature,
+    #     )
+
     # breakpoint()
+
     # buisness_as_normal()
     # buisness_as_normal_transposed()
     # buisness_as_normal_transposed(
