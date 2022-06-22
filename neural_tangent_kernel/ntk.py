@@ -41,6 +41,7 @@ from path_constants import (
     ZEOLITE_HYPOTHETICAL_PREDICTED_ENERGIES,
     TEN_FOLD_CROSS_VALIDATION_ENERGIES,
     ZEO_1_PRIOR,
+    OSDA_PRIOR_FILE
 )
 
 
@@ -156,6 +157,7 @@ def run_ntk(
     prior_map=None,
     norm_factor=NORM_FACTOR,
     use_eigenpro=False,
+    osda_prior_file=OSDA_PRIOR_FILE,
 ):
     iterator = create_iterator(split_type, all_data, metrics_mask, k_folds, seed)
     aggregate_pred = None  # Predictions for all fold(s)
@@ -170,6 +172,7 @@ def run_ntk(
             method=prior,
             normalization_factor=norm_factor,
             prior_map=prior_map,
+            osda_prior_file=osda_prior_file,
         )
         # breakpoint()
         all_data = pd.concat([train, test]).to_numpy()

@@ -147,7 +147,7 @@ def main():
         + list(model.osda_encoder.parameters()),
         lr=0.005,
     )
-    num_epochs = 20
+    num_epochs = 5
     for epoch in range(num_epochs):
         run(
             train_loader,

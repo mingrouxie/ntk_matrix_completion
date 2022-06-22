@@ -12,7 +12,7 @@ from rdkit.Chem import RemoveAllHs, AddHs
 import random
 
 
-def plot_matrix(M, file_name, mask=None, vmin=16, vmax=23):
+def plot_matrix(M, file_name, mask=None, vmin=16, vmax=23, to_save=True):
     fig, ax = plt.subplots()
     cmap = mpl.cm.get_cmap()
     cmap.set_bad(color="white")
@@ -27,7 +27,8 @@ def plot_matrix(M, file_name, mask=None, vmin=16, vmax=23):
         masked_M = M
     im = ax.imshow(masked_M, interpolation="nearest", cmap=cmap, vmin=vmin, vmax=vmax)
     fig.colorbar(im)
-    fig.savefig("data/output/" + file_name + ".png", dpi=150)
+    if to_save:
+        fig.savefig("data/output/" + file_name + ".png", dpi=150)
 
 
 def plot_two_matrices(

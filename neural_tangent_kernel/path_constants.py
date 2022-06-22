@@ -26,9 +26,11 @@ ZEOLITE_ALL_PRIOR_FILE = "data/zeolite_all_priors.pkl"
 # TEMP_0D_PRIOR_FILE = "/Users/mr/Documents/Work/MIT/PhD/projects/matrix_completion/persistent_homology/20220421_nick_has_0D/no_diag_0D.pkl"
 """"""
 ZEO_1_PRIOR = "data/handcrafted/zeo_1.pkl"
-OSDA_PRIOR_FILE = "data/priors_old/precomputed_OSDA_prior_10_with_whims.pkl"
+OSDA_PRIOR_FILE = "data/priors_old/precomputed_OSDA_prior_10_with_whims_v2.pkl"
 # OSDA_CONFORMER_PRIOR_FILE = "data/OSDA_priors_with_conjugates.pkl" 
 OSDA_CONFORMER_PRIOR_FILE = "data/priors/IZC_conformer_priors.pkl"
+OSDA_CONFORMER_PRIOR_FILE_SIEVED = "data/priors/conformer_sieved_by_getaway.pkl"
+OSDA_CONFORMER_PRIOR_FILE_CLIPPED = "data/priors/IZC_conformer_priors_clipped.pkl"
 # OSDA_CONFORMER_PRIOR_FILE = "data/priors/IZC_docked_priors.pkl" # TODO: how to make use of this hmmm
 OSDA_ZEO1_PRIOR_FILE = "data/tricyclohexylmethylphosphonium_prior.pkl"
 OSDA_HYPOTHETICAL_PRIOR_FILE = (

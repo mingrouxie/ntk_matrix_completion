@@ -11,6 +11,7 @@ from path_constants import (
     PERSISTENCE_ZEOLITE_PRIOR_FILE,
     ZEOLITE_GCNN_EMBEDDINGS_FILE,
     ZEOLITE_ALL_PRIOR_FILE,
+    OSDA_CONFORMER_PRIOR_FILE_SIEVED,
     # TEMP_0D_PRIOR_FILE,
     OSDA_ZEO1_PRIOR_FILE,
 )
@@ -24,7 +25,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import pdb
 from functools import lru_cache
-from auto_tqdm import tqdm
+# from auto_tqdm import tqdm
 import os
 import pathlib
 import math
@@ -141,6 +142,7 @@ def load_vector_priors(
     other_prior_to_concat=OSDA_HYPOTHETICAL_PRIOR_FILE,  # OSDA_ZEO1_PRIOR_FILE
     replace_nan=0.0,
     already_exploded=False,
+    clip_boundaries = (0.0,200) # TODO: This is very ugly and needs to be corrected if we want to use WHIMS
 ):
     """
     Return normalized prior as a dataframe of series, each series containing the embeddings.
@@ -160,11 +162,14 @@ def load_vector_priors(
     # TODO(Yitong): 'CC[N+]12C[N@]3C[N@@](C1)C[N@](C2)C3'
     # it seems we are missing precomputed priors for one energy OSDAs...
     exploded_prior = precomputed_prior.reindex(target_index)
+
     # TODO(Yitong): Exchanged .loc[] with .reindex() to fix a break. Was there a reason to use loc[]?
     # exploded_prior = precomputed_prior.loc[target_index] # target_index=all_data_df.index for gcnn embeddings
 
     if replace_nan is not None:
         exploded_prior = exploded_prior.fillna(replace_nan)
+
+    exploded_prior = exploded_prior.clip(clip_boundaries[0], clip_boundaries[1])
     # Check & normalize if anything is negative
     lowest_value = exploded_prior.min().min()
     if lowest_value < 0:
@@ -180,7 +185,7 @@ def load_vector_priors(
 
     # Normalize by the largest row sum
     if normalize:
-        exploded_prior = exploded_prior / max(exploded_prior, key=sum).sum()
+        exploded_prior = exploded_prior / max(exploded_prior.sum(axis=1))
         exploded_prior = (1 - identity_weight) * exploded_prior
     return exploded_prior
 
@@ -198,7 +203,6 @@ def load_prior(
     normalize=True,
     prior_index_map=None,
     other_prior_to_concat=OSDA_HYPOTHETICAL_PRIOR_FILE,
-    conformer_collapse_function=None,
 ):
     precomputed_prior = pd.read_pickle(precomputed_file_name)
     if other_prior_to_concat:
@@ -216,13 +220,10 @@ def load_prior(
     )  # keeps rows with index in target_index, assigns NaN to other indices in target_index
     precomputed_prior = precomputed_prior.filter(
         items=list(column_weights.keys()))
-    if conformer_collapse_function is not None:
-        # TODO: check if the conformer priors are even arrays at all
-        precomputed_prior = precomputed_prior.applymap(
-            conformer_collapse_function)
     precomputed_prior = precomputed_prior.apply(pd.to_numeric)
-    precomputed_prior = precomputed_prior.fillna(0.0)
-    results = precomputed_prior
+
+    # results = precomputed_prior.fillna(0.0)
+    results = precomputed_prior.dropna()
     if normalize:
         # Normalize down each column to between 0 & 1
         precomputed_prior = precomputed_prior.apply(
@@ -242,15 +243,13 @@ def osda_prior(
     osda_prior=OSDA_PRIOR_FILE,
     prior_map=None,
     normalize=True,
-    conformer_collapse_function=None,
 ):
     return load_prior(
-        tuple(all_data_df.index),
-        prior_map if prior_map is not None else OSDA_PRIOR_LOOKUP,
-        osda_prior,
-        identity_weight,
-        normalize,
-        conformer_collapse_function=conformer_collapse_function,
+        target_index=tuple(all_data_df.index),
+        column_weights=prior_map if prior_map is not None else OSDA_PRIOR_LOOKUP,
+        precomputed_file_name=osda_prior,
+        identity_weight=identity_weight,
+        normalize=normalize,
     )
 
 
@@ -323,31 +322,41 @@ def osda_vector_prior(
     vector_feature="getaway",
     identity_weight=0.01,
     other_prior_to_concat=None,
-    osda_prior=OSDA_PRIOR_FILE,
-    conformer_collapse_function=None,
+    osda_prior_file=OSDA_PRIOR_FILE,
+    second_vector_feature=None
 ):
     prior = osda_prior(
         all_data_df,
         identity_weight,
-        osda_prior=osda_prior,
-        conformer_collapse_function=conformer_collapse_function,
+        osda_prior=osda_prior_file,
         normalize=False,
     ).to_numpy()
-    # TODO(Mingrou 6/17/22): Add the conformer_collapse_function to load_vector_priors
     getaway_prior = load_vector_priors(
         all_data_df.index,
-        vector_feature,
-        osda_prior,
-        identity_weight,
+        vector_feature=vector_feature,
+        precomputed_file_name=osda_prior_file,
+        identity_weight=identity_weight,
         normalize=False,
         other_prior_to_concat=other_prior_to_concat,
     ).to_numpy()
+    prior_stack = [getaway_prior, prior]
+
+    if second_vector_feature is not None:
+        whims_prior = load_vector_priors(
+            all_data_df.index,
+            vector_feature=second_vector_feature,
+            precomputed_file_name=osda_prior_file,
+            identity_weight=identity_weight,
+            normalize=False,
+            other_prior_to_concat=other_prior_to_concat,
+        ).to_numpy()
+        prior_stack.append(whims_prior)
     # Splitting the original prior and the vector prior 50-50
     # And a quick normalization by dividing by the sum of the row
-    normalized_getaway_prior = getaway_prior / \
-        (2 * max(getaway_prior, key=sum).sum())
-    normalized_prior = prior / (2 * max(prior, key=sum).sum())
-    stacked = np.hstack([normalized_prior, normalized_getaway_prior])
+
+    normalized_prior_stack = [
+        p / (len(prior_stack) * max(p, key=sum).sum()) for p in prior_stack]
+    stacked = np.hstack(normalized_prior_stack)
 
     # Make room for the identity weight
     stacked = (1 - identity_weight) * stacked
@@ -422,19 +431,19 @@ def osda_zeolite_combined_prior(
     identity_weight=0.01,
     normalize=True,
     stack=True,
-    osda_prior=OSDA_PRIOR_FILE,
+    osda_prior_file=OSDA_PRIOR_FILE,
 ):
     osda_prior = load_prior(
         tuple([i[0] for i in all_data_df.index]),
         OSDA_PRIOR_LOOKUP,
-        osda_prior,
+        osda_prior_file,
         identity_weight,
         normalize,
     ).to_numpy()
     osda_vector_prior = load_vector_priors(
         target_index=[i[0] for i in all_data_df.index],
         vector_feature="getaway",
-        precomputed_file_name=osda_prior,
+        precomputed_file_name=osda_prior_file,
         identity_weight=identity_weight,
         normalize=normalize,
         other_prior_to_concat=None,
@@ -449,6 +458,7 @@ def osda_zeolite_combined_prior(
         ZEOLITE_PRIOR_MAP,
     ).to_numpy()
     if not stack:
+        pdb.set_trace()
         return (osda_prior, osda_vector_prior, zeolite_prior)
     normalized_osda_vector_prior = osda_vector_prior / (
         3 * max(osda_vector_prior, key=sum).sum()
@@ -492,6 +502,7 @@ def make_prior(
     all_data=None,
     test_train_axis=0,
     stack_combined_priors=True,
+    osda_prior_file=OSDA_PRIOR_FILE,
 ):
     """
     train: training set
@@ -553,7 +564,8 @@ def make_prior(
     elif method == "CustomOSDAVector":
         # CustomOSDAVector takes all of the handcrafted OSDA descriptors
         # and appends it to the GETAWAY prior
-        prior = osda_vector_prior(all_data_df, "getaway", normalization_factor)
+        prior = osda_vector_prior(
+            all_data_df, "getaway", normalization_factor, osda_prior_file=osda_prior_file)
         return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
 
     elif method == "CustomZeolite":
@@ -594,7 +606,7 @@ def make_prior(
     # This is the one for really skinny Matrices
     elif method == "CustomOSDAandZeoliteAsRows":
         prior = osda_zeolite_combined_prior(
-            all_data_df, normalize=True, stack=stack_combined_priors
+            all_data_df, normalize=False, stack=stack_combined_priors
         )
         # For now remove the identity concat to test eigenpro
         # np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
@@ -603,29 +615,11 @@ def make_prior(
     # This is the one for really skinny Matrices with sparse matrices.
     elif method == "CustomOSDAandZeoliteAsSparseMatrix":
         prior = csc_matrix(osda_zeolite_combined_prior(
-            all_data_df, normalize=True))
+            all_data_df, normalize=False))
         return sp.sparse.hstack(
             [prior, normalization_factor *
                 sp.sparse.identity(all_data.shape[0])]
         )
-
-    elif method == "CustomConformerOSDA":
-        smiles = list(train.index) + list(test.index)
-        # osda_conformer_prior_filename = get_osda_conformer_prior_filename(
-        #     smiles)  # TODO: real time generation is way too slow
-        # # TODO: should we try std deviation for some ? or minimum?
-        print(f"Reading from {OSDA_CONFORMER_PRIOR_FILE}. This will get messy once we venture into other quadrants")
-        print("Best thing to do is to manually make the prior files, and then we can use the CustomOSDAVector")
-        osda_conformer_prior_filename = OSDA_CONFORMER_PRIOR_FILE
-        prior = osda_prior(
-            all_data_df=all_data_df,
-            identity_weight=normalization_factor,
-            prior_map=prior_map,
-            conformer_collapse_function=np.mean,
-            osda_prior=osda_conformer_prior_filename,
-        )
-
-        return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
 
     elif method == "random":
         dim = 100

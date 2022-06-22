@@ -76,6 +76,7 @@ def get_ground_truth_energy_matrix(
     minimum_row_length=2,
     transpose=False,
     arbitrary_high_energy=None,
+    prune_index=None,
 ):
     if energy_type == Energy_Type.TEMPLATING:
         ground_truth = pd.read_pickle(TEMPLATING_GROUND_TRUTH)
@@ -89,6 +90,9 @@ def get_ground_truth_energy_matrix(
     if transpose:
         ground_truth = ground_truth.T
         ground_truth.index.name = "Zeolite"
+    breakpoint()
+    if prune_index is not None:
+        ground_truth = ground_truth.loc[prune_index]
 
     # Filter down to desired_shape & filter by min_row_length
     if desired_shape is not None:
