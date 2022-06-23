@@ -6,7 +6,7 @@ from path_constants import (
     OUTPUT_DIR,
     OSDA_CONFORMER_PRIOR_FILE,
     OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
-    BINDING_GROUND_TRUTH
+    BINDING_GROUND_TRUTH,
 )
 from analysis_utilities import calculate_metrics
 from utilities import (
@@ -41,20 +41,24 @@ sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 TEST_SEED = 424956
 
 
-def buisness_as_normal(split_type=SplitType.NAIVE_SPLITS, debug=False, prune_index=None, osda_prior_file=OSDA_PRIOR_FILE):
+def buisness_as_normal(
+    split_type=SplitType.NAIVE_SPLITS,
+    debug=False,
+    prune_index=None,
+    osda_prior_file=OSDA_PRIOR_FILE,
+):
     """
     This method runs 10-fold cross validation on the 1194x209 Ground Truth matrix.
     With OSDAs as rows (aka using OSDA priors to predict energies for new OSDAs)
     """
-    ground_truth, binary_data = get_ground_truth_energy_matrix(
-        prune_index=prune_index)
+    ground_truth, binary_data = get_ground_truth_energy_matrix(prune_index=prune_index)
     pred, true, mask = run_ntk(
         ground_truth,
         prior="CustomOSDAVector",  # "CustomConformerOSDA"
         metrics_mask=binary_data,
         use_eigenpro=False,
         split_type=split_type,
-        osda_prior_file=osda_prior_file
+        osda_prior_file=osda_prior_file,
     )
     calculate_metrics(
         pred.to_numpy(),
@@ -71,8 +75,10 @@ def buisness_as_normal(split_type=SplitType.NAIVE_SPLITS, debug=False, prune_ind
         pdb.set_trace()
         # Let's print the renders of the top_osdas
         print(top_osdas.index)
-        [smile_to_property(osda, save_file=os.path.join(
-            OUTPUT_DIR, osda)) for osda in top_osdas.index]
+        [
+            smile_to_property(osda, save_file=os.path.join(OUTPUT_DIR, osda))
+            for osda in top_osdas.index
+        ]
 
     save_matrix(pred, TEN_FOLD_CROSS_VALIDATION_ENERGIES)
 
@@ -90,8 +96,7 @@ def buisness_as_normal_transposed(
     # pred, true, mask = run_ntk(
     #     ground_truth, prior="CustomZeoliteEmbeddings", metrics_mask=binary_data
     # )
-    pred, true, mask = run_ntk(
-        ground_truth, prior=prior, metrics_mask=binary_data)
+    pred, true, mask = run_ntk(ground_truth, prior=prior, metrics_mask=binary_data)
     # breakpoint()
     results = calculate_metrics(
         pred.to_numpy(),
@@ -117,8 +122,7 @@ def buisness_as_normal_skinny():
     # TODO: Notice that this just takes the first (100, 30) chunk of the energy matrix as a way to
     # downsample the matrix. This is almost certainly a bad idea for an accurate test.
     # skinny_ntk_sampled_not_sliced() in ntk.py addresses this but is messy be warned
-    ground_truth, binary_data = get_ground_truth_energy_matrix(
-        desired_shape=(100, 30))
+    ground_truth, binary_data = get_ground_truth_energy_matrix(desired_shape=(100, 30))
     skinny_ground_truth = make_skinny(ground_truth)
     skinny_pred, _t, _m = run_ntk(
         skinny_ground_truth,
@@ -139,8 +143,7 @@ def buisness_as_normal_transposed_over_many_priors(transpose=False, to_write=Fal
     """
     This method is an example of how to test a set of priors to see their individual performance.
     """
-    ground_truth, binary_data = get_ground_truth_energy_matrix(
-        transpose=transpose)
+    ground_truth, binary_data = get_ground_truth_energy_matrix(transpose=transpose)
     if not transpose:  # osda
         prior = "CustomOSDA"
         priors_to_test = [
@@ -267,155 +270,9 @@ def buisness_as_normal_transposed_over_many_priors(transpose=False, to_write=Fal
     return results_print_out
 
 
-def select_zeolite_priors(
-    energy_type,
-    prior,
-    metrics_method,
-    n_features_to_select=10,
-    direction="forward",
-    best_feature="top_20_accuracy",
-):
-    """
-    This method recursively chooses zeolites features to form a set of features that gives the best
-    prediction. Code is adapted from sklearn's Sequential Feature Selector (SFS).
-    Only works for forward selection because the number of features is unknown at this point in the code.
-    (Only retrieved inside the run_ntk function)
-    This method runs 10-fold cross validation on the 1194x209 Ground Truth matrix.
-    With Zeolites as rows (aka using Zeolite priors to predict energies for new Zeolites)
-    """
-    prior_map = np.array(list(ZEOLITE_PRIOR_LOOKUP.keys()))
-    with open(ZEOLITE_PRIOR_SELECTION_FILE, "a") as csv_file:
-        np.savetxt(csv_file, np.expand_dims(
-            prior_map, axis=0), delimiter=",", fmt="%s")
-    # breakpoint()
-
-    ground_truth, binary_data = get_ground_truth_energy_matrix(
-        transpose=True, energy_type=energy_type
-    )
-    row_indices = np.arange(ground_truth.shape[0])
-    # shuffle data and put aside a test set
-    (
-        ground_truth_train,
-        ground_truth_test,
-        binary_data_train,
-        binary_data_test,
-        row_indices_train,
-        row_indices_test,
-    ) = train_test_split(
-        ground_truth, binary_data, row_indices, test_size=0.1, random_state=TEST_SEED
-    )
-    ######
-
-    current_mask = np.zeros(shape=prior_map.shape[0], dtype=bool)
-    scores = pd.DataFrame(
-        index=np.arange(n_features_to_select), columns=["feature", "score"]
-    )
-
-    for i in range(n_features_to_select):
-        new_feature_idx, new_feature, score = get_best_new_feature(
-            ground_truth=ground_truth_train,  # note it is train set here only
-            binary_data=binary_data_train,
-            prior=prior,
-            prior_map=prior_map,
-            current_mask=current_mask,
-            metrics_method=metrics_method,
-            direction=direction,
-            best_feature=best_feature,
-        )
-        current_mask[new_feature_idx] = True
-        scores[i, 0] = new_feature
-        scores[i, 1] = score
-
-    print(
-        f"chosen priors based on {best_feature} are {prior_map[current_mask]}")
-    print("final performance is")
-
-    chosen_prior_map = dict(
-        zip(prior_map[current_mask], np.ones(prior_map[current_mask].shape))
-    )
-    pred, true, mask = run_ntk(
-        ground_truth_train,
-        prior=prior,
-        metrics_mask=binary_data_train,
-        prior_map=chosen_prior_map,
-    )
-    results = calculate_metrics(
-        pred.to_numpy(),
-        true.to_numpy(),
-        mask.to_numpy(),
-        verbose=True,
-        method=metrics_method,
-    )
-
-    print(f"Test set indices are {row_indices_test}")
-    # breakpoint()
-    return prior_map[current_mask]
-
-
-def get_best_new_feature(
-    ground_truth,
-    binary_data,
-    prior,
-    prior_map,
-    current_mask,
-    metrics_method,
-    direction,
-    best_feature,
-    to_write=True,
-):
-    candidate_feature_indices = np.flatnonzero(~current_mask)
-    scores = {}
-
-    for feature_idx in candidate_feature_indices:
-        candidate_mask = current_mask.copy()
-        candidate_mask[feature_idx] = True
-        if direction == "backward":
-            candidate_mask = ~candidate_mask
-        candidate_prior_map = prior_map.copy()
-        candidate_prior_map = candidate_prior_map[candidate_mask]
-        candidate_prior_map = dict(
-            zip(candidate_prior_map, np.ones(candidate_prior_map.shape))
-        )
-        pred, true, mask = run_ntk(
-            ground_truth,
-            prior=prior,
-            metrics_mask=binary_data,
-            prior_map=candidate_prior_map,
-        )
-        results = calculate_metrics(
-            pred.to_numpy(),
-            true.to_numpy(),
-            mask.to_numpy(),
-            verbose=False,
-            method=metrics_method,
-        )
-        scores[feature_idx] = results[best_feature]
-
-    if best_feature in ["rmse_scores"]:
-        best_feature_idx = min(
-            scores, key=lambda feature_idx: scores[feature_idx])
-    else:
-        print('here')
-        best_feature_idx = max(
-            scores, key=lambda feature_idx: scores[feature_idx])
-    print(
-        f"New chosen feature is {prior_map[best_feature_idx]} with score {scores[best_feature_idx]}"
-    )
-
-    if to_write:
-        with open(ZEOLITE_PRIOR_SELECTION_FILE, "a") as csv_file:
-            score_values = np.zeros(current_mask.shape)
-            score_values[list(scores.keys())] = np.array(list(scores.values()))
-            score_values[current_mask] = np.nan
-            score_values = np.expand_dims(score_values, axis=0)
-            np.savetxt(csv_file, score_values, delimiter=",")
-
-    return best_feature_idx, prior_map[best_feature_idx], scores[best_feature_idx]
-
-
 if __name__ == "__main__":
     start = time.time()
-    sieved_priors_index = pd.read_pickle(OSDA_CONFORMER_PRIOR_FILE_CLIPPED).index
+    sieved_priors_index = pd.read_pickle(OSDA_CONFORMER_PRIOR_FILE_SIEVED).index
 
     # ground_truth_index = pd.read_pickle(BINDING_GROUND_TRUTH).index
     # ground_truth_index= ground_truth_index.drop('CC[N+]12C[N@]3C[N@@](C1)C[N@](C2)C3')
@@ -423,31 +280,15 @@ if __name__ == "__main__":
     # def vector_explode(x): return pd.Series(x['getaway'])
     # exploded_precomputed_prior = precomputed_prior.apply(vector_explode, axis=1)
     # double_sieved_priors_index = exploded_precomputed_prior.reindex(sieved_priors_index).dropna().index
-    sieved_priors_index.name = 'SMILES'
+    sieved_priors_index.name = "SMILES"
     # pdb.set_trace()
-    buisness_as_normal(split_type=SplitType.OSDA_ISOMER_SPLITS,
-                       debug=True, prune_index=sieved_priors_index,
-                       osda_prior_file=OSDA_CONFORMER_PRIOR_FILE_CLIPPED)
+    buisness_as_normal(
+        split_type=SplitType.OSDA_ISOMER_SPLITS,
+        debug=True,
+        prune_index=sieved_priors_index,
+        osda_prior_file=OSDA_CONFORMER_PRIOR_FILE_SIEVED,
+    )
     pdb.set_trace()
-
-    # for best_feature in [
-    #     # "rmse_scores",
-    #     # "spearman_scores",
-    #     "top_1_accuracy",
-    #     # "top_3_accuracy",
-    #     # "top_5_accuracy",
-    #     # "top_20_accuracy",
-    # ]:
-    #     selected_priors = select_zeolite_priors(
-    #         energy_type=Energy_Type.BINDING,
-    #         prior="CustomZeolite",
-    #         metrics_method="top_k_in_top_k",
-    #         n_features_to_select=10,
-    #         direction="forward",
-    #         best_feature=best_feature,
-    #     )
-
-    # breakpoint()
 
     # buisness_as_normal()
     # buisness_as_normal_transposed()

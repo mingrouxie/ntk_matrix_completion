@@ -161,5 +161,5 @@ def main():
     print("hello yitong")
     writer.close()
 
-
-main()
+if __name__ == '__main__':
+    main()
