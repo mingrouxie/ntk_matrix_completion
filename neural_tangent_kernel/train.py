@@ -38,9 +38,6 @@ import time
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 
 
-TEST_SEED = 424956
-
-
 def buisness_as_normal(
     split_type=SplitType.NAIVE_SPLITS,
     debug=False,

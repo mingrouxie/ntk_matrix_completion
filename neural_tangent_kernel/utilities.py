@@ -8,8 +8,11 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from rdkit import Chem
 from rdkit.Chem import RemoveAllHs, AddHs
+
 # from rdkit.Chem import RemoveAllHs
 import random
+
+from random_seeds import ISOMER_SEED, SUBSTRATE_SEED
 
 
 def plot_matrix(M, file_name, mask=None, vmin=16, vmax=23, to_save=True):
@@ -68,8 +71,7 @@ def chunks(lst, n, chunk_train=False, chunk_metrics=None):
     for i in range(0, len(lst) - n, n):
         leftside_index = i
         rightside_index = i + n
-        if i == len(lst) - n:
-            # Throw all the crumbs (i.e., last < 2n datapoints) into the final split
+        if i == len(lst) - n:  # for the last chunk that might be < n
             rightside_index = len(lst)
         train_chunk = (
             pd.concat([lst[:leftside_index], lst[rightside_index:]])
@@ -85,16 +87,19 @@ def chunks(lst, n, chunk_train=False, chunk_metrics=None):
         yield train_chunk, test_chunk, metrics_chunk
 
 
-def get_isomer_chunks(all_data, metrics_mask, k_folds, random_seed=5):
-    random.seed(random_seed)
+def get_isomer_chunks(all_data, metrics_mask, k_folds, random_seed=ISOMER_SEED):
+    breakpoint()
+    # random.seed(random_seed) # TODO: commented out because sample already uses a random_state
     clustered_isomers = pd.Series(cluster_isomers(all_data.index).values())
     clustered_isomers = clustered_isomers.sample(frac=1, random_state=random_seed)
     # Chunk by the isomer sets (train / test sets will not be balanced perfectly)
+    breakpoint()
     nested_iterator = chunks(
         lst=clustered_isomers,
         n=int(len(clustered_isomers) / k_folds),
         chunk_train=True,
     )
+    breakpoint()
     # Now flatten the iterated isomer train / test sets
     for train, test, _ in nested_iterator:
         train_osdas = list(set().union(*train))
@@ -102,6 +107,7 @@ def get_isomer_chunks(all_data, metrics_mask, k_folds, random_seed=5):
         yield all_data.loc[train_osdas], all_data.loc[test_osdas], metrics_mask.loc[
             test_osdas
         ]
+
 
 def save_matrix(matrix, file_name, overwrite=True):
     file = os.path.abspath("")
@@ -114,7 +120,7 @@ def save_matrix(matrix, file_name, overwrite=True):
     matrix.to_pickle(savepath)
 
 
-def get_splits_in_zeolite_type(allData, metrics_mask, k=10, seed=5, shuffle=True):
+def get_splits_in_zeolite_type(allData, metrics_mask, k=10, seed=SUBSTRATE_SEED, shuffle=True):
     fold_iterator = KFold(n_splits=k, shuffle=shuffle, random_state=seed).split(allData)
     for _fold in range(k):
         train_idx, test_idx = next(fold_iterator)
@@ -131,7 +137,8 @@ def plot_binding_energies(datas):
 def plot_spheres(datas):
     print("plot_spheres not coded yet")
     return
-    
+
+
 def cluster_isomers(smiles):
     """
     Take the SMILES of our OSDAs and cluster all isomers for train / test / eval split
@@ -151,3 +158,22 @@ def cluster_isomers(smiles):
     # plt.hist([len(c) for c in nonisomeric_smiles_lookup], bins=bins, alpha=0.5, label="isomer set sizes")
     # plt.title("OSDA Isomer Set Sizes")
     return nonisomeric_smiles_lookup
+
+
+def report_best_scores(results, n_top=3):
+    """
+    Function for reporting hyperparameter optimization results from output of 
+    sklearn's RandomizedSearchCV
+    """
+    for i in range(1, n_top + 1):
+        candidates = np.flatnonzero(results["rank_test_score"] == i)
+        for candidate in candidates:
+            print("Model with rank: {0}".format(i))
+            print(
+                "Mean validation score: {0:.3f} (std: {1:.3f})".format(
+                    results["mean_test_score"][candidate],
+                    results["std_test_score"][candidate],
+                )
+            )
+            print("Parameters: {0}".format(results["params"][candidate]))
+            print("")

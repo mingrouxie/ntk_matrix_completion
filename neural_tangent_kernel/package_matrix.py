@@ -10,6 +10,7 @@ from path_constants import BINDING_GROUND_TRUTH, TEMPLATING_GROUND_TRUTH, BINDIN
 from sklearn.model_selection import train_test_split
 from prior import make_prior
 from torch.utils.data import TensorDataset
+from random_seeds import PACKAGE_LOADER_SEED
 
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
@@ -183,7 +184,7 @@ def package_dataloader(
     y_nan_fill=30,
     batch_size=256,
     test_proportion=0.1,
-    random_seed=5,
+    random_seed=PACKAGE_LOADER_SEED,
 ):
     if energy_type == Energy_Type.TEMPLATING:
         ground_truth = pd.read_pickle(TEMPLATING_GROUND_TRUTH)

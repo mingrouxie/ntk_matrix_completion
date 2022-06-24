@@ -43,13 +43,12 @@ from path_constants import (
     ZEO_1_PRIOR,
     OSDA_PRIOR_FILE
 )
-
+from random_seeds import MODEL_SEED
 
 sys.path.insert(
     1, os.path.join(str(pathlib.Path(__file__).parent.absolute().parent), "graphical")
 )
 
-SEED = 5
 NORM_FACTOR = 0.001
 PI = np.pi
 
@@ -153,7 +152,7 @@ def run_ntk(
     metrics_mask,
     split_type=SplitType.NAIVE_SPLITS,
     k_folds=10,
-    seed=SEED,
+    seed=MODEL_SEED,
     prior_map=None,
     norm_factor=NORM_FACTOR,
     use_eigenpro=False,
@@ -261,7 +260,7 @@ def gaussian(samples, centers, bandwidth):
 # TODO: This is in development and pretty god awful.
 # TODO: make sample_size bigger, maybe 10K?
 def skinny_ntk_sampled_not_sliced(
-    sample_size=1000, num_splits=10, seed=SEED, use_eigenpro=True
+    sample_size=1000, num_splits=10, seed=MODEL_SEED, use_eigenpro=True
 ):
     """
     This method runs 10-fold cross validation on the 1194x209 Ground Truth matrix made SKINNY
