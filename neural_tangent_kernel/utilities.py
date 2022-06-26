@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import os
 import pdb
+from sklearn import metrics
 
 from sklearn.model_selection import KFold
 import matplotlib.pyplot as plt
@@ -88,25 +89,27 @@ def chunks(lst, n, chunk_train=False, chunk_metrics=None):
 
 
 def get_isomer_chunks(all_data, metrics_mask, k_folds, random_seed=ISOMER_SEED):
-    breakpoint()
     # random.seed(random_seed) # TODO: commented out because sample already uses a random_state
     clustered_isomers = pd.Series(cluster_isomers(all_data.index).values())
     clustered_isomers = clustered_isomers.sample(frac=1, random_state=random_seed)
     # Chunk by the isomer sets (train / test sets will not be balanced perfectly)
-    breakpoint()
     nested_iterator = chunks(
         lst=clustered_isomers,
         n=int(len(clustered_isomers) / k_folds),
         chunk_train=True,
     )
-    breakpoint()
     # Now flatten the iterated isomer train / test sets
     for train, test, _ in nested_iterator:
         train_osdas = list(set().union(*train))
         test_osdas = list(set().union(*test))
-        yield all_data.loc[train_osdas], all_data.loc[test_osdas], metrics_mask.loc[
-            test_osdas
-        ]
+        if np.any(metrics_mask):
+            yield all_data.loc[train_osdas], all_data.loc[test_osdas], metrics_mask.loc[
+                test_osdas
+            ]
+        else:
+            # no masking of non-binding involved, used in baseline_models for predicting binding energies
+            yield all_data.index.isin(train_osdas), all_data.index.isin(test_osdas)
+            # yield all_data.loc[train_osdas], all_data.loc[test_osdas]
 
 
 def save_matrix(matrix, file_name, overwrite=True):
@@ -120,7 +123,9 @@ def save_matrix(matrix, file_name, overwrite=True):
     matrix.to_pickle(savepath)
 
 
-def get_splits_in_zeolite_type(allData, metrics_mask, k=10, seed=SUBSTRATE_SEED, shuffle=True):
+def get_splits_in_zeolite_type(
+    allData, metrics_mask, k=10, seed=SUBSTRATE_SEED, shuffle=True
+):
     fold_iterator = KFold(n_splits=k, shuffle=shuffle, random_state=seed).split(allData)
     for _fold in range(k):
         train_idx, test_idx = next(fold_iterator)
@@ -137,6 +142,23 @@ def plot_binding_energies(datas):
 def plot_spheres(datas):
     print("plot_spheres not coded yet")
     return
+
+
+from sklearn.model_selection import StratifiedKFold, KFold
+
+
+class IsomerKFold:
+    def __init__(self, n_splits=3):
+        self.n_splits = n_splits
+
+    def split(self, X, y, groups=None):
+        X = X.reset_index("Zeolite")
+        breakpoint()
+        iterator = get_isomer_chunks(X, metrics_mask=None, k_folds=self.n_splits)
+        return iterator
+
+    def get_n_splits(self, X, y, groups=None):
+        return self.n_splits
 
 
 def cluster_isomers(smiles):
@@ -162,7 +184,7 @@ def cluster_isomers(smiles):
 
 def report_best_scores(results, n_top=3):
     """
-    Function for reporting hyperparameter optimization results from output of 
+    Function for reporting hyperparameter optimization results from output of
     sklearn's RandomizedSearchCV
     """
     for i in range(1, n_top + 1):

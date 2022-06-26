@@ -57,6 +57,7 @@ def buisness_as_normal(
         split_type=split_type,
         osda_prior_file=osda_prior_file,
     )
+    # TODO: implement option to compute RMSE and topk in topk for each fold 
     calculate_metrics(
         pred.to_numpy(),
         true.to_numpy(),

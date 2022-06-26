@@ -31,13 +31,13 @@ from analysis_utilities import plot_top_k_curves
 from weights import ZEOLITE_PRIOR_LOOKUP, OSDA_PRIOR_LOOKUP
 from ntk import run_ntk, skinny_ntk_sampled_not_sliced, SplitType
 from precompute_osda_priors import smile_to_property
-
+from random_seeds import SUBSTRATE_PRIOR_SELECTION_SEED
 import numpy as np
 import time
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 
-TEST_SEED = 424956
+# TODO: change zeolite to substrate...
 
 def select_zeolite_priors(
     energy_type,
@@ -73,7 +73,11 @@ def select_zeolite_priors(
         row_indices_train,
         row_indices_test,
     ) = train_test_split(
-        ground_truth, binary_data, row_indices, test_size=0.1, random_state=TEST_SEED
+        ground_truth,
+        binary_data,
+        row_indices,
+        test_size=0.1,
+        random_state=SUBSTRATE_PRIOR_SELECTION_SEED,
     )
     ######
 
@@ -180,15 +184,16 @@ def get_best_new_feature(
 
     return best_feature_idx, prior_map[best_feature_idx], scores[best_feature_idx]
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     for best_feature in [
-            # "rmse_scores",
-            # "spearman_scores",
-            "top_1_accuracy",
-            # "top_3_accuracy",
-            # "top_5_accuracy",
-            # "top_20_accuracy",
-        ]:
+        # "rmse_scores",
+        # "spearman_scores",
+        "top_1_accuracy",
+        # "top_3_accuracy",
+        # "top_5_accuracy",
+        # "top_20_accuracy",
+    ]:
         selected_priors = select_zeolite_priors(
             energy_type=Energy_Type.BINDING,
             prior="CustomZeolite",
@@ -196,9 +201,9 @@ if __name__ == '__main__':
             n_features_to_select=10,
             direction="forward",
             best_feature=best_feature,
-            )
+        )
 
-        breakpoint()  
+        breakpoint()
     # TODO: not implemented yet - show what the test accuracy is T.T
     # TODO: what about 50% RMSE and 50% top-k in top-k accuracy?
     # TODO: Genetic algorithm? Worth it?

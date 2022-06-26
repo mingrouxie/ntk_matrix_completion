@@ -4,7 +4,7 @@
 INPUT DATA
 """
 # Format binding.csv from Schwalbe Koda's work: https://github.com/learningmatter-mit/Zeolite-Phase-Competition/blob/main/data/binding.csv
-BINDING_CSV = "data/truths/binding.csv"
+BINDING_CSV = "data/daniels_data/science_paper/binding.csv"
 BINDING_GROUND_TRUTH = "data/truths/BindingSiO2GroundTruth.pkl"
 TEMPLATING_GROUND_TRUTH = "data/truths/TemplatingGroundTruth.pkl"
 
@@ -49,3 +49,4 @@ TEN_FOLD_CROSS_VALIDATION_ENERGIES = "data/output/energy_predictions.pkl"
 PERFORMANCE_METRICS = "data/output/peformance_metrics.pkl"
 ZEOLITE_PRIOR_SELECTION_FILE = "data/output/zeolite_prior_selection.csv"
 OUTPUT_DIR = "data/output/"
+XGBOOST_MODEL_FILE = "data/output/baseline_model/xgboost.json"

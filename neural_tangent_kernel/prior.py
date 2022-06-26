@@ -2,6 +2,7 @@ import multiprocessing
 from math import ceil
 from itertools import product
 from path_constants import (
+    HYPOTHETICAL_OSDA_ENERGIES,
     ZEOLITE_PRIOR_FILE,
     HANDCRAFTED_ZEOLITE_PRIOR_FILE,
     OSDA_PRIOR_FILE,
@@ -25,6 +26,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import pdb
 from functools import lru_cache
+
 # from auto_tqdm import tqdm
 import os
 import pathlib
@@ -48,7 +50,7 @@ VALID_METHODS = {
     "ManualZeolite",
     "CustomOSDAandZeoliteAsSparseMatrix",
     "CustomZeoliteEmbeddings",
-    "CustomConformerOSDA",
+    # "CustomConformerOSDA",
 }
 
 
@@ -163,7 +165,6 @@ def load_vector_priors(
             return pd.Series(x[vector_feature])
 
         precomputed_prior = precomputed_prior.apply(vector_explode, axis=1)
-    breakpoint()
     # TODO(Yitong): 'CC[N+]12C[N@]3C[N@@](C1)C[N@](C2)C3'
     # it seems we are missing precomputed priors for one energy OSDAs...
     exploded_prior = precomputed_prior.reindex(target_index)
@@ -216,7 +217,9 @@ def load_prior(
     other_prior_to_concat=OSDA_HYPOTHETICAL_PRIOR_FILE,
 ):
     precomputed_prior = pd.read_pickle(precomputed_file_name)
+    print(f"Precomputed prior file {precomputed_file_name} read")
     if other_prior_to_concat:
+        print(f"Other prior to concat {other_prior_to_concat} read")
         big_precomputed_priors = pd.read_pickle(other_prior_to_concat)
         precomputed_prior = pd.concat([big_precomputed_priors, precomputed_prior])
         precomputed_prior = precomputed_prior[
@@ -233,8 +236,10 @@ def load_prior(
     )  # keeps rows with index in target_index, assigns NaN to other indices in target_index
     precomputed_prior = precomputed_prior.filter(items=list(column_weights.keys()))
     precomputed_prior = precomputed_prior.apply(pd.to_numeric)
-
-    # TODO: this line obscures changes in data points (dropping rows when priors are NaN etc.) we should change this
+    # TODO: this line obscures changes in data points (dropping rows when priors are NaN etc.)
+    # We NEED TO CHANGE THIS
+    # ring sizes as well for zeolites, after ring_size_1
+    print(f"Precomputed prior has this many NaN entries:", precomputed_prior.isna().sum().sum())
     # results = precomputed_prior.fillna(0.0)
     results = precomputed_prior.dropna()
 
@@ -247,6 +252,7 @@ def load_prior(
         results = precomputed_prior.apply(
             lambda x: x * column_weights[x.name] / normalization_factor
         )
+    
     return (1 - identity_weight) * results
 
 
@@ -256,6 +262,7 @@ def osda_prior(
     osda_prior=OSDA_PRIOR_FILE,
     prior_map=None,
     normalize=True,
+    other_prior_to_concat=OSDA_HYPOTHETICAL_PRIOR_FILE,
 ):
     return load_prior(
         target_index=tuple(all_data_df.index),
@@ -263,6 +270,7 @@ def osda_prior(
         precomputed_file_name=osda_prior,
         identity_weight=identity_weight,
         normalize=normalize,
+        other_prior_to_concat=other_prior_to_concat,
     )
 
 
@@ -323,21 +331,19 @@ def zeolite_prior(
     Takes in all the priors and their weights (feature_lookup) and returns priors that are
     normalized (within each column) to (1-identity_weight).
     """
-    # breakpoint()
     return load_prior(
         tuple(all_data_df.index),
         ZEOLITE_PRIOR_LOOKUP if not feature_lookup else feature_lookup,
-        PERSISTENCE_ZEOLITE_PRIOR_FILE,  # includes handcrafted
+        # PERSISTENCE_ZEOLITE_PRIOR_FILE,  # includes handcrafted
         # ZEOLITE_GCNN_EMBEDDINGS_FILE,
         # ZEOLITE_PRIOR_FILE, # includes handcrafted but missing a few features
-        # HANDCRAFTED_ZEOLITE_PRIOR_FILE,
+        HANDCRAFTED_ZEOLITE_PRIOR_FILE,
         # ZEOLITE_ALL_PRIOR_FILE, # handcraft, persistent, gcnn
         # TEMP_0D_PRIOR_FILE,
         identity_weight,
         normalize,
         ZEOLITE_PRIOR_MAP,
-        other_prior_to_concat=None,
-        # other_prior_to_concat=ZEO_1_PRIOR,
+        other_prior_to_concat=None, #ZEO_1_PRIOR,
     )
 
 
@@ -351,7 +357,6 @@ def zeolite_vector_prior(
     Takes in all priors and their weights (prior_map), and returns prior normalized to a
     normalization factor (default 0.99). This function allows for vector priors.
     """
-    # breakpoint()
     gcnn_priors = load_vector_priors(
         target_index=all_data_df.index,
         vector_feature="feature_set",
@@ -361,7 +366,6 @@ def zeolite_vector_prior(
         already_exploded=True,
         identity_weight=identity_weight,
     ).to_numpy()
-    # breakpoint()
     handcrafted_zeolite_priors = zeolite_prior(all_data_df, prior_map).to_numpy()
     # weigh handcrafted and gcnn equally
     normalized_gcnn_priors = gcnn_priors / (2 * max(gcnn_priors, key=sum).sum())
@@ -369,7 +373,6 @@ def zeolite_vector_prior(
         2 * max(handcrafted_zeolite_priors, key=sum).sum()
     )
     stacked = np.hstack([normalized_gcnn_priors, normalized_handcrafted_priors])
-    # breakpoint()
     return (1 - identity_weight) * stacked
 
 
@@ -403,9 +406,10 @@ def osda_zeolite_combined_prior(
         identity_weight,
         normalize,
         ZEOLITE_PRIOR_MAP,
+        other_prior_to_concat=None
     ).to_numpy()
     if not stack:
-        pdb.set_trace()
+        # pdb.set_trace()
         return (osda_prior, osda_vector_prior, zeolite_prior)
     normalized_osda_vector_prior = osda_vector_prior / (
         3 * max(osda_vector_prior, key=sum).sum()
@@ -520,7 +524,6 @@ def make_prior(
     elif method == "CustomZeolite":
         # CustomZeolite takes all of the priors from the data file specified in zeolite_prior()
         prior = zeolite_prior(all_data_df, prior_map).to_numpy()
-        # breakpoint()
         return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
 
     elif method == "CustomZeoliteEmbeddings":
@@ -552,7 +555,10 @@ def make_prior(
     # This is the one for really skinny Matrices
     elif method == "CustomOSDAandZeoliteAsRows":
         prior = osda_zeolite_combined_prior(
-            all_data_df, normalize=False, stack=stack_combined_priors
+            all_data_df,
+            normalize=False,
+            stack=stack_combined_priors,
+            osda_prior_file=osda_prior_file,
         )
         # For now remove the identity concat to test eigenpro
         # np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])

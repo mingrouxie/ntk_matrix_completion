@@ -184,7 +184,10 @@ def run_ntk(
 
         assert np.any(np.isnan(X) == False)
         X = np.nan_to_num(X, copy=True, nan=0.0)
+        
         # TODO (Mingrou): Check with Yitong why the code worked before without this line
+        # TODO: another fillna? Oh dear. Please extract all data preprocessing into one script 
+        # And, also, just have cleaner data files in general. Use percentile?
 
         results_ntk = predict(all_data, mask, len(test), X=X)
         prediction_ntk = pd.DataFrame(
