@@ -516,7 +516,7 @@ def make_prior(
         prior = osda_vector_prior(
             all_data_df,
             "getaway",
-            normalization_factor,
+            identity_weight=normalization_factor,
             osda_prior_file=osda_prior_file,
         )
         return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])

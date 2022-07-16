@@ -101,6 +101,7 @@ def predict(all_data, mask, num_test_rows, X, reduce_footprint=False):
 
     results = np.linalg.solve(K_matrix, observed_data.T).T @ k_matrix #pg21 in paper
     assert results.shape == (all_data.shape[0], num_test_rows), "Results malformed"
+    # breakpoint()
 
     assert np.any(np.isnan(results)) == False
     return results.T
@@ -131,6 +132,7 @@ def create_iterator(split_type, all_data, metrics_mask, k_folds, seed):
             total=k_folds,
         )
     elif split_type == SplitType.OSDA_ISOMER_SPLITS:
+        # breakpoint()
         assert (
             all_data.index.name == "SMILES"
         ), "The OSDA isomer split is currently only implemented for OSDAs as rows"
@@ -162,7 +164,6 @@ def run_ntk(
     aggregate_pred = None  # Predictions for all fold(s)
     aggregate_true = None  # Ground truths for all fold(s)
     aggregate_mask = None  # Non-binding masks for all fold(s)
-
     # Iterate over all predictions and populate metrics matrices
     for train, test, test_mask_chunk in iterator:
         X = make_prior(
@@ -173,7 +174,6 @@ def run_ntk(
             prior_map=prior_map,
             osda_prior_file=osda_prior_file,
         )
-        # breakpoint()
         all_data = pd.concat([train, test]).to_numpy()
         ##### SAFETY
         all_data[train.shape[0] :, :] = 0
@@ -184,12 +184,19 @@ def run_ntk(
 
         assert np.any(np.isnan(X) == False)
         X = np.nan_to_num(X, copy=True, nan=0.0)
-        
+        # breakpoint()
         # TODO (Mingrou): Check with Yitong why the code worked before without this line
         # TODO: another fillna? Oh dear. Please extract all data preprocessing into one script 
         # And, also, just have cleaner data files in general. Use percentile?
-
+        # DEBUG 1092 and 1096. These look suspiciously familiar
+        # {'C[C@H]1C[N+]2(CCCCC[N+]3(C)CCCCC3)CCC1CC2', 
+        # 'C[C@@H]1C[N+]2(CCCCC[N+]3(C)CCCCC3)CCC1CC2', 
+        # 'C1CN2CCC1CC2', 
+        # 'C[N+]1(CC2CCCCC2)CCC(CCCC2CC[N+](C)(CC3CCCCC3)CC2)CC1'}
+        print("ntk/run_ntk: Predicting for data of shape", all_data.shape, mask.shape, X.shape)
+        print("Test set size:", test.shape)
         results_ntk = predict(all_data, mask, len(test), X=X)
+        print("results_ntk of shape", results_ntk.shape)
         prediction_ntk = pd.DataFrame(
             data=results_ntk, index=test.index, columns=test.columns
         )
@@ -210,7 +217,7 @@ def run_ntk(
     # We return aggregate_pred, aggregate_true, aggregate_mask.
     # Aggregate_mask is necessary to keep track of which cells in the matrix are
     # non-binding (for spearman & rmse calculation) when shuffled_iterator=True
-
+    print("Returning data of shape", aggregate_pred.shape, aggregate_true.shape, aggregate_mask.shape)
     return aggregate_pred, aggregate_true, aggregate_mask
 
 

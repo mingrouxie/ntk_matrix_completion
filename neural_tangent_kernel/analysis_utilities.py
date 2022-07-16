@@ -101,12 +101,13 @@ def calculate_metrics(
     verbose=True,
     meta=None,
     method="top_k_in_top_k",
-    to_write=False,
-    to_plot=False,
+    to_write=True,
+    to_plot=True,
 ):
     """
     All metrics as calculated by ROW
     """
+    print("analysis_utilities/calculate_metrics: truth, pred and mask are of shape", true.shape, pred.shape, mask.shape)
     try:
         cosims, r2_scores, rmse_scores, spearman_scores = calculate_row_metrics(
             true, pred, mask
@@ -137,7 +138,7 @@ def calculate_metrics(
         top_20 = calculate_top_n_in_top_k_accuracy(true, pred, k=20)
         if to_plot:
             top_20_accuracies = [
-                calculate_top_n_in_top_k_accuracy(true, pred, k=k) for k in range(0, 21)
+                calculate_top_n_in_top_k_accuracy(true, pred, k=k) for k in range(1, 209)
             ]
     elif method == "top_k":
         top_1 = calculate_top_k_accuracy(true, pred, 1)
@@ -157,7 +158,7 @@ def calculate_metrics(
         "top_3_accuracy": np.array(top_3).round(4),
         "top_5_accuracy": np.array(top_5).round(4),
         "top_20_accuracy": np.array(top_20).round(4),
-        # "top_20_accuracies": top_20_accuracies,
+        "top_20_accuracies": top_20_accuracies,
     }
     if verbose:
         print(

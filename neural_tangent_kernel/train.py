@@ -57,6 +57,7 @@ def buisness_as_normal(
         split_type=split_type,
         osda_prior_file=osda_prior_file,
     )
+    print("Returned NTK predictions are of shape", pred.shape, true.shape, mask.shape)
     # TODO: implement option to compute RMSE and topk in topk for each fold 
     calculate_metrics(
         pred.to_numpy(),
@@ -70,14 +71,13 @@ def buisness_as_normal(
     if debug:
         # Quick investigation of top 10 OSDAs
         top_osdas = ((true - pred) ** 2).T.sum().sort_values()[:10]
-        pdb.set_trace()
+        # breakpoint()
         # Let's print the renders of the top_osdas
         print(top_osdas.index)
         [
             smile_to_property(osda, save_file=os.path.join(OUTPUT_DIR, osda))
             for osda in top_osdas.index
         ]
-
     save_matrix(pred, TEN_FOLD_CROSS_VALIDATION_ENERGIES)
 
 
@@ -270,7 +270,7 @@ def buisness_as_normal_transposed_over_many_priors(transpose=False, to_write=Fal
 
 if __name__ == "__main__":
     start = time.time()
-    sieved_priors_index = pd.read_pickle(OSDA_CONFORMER_PRIOR_FILE_SIEVED).index
+    sieved_priors_index = pd.read_pickle(OSDA_CONFORMER_PRIOR_FILE_CLIPPED).index
 
     # ground_truth_index = pd.read_pickle(BINDING_GROUND_TRUTH).index
     # ground_truth_index= ground_truth_index.drop('CC[N+]12C[N@]3C[N@@](C1)C[N@](C2)C3')
@@ -284,7 +284,7 @@ if __name__ == "__main__":
         split_type=SplitType.OSDA_ISOMER_SPLITS,
         debug=True,
         prune_index=sieved_priors_index,
-        osda_prior_file=OSDA_CONFORMER_PRIOR_FILE_SIEVED,
+        osda_prior_file=OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
     )
     pdb.set_trace()
 

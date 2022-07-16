@@ -6,7 +6,7 @@ from path_constants import (
     OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
     OSDA_CONFORMER_PRIOR_FILE_SIEVED,
     OSDA_PRIOR_FILE,
-    XGBOOST_MODEL_FILE
+    XGBOOST_MODEL_FILE,
 )
 from utilities import get_isomer_chunks, report_best_scores, cluster_isomers
 from utilities import IsomerKFold
@@ -58,54 +58,6 @@ def thoughts():
     pass
 
 
-def reference_stuff():
-    # ground_truth, binary_data = get_ground_truth_energy_matrix(prune_index=prune_index)
-    # pred, true, mask = run_xgb(
-    #     ground_truth,
-    #     prior="SOMETHING",
-    #     metrics_mask=binary_data,
-    #     split_type=SplitType.OSDA_ISOMER_SPLITS,
-    #     osda_prior_file=osda_prior_file
-    # )
-    # calculate_metrics
-
-    # run_ntk(
-    #     ground_truth,
-    #     prior="CustomOSDAVector",  # "CustomConformerOSDA"
-    #     metrics_mask=binary_data,
-    #     use_eigenpro=False,
-    #     split_type=split_type,
-    #     osda_prior_file=osda_prior_file,
-    # )
-    # def run_ntk(
-    #     all_data,
-    #     prior,
-    #     metrics_mask,
-    #     split_type=SplitType.NAIVE_SPLITS,
-    #     k_folds=10,
-    #     seed=SEED,
-    #     prior_map=None,
-    #     norm_factor=NORM_FACTOR,
-    #     use_eigenpro=False,
-    #     osda_prior_file=OSDA_PRIOR_FILE,
-    # ):
-    #     iterator = create_iterator(split_type, all_data, metrics_mask, k_folds, seed)
-    #     aggregate_pred = None  # Predictions for all fold(s)
-    #     aggregate_true = None  # Ground truths for all fold(s)
-    #     aggregate_mask = None  # Non-binding masks for all fold(s)
-
-    # create_iterator(split_type=SplitType.OSDA_ISOMER_SPLITS, all_data, metrics_mask, k_folds, seed)
-
-    # StratifiedKFold
-
-    # how do I use the isomer splits in utilities
-    # with a ML model
-    # is an iterator sufficient
-
-    # My ignorance in the psets is coming back to bite me ugh
-    pass
-
-
 def test_xgboost():
     X, y = load_diabetes(return_X_y=True)
     xgb_whole_dataset(X, y)
@@ -154,12 +106,12 @@ def test_get_tuned_xgb(X, y, cv=3):
     # Hyperparameter search
     xgb = xgboost.XGBRegressor()
     params = {
-        "colsample_bytree": uniform(0.7, 0.3), # default 1.0
-        "gamma": uniform(0, 0.5), # default 0.0
+        "colsample_bytree": uniform(0.7, 0.3),  # default 1.0
+        "gamma": uniform(0, 0.5),  # default 0.0
         "learning_rate": uniform(0.03, 0.3),  # default 0.1
         "max_depth": randint(2, 8),  # default 3
         "n_estimators": randint(100, 150),  # default 100
-        "subsample": uniform(0.6, 0.4), # default 1.0
+        "subsample": uniform(0.6, 0.4),  # default 1.0
     }
     search = RandomizedSearchCV(
         xgb,
@@ -187,7 +139,7 @@ def get_tuned_model(
     random_seed=MODEL_SEED,
     objective="reg:squarederror",
     nthread=5,
-    model_file=XGBOOST_MODEL_FILE
+    model_file=XGBOOST_MODEL_FILE,
 ):
     # Hyperparameter search
     print(f"Doing hyperparameter optimization")
@@ -210,9 +162,11 @@ def get_tuned_model(
     if split_type == SplitType.OSDA_ISOMER_SPLITS:
         # cv_generator = IsomerKFold(n_splits=cv)
         cv_generator = get_isomer_chunks(
-            X.reset_index("Zeolite"), metrics_mask=None, k_folds=cv # TODO: cv=5 arbitrary
+            X.reset_index("Zeolite"),
+            metrics_mask=None,
+            k_folds=cv,  # TODO: cv=5 arbitrary
         )
-    search = RandomizedSearchCV( 
+    search = RandomizedSearchCV(
         # TODO: bayesian opt with hyper opt
         # https://www.kaggle.com/code/prashant111/a-guide-on-xgboost-hyperparameters-tuning/notebook
         model,
@@ -229,9 +183,11 @@ def get_tuned_model(
     search.fit(X, y)
     report_best_scores(search.cv_results_, 1)
     tuned_xgb = xgboost.XGBRegressor(
-        objective=objective, random_state=random_seed, nthread=nthread, **search.best_params_
+        objective=objective,
+        random_state=random_seed,
+        nthread=nthread,
+        **search.best_params_,
     )
-    tuned_xgb.save_model(model_file)
     print(f"Time taken: {(time.time()-start)/60} minutes taken")
     return tuned_xgb, search
 
@@ -273,11 +229,11 @@ def main(
     ### what to do with the retrieved priors
     if stack_combined_priors == "all":
         X = np.concatenate(
-            [X_osda_getaway_prior, X_osda_getaway_prior, X_zeolite_prior], axis=1
+            [X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior], axis=1
         )
     elif stack_combined_priors == "osda":
-        X = np.concatenate([X_osda_getaway_prior, X_osda_getaway_prior], axis=1)
-    elif stack_combined_priors == 'zeolite':
+        X = np.concatenate([X_osda_handcrafted_prior, X_osda_getaway_prior], axis=1)
+    elif stack_combined_priors == "zeolite":
         X = X_zeolite_prior
     else:
         print(f"What do you want to do with the priors??")
@@ -311,7 +267,9 @@ def main(
             model_file=model_file,
         )
     # fit and predict tuned model
+    breakpoint()
     model.fit(X_train, ground_truth_train)
+    model.save_model(model_file)
     y_pred = model.predict(X_train)
     print("Train score: ", np.sqrt(mean_squared_error(ground_truth_train, y_pred)))
     y_pred = model.predict(X_test)
@@ -327,6 +285,24 @@ if __name__ == "__main__":
         stack_combined_priors="osda"
     )
 
+    # params = {
+    #     "colsample_bytree": 0.3181689154948444,
+    #     "gamma": 0.1829854912145143,
+    #     "learning_rate": 0.06989883691979182,
+    #     "max_depth": 4,
+    #     "min_child_weight": 2.6129103665660702,
+    #     "n_estimators": 116,
+    #     "reg_alpha": 0.8264051782292202,
+    #     "reg_lambda": 0.47355178063941394,
+    #     "subsample": 0.9532706328098646,
+    # }
+    # model = xgboost.XGBRegressor(
+    #     random_state=MODEL_SEED,
+    #     objective="reg:squarederror",
+    #     nthread=5,
+    #     **params
+    # )
+    # main(model=model, optimize_hyperparameters=False, stack_combined_priors="osda")
 
 # print("Scores: {0}\nMean: {1:.3f}\nStd: {2:.3f}".format(scores, np.mean(scores), np.std(scores)))
 # 553 isomer groups from 1096 data points. very interesting

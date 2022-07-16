@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import pdb
 from sklearn import metrics
+from math import ceil, floor
 
 from sklearn.model_selection import KFold
 import matplotlib.pyplot as plt
@@ -72,7 +73,7 @@ def chunks(lst, n, chunk_train=False, chunk_metrics=None):
     for i in range(0, len(lst) - n, n):
         leftside_index = i
         rightside_index = i + n
-        if i == len(lst) - n:  # for the last chunk that might be < n
+        if len(lst) - 2 * n < i: # for the last chunk that might be < n
             rightside_index = len(lst)
         train_chunk = (
             pd.concat([lst[:leftside_index], lst[rightside_index:]])
@@ -95,7 +96,7 @@ def get_isomer_chunks(all_data, metrics_mask, k_folds, random_seed=ISOMER_SEED):
     # Chunk by the isomer sets (train / test sets will not be balanced perfectly)
     nested_iterator = chunks(
         lst=clustered_isomers,
-        n=int(len(clustered_isomers) / k_folds),
+        n=floor(len(clustered_isomers) / k_folds),
         chunk_train=True,
     )
     # Now flatten the iterated isomer train / test sets
@@ -108,6 +109,8 @@ def get_isomer_chunks(all_data, metrics_mask, k_folds, random_seed=ISOMER_SEED):
             ]
         else:
             # no masking of non-binding involved, used in baseline_models for predicting binding energies
+            # print("Isomer train-test split:", len(train_osdas), len(test_osdas))
+            # yield train_osdas, test_osdas
             yield all_data.index.isin(train_osdas), all_data.index.isin(test_osdas)
             # yield all_data.loc[train_osdas], all_data.loc[test_osdas]
 
