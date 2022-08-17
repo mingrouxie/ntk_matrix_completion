@@ -43,41 +43,40 @@ def ntk_cv(
     debug=False,
     prune_index=None,
     osda_prior_file=OSDA_PRIOR_FILE,
+    prior_type="CustomOSDAVector" # "CustomConformerOSDA"
 ):
     """
     This method runs 10-fold cross validation on the 1194x209 Ground Truth matrix.
-    With OSDAs as rows (aka using OSDA priors to predict energies for new OSDAs)
+    With OSDAs as rows (aka using OSDA priors to predict energies for new OSDAs).
+
+    split_type: How to split data for the 10-fold
+    debug: If True, prints the SMILES of the "top-performing" OSDAs by squared error
+    prune_index: if specified, sieves the ground truth matrix for specified rows
+    osda_prior_file: source file for OSDA priors
     """
     ground_truth, binary_data = get_ground_truth_energy_matrix(prune_index=prune_index)
     pred, true, mask = run_ntk(
         ground_truth,
-        prior="CustomOSDAVector",  # "CustomConformerOSDA"
+        prior=prior_type,
         metrics_mask=binary_data,
         use_eigenpro=False,
         split_type=split_type,
         osda_prior_file=osda_prior_file,
     )
-    print("Returned NTK predictions are of shape", pred.shape, true.shape, mask.shape)
+    print("[NTK_CV] Returned NTK predictions are of shape", pred.shape, true.shape, mask.shape)
     # TODO: implement option to compute RMSE and topk in topk for each fold 
     calculate_metrics(
         pred.to_numpy(),
         true.to_numpy(),
         mask.to_numpy(),
         verbose=True,
-        # method="top_k",
         method="top_k_in_top_k",
     )
     plot_matrix(pred, "pred", vmin=-30, vmax=5)
-    # if debug:
-    #     # Quick investigation of top 10 OSDAs
-    #     top_osdas = ((true - pred) ** 2).T.sum().sort_values()[:10]
-    #     # breakpoint()
-    #     # Let's print the renders of the top_osdas
-    #     print(top_osdas.index)
-    #     [
-    #         smile_to_property(osda, save_file=os.path.join(OUTPUT_DIR, osda))
-    #         for osda in top_osdas.index
-        # ]
+    if debug:
+        # Quick investigation of top 10 OSDAs
+        top_osdas = ((true - pred) ** 2).T.sum().sort_values()[:10]
+        print(top_osdas.index)
     save_matrix(pred, TEN_FOLD_CROSS_VALIDATION_ENERGIES)
 
 
