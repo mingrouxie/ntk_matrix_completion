@@ -43,7 +43,13 @@ def ntk_cv(
     debug=False,
     prune_index=None,
     osda_prior_file=OSDA_PRIOR_FILE,
-    prior_type="CustomOSDAVector" # "CustomConformerOSDA"
+    prior_type="CustomOSDAVector",  # "CustomConformerOSDA"
+    energy_type=Energy_Type.BINDING,
+    metric_method="top_k_in_top_k",
+    verbose=True,
+    use_eigenpro=False,
+    to_write=True,
+    to_plot=False,
 ):
     """
     This method runs 10-fold cross validation on the 1194x209 Ground Truth matrix.
@@ -53,24 +59,38 @@ def ntk_cv(
     debug: If True, prints the SMILES of the "top-performing" OSDAs by squared error
     prune_index: if specified, sieves the ground truth matrix for specified rows
     osda_prior_file: source file for OSDA priors
+    prior_type: method of creating the prior
+    energy_type: Type of ground truth (default is binding energy)
+    use_eigenpro: If True, uses eigenpro. Not yet implemented
+    to_write: If True, writes analysis results to file
+    to_plot: If True, pltos analysis results
     """
-    ground_truth, binary_data = get_ground_truth_energy_matrix(prune_index=prune_index)
+    ground_truth, binary_data = get_ground_truth_energy_matrix(
+        prune_index=prune_index, energy_type=energy_type
+    )
     pred, true, mask = run_ntk(
         ground_truth,
         prior=prior_type,
         metrics_mask=binary_data,
-        use_eigenpro=False,
+        use_eigenpro=use_eigenpro,
         split_type=split_type,
         osda_prior_file=osda_prior_file,
     )
-    print("[NTK_CV] Returned NTK predictions are of shape", pred.shape, true.shape, mask.shape)
-    # TODO: implement option to compute RMSE and topk in topk for each fold 
+    print(
+        "[NTK_CV] Returned NTK predictions are of shape",
+        pred.shape,
+        true.shape,
+        mask.shape,
+    )
+    # TODO: implement option to compute RMSE and topk in topk for each fold
     calculate_metrics(
         pred.to_numpy(),
         true.to_numpy(),
         mask.to_numpy(),
-        verbose=True,
-        method="top_k_in_top_k",
+        verbose=verbose,
+        method=metric_method,
+        to_write=to_write,
+        to_plot=to_plot,
     )
     plot_matrix(pred, "pred", vmin=-30, vmax=5)
     if debug:
@@ -78,36 +98,41 @@ def ntk_cv(
         top_osdas = ((true - pred) ** 2).T.sum().sort_values()[:10]
         print(top_osdas.index)
     save_matrix(pred, TEN_FOLD_CROSS_VALIDATION_ENERGIES)
+    print("ntk_cv finished")
 
 
 def ntk_cv_transposed(
-    energy_type, prior, method="top_k", verbose=True, to_write=True, to_plot=False
+    energy_type=Energy_Type.BINDING,
+    prior_type="CustomZeolite", # "CustomZeoliteEmbeddings"
+    metric_method="top_k_in_top_k",
+    verbose=True,
+    to_write=True,
+    to_plot=False,
 ):
     """
     This method runs 10-fold cross validation on the 1194x209 Ground Truth matrix.
-    With Zeolites as rows (aka using Zeolite priors to predict energies for new Zeolites)
+    With Zeolites as rows (aka using Zeolite priors to predict energies for new Zeolites).
+
+    energy_type: Type of ground truth (default is binding energy)
+    prior_type: method of creating the prior
     """
     ground_truth, binary_data = get_ground_truth_energy_matrix(
         transpose=True, energy_type=energy_type
     )
-    # pred, true, mask = run_ntk(
-    #     ground_truth, prior="CustomZeoliteEmbeddings", metrics_mask=binary_data
-    # )
-    pred, true, mask = run_ntk(ground_truth, prior=prior, metrics_mask=binary_data)
-    # breakpoint()
+    pred, true, mask = run_ntk(ground_truth, prior=prior_type, metrics_mask=binary_data)
     results = calculate_metrics(
         pred.to_numpy(),
         true.to_numpy(),
         mask.to_numpy(),
         energy_type=Energy_Type.BINDING,
         verbose=verbose,
-        method=method,
+        method=metric_method,
         to_write=to_write,
         to_plot=to_plot,
     )
     pdb.set_trace()
 
-    print("finished! ")
+    print("ntk_cv_transpose finished")
 
 
 def ntk_cv_skinny():
