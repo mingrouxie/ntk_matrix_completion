@@ -38,7 +38,7 @@ import time
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 
 
-def buisness_as_normal(
+def ntk_cv(
     split_type=SplitType.NAIVE_SPLITS,
     debug=False,
     prune_index=None,
@@ -68,20 +68,20 @@ def buisness_as_normal(
         method="top_k_in_top_k",
     )
     plot_matrix(pred, "pred", vmin=-30, vmax=5)
-    if debug:
-        # Quick investigation of top 10 OSDAs
-        top_osdas = ((true - pred) ** 2).T.sum().sort_values()[:10]
-        # breakpoint()
-        # Let's print the renders of the top_osdas
-        print(top_osdas.index)
-        [
-            smile_to_property(osda, save_file=os.path.join(OUTPUT_DIR, osda))
-            for osda in top_osdas.index
-        ]
+    # if debug:
+    #     # Quick investigation of top 10 OSDAs
+    #     top_osdas = ((true - pred) ** 2).T.sum().sort_values()[:10]
+    #     # breakpoint()
+    #     # Let's print the renders of the top_osdas
+    #     print(top_osdas.index)
+    #     [
+    #         smile_to_property(osda, save_file=os.path.join(OUTPUT_DIR, osda))
+    #         for osda in top_osdas.index
+        # ]
     save_matrix(pred, TEN_FOLD_CROSS_VALIDATION_ENERGIES)
 
 
-def buisness_as_normal_transposed(
+def ntk_cv_transposed(
     energy_type, prior, method="top_k", verbose=True, to_write=True, to_plot=False
 ):
     """
@@ -111,7 +111,7 @@ def buisness_as_normal_transposed(
     print("finished! ")
 
 
-def buisness_as_normal_skinny():
+def ntk_cv_skinny():
     """
     This method runs 10-fold cross validation on the 1194x209 Ground Truth matrix made SKINNY.
     """
@@ -137,7 +137,7 @@ def buisness_as_normal_skinny():
     )
 
 
-def buisness_as_normal_transposed_over_many_priors(transpose=False, to_write=False):
+def ntk_cv_transposed_over_many_priors(transpose=False, to_write=False):
     """
     This method is an example of how to test a set of priors to see their individual performance.
     """
@@ -263,7 +263,7 @@ def buisness_as_normal_transposed_over_many_priors(transpose=False, to_write=Fal
 
     if to_write:
         df = pd.read_csv(io.StringIO("\n".join(results_print_out)), sep="\t")
-        df.to_csv("./buisness_as_normal_transposed_over_many_priors.csv")
+        df.to_csv("./ntk_cv_transposed_over_many_priors.csv")
 
     return results_print_out
 
@@ -280,7 +280,7 @@ if __name__ == "__main__":
     # double_sieved_priors_index = exploded_precomputed_prior.reindex(sieved_priors_index).dropna().index
     sieved_priors_index.name = "SMILES"
     # pdb.set_trace()
-    buisness_as_normal(
+    ntk_cv(
         split_type=SplitType.OSDA_ISOMER_SPLITS,
         debug=True,
         prune_index=sieved_priors_index,
@@ -288,9 +288,9 @@ if __name__ == "__main__":
     )
     pdb.set_trace()
 
-    # buisness_as_normal()
-    # buisness_as_normal_transposed()
-    # buisness_as_normal_transposed(
+    # ntk_cv()
+    # ntk_cv_transposed()
+    # ntk_cv_transposed(
     #     energy_type=Energy_Type.BINDING,
     #     prior="CustomZeolite",
     #     verbose=True,
@@ -298,10 +298,10 @@ if __name__ == "__main__":
     #     to_plot=True
     # )
     # skinny_ntk_sampled_not_sliced()
-    # buisness_as_normal_skinny()
-    # buisness_as_normal()
-    # buisness_as_normal_transposed()
-    # results_print_out = buisness_as_normal_transposed_over_many_priors(
+    # ntk_cv_skinny()
+    # ntk_cv()
+    # ntk_cv_transposed()
+    # results_print_out = ntk_cv_transposed_over_many_priors(
     #     transpose=True, to_write=True
     # )
     # print(len(results_print_out))
