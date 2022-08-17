@@ -103,7 +103,7 @@ def ntk_cv(
 
 def ntk_cv_transposed(
     energy_type=Energy_Type.BINDING,
-    prior_type="CustomZeolite", # "CustomZeoliteEmbeddings"
+    prior_type="CustomZeolite",  # "CustomZeoliteEmbeddings"
     metric_method="top_k_in_top_k",
     verbose=True,
     to_write=True,
@@ -161,60 +161,20 @@ def ntk_cv_skinny():
     )
 
 
-def ntk_cv_transposed_over_many_priors(transpose=False, to_write=False):
+def ntk_cv_compare_priors(priors_to_test, prior_type, transpose=False, to_write=False):
     """
-    This method is an example of how to test a set of priors to see their individual performance.
+    This method tests a set of priors to see their individual performance.
+    The NTK is run with 10-fold CV with each individual prior, and then once more with all the priors together
+
+    transpose: If True, matrix is transposed
+    to_write: If True, results are written to file
+    priors_to_test: iterable of priors to test
     """
     ground_truth, binary_data = get_ground_truth_energy_matrix(transpose=transpose)
-    if not transpose:  # osda
-        prior = "CustomOSDA"
-        priors_to_test = [
-            "mol_weights",
-            "volume",
-            "normalized_num_rotatable_bonds",
-            "formal_charge",
-            "asphericity",
-            "inertial_shape_factor",
-            "spherocity",
-            "eccentricity",
-            "gyration_radius",
-            "pmi1",
-            "pmi2",
-            "pmi3",
-            "npr1",
-            "npr2",
-            "free_sas",
-            "bertz_ct",
-        ]
-    else:
-        print(
-            "Some temporary stuff going on here please check you are calling the right thing"
-        )
-        breakpoint()
-        prior = "CustomZeolite"  # "CustomZeoliteEmbeddings"
-        priors_to_test = ZEOLITE_PRIOR_LOOKUP.keys()
-        priors_to_test = [  # TODO: Mingrou temporary, just to test the 0D
-            "cell_birth-of-top-1-0D-feature",
-            "cell_death-of-top-1-0D-feature",
-            "cell_persistence-of-top-1-0D-feature",
-            "cell_birth-of-top-2-0D-feature",
-            "cell_death-of-top-2-0D-feature",
-            "cell_persistence-of-top-2-0D-feature",
-            "cell_birth-of-top-3-0D-feature",
-            "cell_death-of-top-3-0D-feature",
-            "cell_persistence-of-top-3-0D-feature",
-            "supercell_birth-of-top-1-0D-feature",
-            "supercell_death-of-top-1-0D-feature",
-            "supercell_persistence-of-top-1-0D-feature",
-            "supercell_birth-of-top-2-0D-feature",
-            "supercell_death-of-top-2-0D-feature",
-            "supercell_persistence-of-top-2-0D-feature",
-            "supercell_birth-of-top-3-0D-feature",
-            "supercell_death-of-top-3-0D-feature",
-            "supercell_persistence-of-top-3-0D-feature",
-        ]
+    prior = prior_type
+    priors_to_test = priors_to_test
     results = []
-    # Let's do 10-fold cross validation & gather metrics for each prior by itself.
+    # 10-fold cross validation & gather metrics for each prior by itself.
     for prior_to_test in priors_to_test:
         pred, true, mask = run_ntk(
             ground_truth,
@@ -233,7 +193,8 @@ def ntk_cv_transposed_over_many_priors(transpose=False, to_write=False):
         )
         print(prior_to_test, metrics["top_5_accuracy"])
         results.append((prior_to_test, metrics))
-    # Let's get metrics for the baseline: identity
+
+    # Metrics for the baseline: identity
     identity_pred, identity_true, mask = run_ntk(
         ground_truth,
         prior="identity",
@@ -269,7 +230,7 @@ def ntk_cv_transposed_over_many_priors(transpose=False, to_write=False):
         "here are the results sorted by rmse & top_1_accuracy "
     )  # , results_print_out)
 
-    # Test all the priors together...
+    # Test all the priors together
     full_pred, full_true, mask = run_ntk(
         ground_truth, prior="identity", metrics_mask=binary_data, norm_factor=0.1
     )
@@ -287,7 +248,7 @@ def ntk_cv_transposed_over_many_priors(transpose=False, to_write=False):
 
     if to_write:
         df = pd.read_csv(io.StringIO("\n".join(results_print_out)), sep="\t")
-        df.to_csv("./ntk_cv_transposed_over_many_priors.csv")
+        df.to_csv("./ntk_cv_compare_priors.csv")
 
     return results_print_out
 
@@ -325,8 +286,57 @@ if __name__ == "__main__":
     # ntk_cv_skinny()
     # ntk_cv()
     # ntk_cv_transposed()
-    # results_print_out = ntk_cv_transposed_over_many_priors(
-    #     transpose=True, to_write=True
+
+    # osda_priors_to_test = [
+    #     "mol_weights",
+    #     "volume",
+    #     "normalized_num_rotatable_bonds",
+    #     "formal_charge",
+    #     "asphericity",
+    #     "inertial_shape_factor",
+    #     "spherocity",
+    #     "eccentricity",
+    #     "gyration_radius",
+    #     "pmi1",
+    #     "pmi2",
+    #     "pmi3",
+    #     "npr1",
+    #     "npr2",
+    #     "free_sas",
+    #     "bertz_ct",
+    # ]
+    # results_print_out = ntk_cv_compare_priors(
+    #     priors_to_test=zeolite_priors_to_test, prior_type="CustomOSDA", transpose=True, to_write=True
     # )
+
+    # zeolite_priors_to_test = [  # TODO: Mingrou temporary, just to test the 0D
+    #     "cell_birth-of-top-1-0D-feature",
+    #     "cell_death-of-top-1-0D-feature",
+    #     "cell_persistence-of-top-1-0D-feature",
+    #     "cell_birth-of-top-2-0D-feature",
+    #     "cell_death-of-top-2-0D-feature",
+    #     "cell_persistence-of-top-2-0D-feature",
+    #     "cell_birth-of-top-3-0D-feature",
+    #     "cell_death-of-top-3-0D-feature",
+    #     "cell_persistence-of-top-3-0D-feature",
+    #     "supercell_birth-of-top-1-0D-feature",
+    #     "supercell_death-of-top-1-0D-feature",
+    #     "supercell_persistence-of-top-1-0D-feature",
+    #     "supercell_birth-of-top-2-0D-feature",
+    #     "supercell_death-of-top-2-0D-feature",
+    #     "supercell_persistence-of-top-2-0D-feature",
+    #     "supercell_birth-of-top-3-0D-feature",
+    #     "supercell_death-of-top-3-0D-feature",
+    #     "supercell_persistence-of-top-3-0D-feature",
+    # ]
+    # OR
+    # zeolite_priors_to_test = ZEOLITE_PRIOR_LOOKUP.keys()
+    # results_print_out = ntk_cv_compare_priors(
+    #     priors_to_test=zeolite_priors_to_test,
+    #     prior_type="CustomZeolite",  # "CustomZeoliteEmbeddings"
+    #     transpose=True,
+    #     to_write=True,
+    # )
+
     # print(len(results_print_out))
     print(f"{(time.time() - start)/60} minutes taken")
