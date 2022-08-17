@@ -161,24 +161,38 @@ def ntk_cv_skinny():
     )
 
 
-def ntk_cv_compare_priors(priors_to_test, prior_type, transpose=False, to_write=False):
+def ntk_cv_compare_priors(
+    priors_to_test,
+    prior_type,
+    transpose=False,
+    to_write=False,
+    to_plot=True,
+    metric_method="top_k_in_top_k",
+    verbose=False,
+):
     """
     This method tests a set of priors to see their individual performance.
     The NTK is run with 10-fold CV with each individual prior, and then once more with all the priors together
 
     transpose: If True, matrix is transposed
-    to_write: If True, results are written to file
     priors_to_test: iterable of priors to test
+    to_write: If True, results are written to file
+    to_plot: If True, results are plotted
+    verbose: If True, prints analysis results
+
+    Returns:
+    CSV-readable iterable of results, which includes sorted per-prior and identity prior results, and the full results as well
     """
     ground_truth, binary_data = get_ground_truth_energy_matrix(transpose=transpose)
     prior = prior_type
     priors_to_test = priors_to_test
     results = []
-    # 10-fold cross validation & gather metrics for each prior by itself.
+
+    # 10-fold cross validation & metrics for each prior by itself.
     for prior_to_test in priors_to_test:
         pred, true, mask = run_ntk(
             ground_truth,
-            prior=prior,
+            prior=prior_type,
             metrics_mask=binary_data,
             prior_map={prior_to_test: 1.0},
         )
@@ -189,7 +203,7 @@ def ntk_cv_compare_priors(priors_to_test, prior_type, transpose=False, to_write=
             mask.to_numpy(),
             verbose=False,
             meta=prior_to_test,
-            method="top_k_in_top_k",
+            method=metric_method,
         )
         print(prior_to_test, metrics["top_5_accuracy"])
         results.append((prior_to_test, metrics))
@@ -205,13 +219,13 @@ def ntk_cv_compare_priors(priors_to_test, prior_type, transpose=False, to_write=
         identity_true.to_numpy(),
         mask.to_numpy(),
         verbose=False,
-        method="top_k_in_top_k",
+        method=metric_method,
     )
-
     results.append(("identity", identity_metrics))
+
+    # sort results
     results.sort(key=lambda x: x[1]["rmse_scores"])
     results.sort(key=lambda x: -x[1]["top_1_accuracy"])
-
     results_print_out = [
         r[0]
         + "\t"
@@ -226,25 +240,32 @@ def ntk_cv_compare_priors(priors_to_test, prior_type, transpose=False, to_write=
         + str(r[1]["top_5_accuracy"])
         for r in results
     ]
-    print(
-        "here are the results sorted by rmse & top_1_accuracy "
-    )  # , results_print_out)
+    # print(
+    #     "[NTK_COMPARE_PRIORS] Results sorted by rmse & top_1_accuracy ", results_print_out)
 
     # Test all the priors together
+    prior_map_full = dict([(p, 1.0) for p in priors_to_test])
     full_pred, full_true, mask = run_ntk(
-        ground_truth, prior="identity", metrics_mask=binary_data, norm_factor=0.1
+        ground_truth, 
+        prior=prior_type,
+        metrics_mask=binary_data,
+        prior_map=prior_map_full,
+        metrics_mask=binary_data, 
+        norm_factor=0.1
     )
     full_metrics = calculate_metrics(
         full_pred.to_numpy(),
         full_true.to_numpy(),
         mask.to_numpy(),
-        verbose=False,
-        method="top_k_in_top_k",
+        verbose=verbose,
+        method=metric_method,
     )
-    plot_matrix(full_pred, "full_pred")  # , vmin=0, vmax=2)
-    plot_matrix(full_true, "full_true")  # , vmin=0, vmax=2)
-    plot_top_k_curves(full_metrics["top_20_accuracies"])
-    print("full metrics run: ", full_metrics)
+    results.append(("full", full_metrics))
+
+    if to_plot:
+        plot_matrix(full_pred, "full_pred")  # , vmin=0, vmax=2)
+        plot_matrix(full_true, "full_true")  # , vmin=0, vmax=2)
+        plot_top_k_curves(full_metrics["top_20_accuracies"])
 
     if to_write:
         df = pd.read_csv(io.StringIO("\n".join(results_print_out)), sep="\t")
