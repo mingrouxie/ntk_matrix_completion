@@ -1,39 +1,26 @@
-from path_constants import (
-    OSDA_CONFORMER_PRIOR_FILE_SIEVED,
-    OSDA_PRIOR_FILE,
-    TEN_FOLD_CROSS_VALIDATION_ENERGIES,
-    ZEOLITE_PRIOR_SELECTION_FILE,
-    OUTPUT_DIR,
-    OSDA_CONFORMER_PRIOR_FILE,
-    OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
-    BINDING_GROUND_TRUTH,
-)
-from analysis_utilities import calculate_metrics
-from utilities import (
-    save_matrix,
-)
-from package_matrix import (
-    Energy_Type,
-    get_ground_truth_energy_matrix,
-    make_skinny,
-    unmake_skinny,
-)
-import sys
-import pathlib
-import pandas as pd
 import io
 import os
-from sklearn.model_selection import train_test_split
-
+import pathlib
 import pdb
-from utilities import plot_matrix
-from analysis_utilities import plot_top_k_curves
-from weights import ZEOLITE_PRIOR_LOOKUP, OSDA_PRIOR_LOOKUP
-from ntk import run_ntk, skinny_ntk_sampled_not_sliced, SplitType
-from precompute_osda_priors import smile_to_property
+import sys
+import time
 
 import numpy as np
-import time
+import pandas as pd
+from sklearn.model_selection import train_test_split
+
+from analysis_utilities import calculate_metrics, plot_top_k_curves
+from ntk import SplitType, run_ntk, skinny_ntk_sampled_not_sliced
+from package_matrix import (Energy_Type, get_ground_truth_energy_matrix,
+                            make_skinny, unmake_skinny)
+from path_constants import (BINDING_GROUND_TRUTH, OSDA_CONFORMER_PRIOR_FILE,
+                            OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
+                            OSDA_CONFORMER_PRIOR_FILE_SIEVED, OSDA_PRIOR_FILE,
+                            OUTPUT_DIR, TEN_FOLD_CROSS_VALIDATION_ENERGIES,
+                            ZEOLITE_PRIOR_SELECTION_FILE)
+from precompute_osda_priors import smile_to_property
+from utilities import plot_matrix, save_matrix
+from weights import OSDA_PRIOR_LOOKUP, ZEOLITE_PRIOR_LOOKUP
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 
