@@ -97,7 +97,7 @@ def get_tuned_model(
         y = y.reset_index().set_index(["SMILES", "Zeolite"])
         search.fit(X, y)
     elif search_type == "hyperopt":
-        from test_hyperopt import HyperoptSearchCV
+        from tests.test_hyperopt import HyperoptSearchCV
 
         fixed_params = {
             "objective": objective,

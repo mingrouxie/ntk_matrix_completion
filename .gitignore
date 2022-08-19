@@ -138,3 +138,7 @@ dmypy.json
 # numpy matrices
 *.npy
 *.npx
+data/priors/README.md
+data/truths/README.md
+runs/
+tests/

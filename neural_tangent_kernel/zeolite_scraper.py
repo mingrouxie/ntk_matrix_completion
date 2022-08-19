@@ -81,27 +81,27 @@ def scrape_framework_cs(url):
     properties["vertex_symbol"] = divs[13].text
     return properties
 
+if __name__ == '__main__':
+    TABLE = "https://america.iza-structure.org/IZA-SC/ftc_table.php"
+    URL_STEM = "https://america.iza-structure.org/IZA-SC/"
 
-TABLE = "https://america.iza-structure.org/IZA-SC/ftc_table.php"
-URL_STEM = "https://america.iza-structure.org/IZA-SC/"
-
-table_page = requests.get(TABLE)
-table_soup = BeautifulSoup(table_page.content, "html.parser")
-all_zeolites = table_soup.find_all("td", attrs={"class": "CodeTable"})
-zeolite_data = pd.DataFrame()
+    table_page = requests.get(TABLE)
+    table_soup = BeautifulSoup(table_page.content, "html.parser")
+    all_zeolites = table_soup.find_all("td", attrs={"class": "CodeTable"})
+    zeolite_data = pd.DataFrame()
 
 
-for zeolite in tqdm(all_zeolites):
-    code = zeolite.find("a").text.replace(" ", "")
-    url = URL_STEM + zeolite.find("a")["href"]
-    properties = scrape_main_page(url)
-    # This .replace() call is a bit hacky... but it works so...
-    framework_url = URL_STEM + zeolite.find("a")["href"].replace(
-        "framework.php", "framework_cs.php"
-    )
-    properties.update(scrape_framework_cs(framework_url))
-    series = pd.Series(properties)
-    series.name = code
-    zeolite_data = zeolite_data.append(series)
+    for zeolite in tqdm(all_zeolites):
+        code = zeolite.find("a").text.replace(" ", "")
+        url = URL_STEM + zeolite.find("a")["href"]
+        properties = scrape_main_page(url)
+        # This .replace() call is a bit hacky... but it works so...
+        framework_url = URL_STEM + zeolite.find("a")["href"].replace(
+            "framework.php", "framework_cs.php"
+        )
+        properties.update(scrape_framework_cs(framework_url))
+        series = pd.Series(properties)
+        series.name = code
+        zeolite_data = zeolite_data.append(series)
 
-save_matrix(zeolite_data, ZEOLITE_PRIOR_FILE)
+    save_matrix(zeolite_data, ZEOLITE_PRIOR_FILE)
