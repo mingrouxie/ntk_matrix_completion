@@ -1,6 +1,3 @@
-from pyexpat import model
-
-from sklearn import cluster
 from path_constants import (
     BINDING_CSV,
     OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
@@ -25,7 +22,6 @@ from sklearn.linear_model import (
     SGDRegressor,
     LassoCV,
 )
-from sklearn.datasets import load_breast_cancer, load_diabetes, load_wine
 from sklearn.metrics import auc, accuracy_score, confusion_matrix, mean_squared_error
 from sklearn.model_selection import (
     StratifiedKFold,
@@ -38,113 +34,41 @@ from sklearn.model_selection import (
 from scipy.stats import uniform, randint
 import xgboost
 from random_seeds import HYPPARAM_SEED, ISOMER_SEED, MODEL_SEED
+import matplotlib.pyplot as plt
 
-
-def thoughts():
-    # get ground truth data with get_ground_truth_energy_matrix
-    # also these models, if I am only feeding in OSDA priors then it would just
-    # predict the mean of the binding energies, right?
-    # If I train on only one zeolite, that's way too little data
-    # we could feed in the zeolite priors as well, that would help differentiate between the two
-
-    # okay on the test splits
-    # nothing to tune for NTK, can just use the results I alrdy have
-    # for this, can implement the data splits w the isomers, save them if you paranoid
-    # and then yknow yeah do the hyp param optimization
-    # and report final best train, and test performance
-    # Steal code if needed from psets
-
-    # if i want to code in similar fashion then
-    pass
-
-
-def test_xgboost():
-    X, y = load_diabetes(return_X_y=True)
-    xgb_whole_dataset(X, y)
-    xgb_cv(X, y, cv=10)
-    xgb_kfold(X, y, n_splits=10)
-    xgb_hyp_search(X, y)
-
-
-def xgb_whole_dataset(X, y, random_seed=HYPPARAM_SEED):
-    # step-by-step
-    xgb = xgboost.XGBRegressor(objective="reg:squarederror", random_state=random_seed)
-    xgb.fit(X, y)
-    y_pred = xgb.predict(X)
-    print("Whole dataset:", np.sqrt(mean_squared_error(y, y_pred)))
-
-
-def xgb_cv(X, y, cv=10, random_seed=HYPPARAM_SEED):
-    # CV
-    scores = cross_val_score(
-        xgboost.XGBRegressor(objective="reg:squarederror", random_state=random_seed),
-        X,
-        y,
-        scoring="neg_mean_squared_error",
-        cv=cv,
-    )
-    print("CV:", np.mean(np.sqrt(-scores)), np.std(np.sqrt(-scores)))
-
-
-def xgb_kfold(X, y, n_splits=10, random_seed=HYPPARAM_SEED):
-    # with k-fold
-    kfold = KFold(n_splits=n_splits, shuffle=True, random_state=random_seed)
-    scores = []
-    for train_idx, test_idx in kfold.split(X):
-        X_train, X_test = X[train_idx], X[test_idx]
-        y_train, y_test = y[train_idx], y[test_idx]
-        xgb = xgboost.XGBRegressor(
-            objective="reg:squarederror", random_state=random_seed
-        )
-        xgb.fit(X_train, y_train)
-        y_pred = xgb.predict(X_test)
-        scores.append(mean_squared_error(y_test, y_pred))
-    print("KFold:", np.mean(scores), np.std(scores))
-
-
-def test_get_tuned_xgb(X, y, cv=3):
-    # Hyperparameter search
-    xgb = xgboost.XGBRegressor()
-    params = {
-        "colsample_bytree": uniform(0.7, 0.3),  # default 1.0
-        "gamma": uniform(0, 0.5),  # default 0.0
-        "learning_rate": uniform(0.03, 0.3),  # default 0.1
-        "max_depth": randint(2, 8),  # default 3
-        "n_estimators": randint(100, 150),  # default 100
-        "subsample": uniform(0.6, 0.4),  # default 1.0
-    }
-    search = RandomizedSearchCV(
-        xgb,
-        param_distributions=params,
-        random_state=HYPPARAM_SEED,
-        n_iter=200,
-        cv=cv,  # can be a cv generator with split and get_n_splits methods
-        verbose=1,
-        n_jobs=1,
-        return_train_score=True,
-    )
-    search.fit(X, y)
-    report_best_scores(search.cv_results_, 1)
-    tuned_xgb = xgboost.XGBRegressor(*search.best_params_)
-    return tuned_xgb
 
 
 def get_tuned_model(
-    model,
     params,
     X,
     y,
-    cv=5,
+    k_folds=5,
     split_type=SplitType.OSDA_ISOMER_SPLITS,
     random_seed=MODEL_SEED,
-    objective="reg:squarederror",
+    objective="reg:squarederror", # "neg_root_mean_squared_error"
     nthread=5,
-    model_file=XGBOOST_MODEL_FILE,
+    search_type="random",
+    # test_cross_val=False, # change here
 ):
-    # Hyperparameter search
+    """Hyperparameter search for XGBRegressor"""
     print(f"Doing hyperparameter optimization")
     start = time.time()
-    if not model:
+
+    # get iterator for train-evaluation splits
+    if split_type == SplitType.OSDA_ISOMER_SPLITS:
+        # cv_generator = IsomerKFold(n_splits=cv)
+        cv_generator = get_isomer_chunks(
+            X.reset_index("Zeolite"),
+            metrics_mask=None,
+            k_folds=k_folds,  # TODO: cv=5 arbitrary
+        )
+    else:
+        print("What iterator do you want?")
+        breakpoint()
+
+    # tuning
+    if search_type == "random":
+        # IZC 2022 results were from this
         model = xgboost.XGBRegressor(
             objective=objective, random_state=random_seed, nthread=nthread
         )
@@ -159,29 +83,33 @@ def get_tuned_model(
             "reg_lambda": uniform(0.0, 1.0),
             "min_child_weight": uniform(1.0, 10),
         }
-    if split_type == SplitType.OSDA_ISOMER_SPLITS:
-        # cv_generator = IsomerKFold(n_splits=cv)
-        cv_generator = get_isomer_chunks(
-            X.reset_index("Zeolite"),
-            metrics_mask=None,
-            k_folds=cv,  # TODO: cv=5 arbitrary
+        search = RandomizedSearchCV(
+            model,
+            param_distributions=params,
+            random_state=HYPPARAM_SEED,
+            n_iter=100,  # TODO: arbitrary
+            cv=cv_generator,
+            verbose=3,
+            n_jobs=1,
+            return_train_score=True,
+            error_score="raise",
         )
-    search = RandomizedSearchCV(
-        # TODO: bayesian opt with hyper opt
-        # https://www.kaggle.com/code/prashant111/a-guide-on-xgboost-hyperparameters-tuning/notebook
-        model,
-        param_distributions=params,
-        random_state=HYPPARAM_SEED,
-        n_iter=100,  # TODO: arbitrary
-        cv=cv_generator,
-        verbose=3,
-        n_jobs=1,
-        return_train_score=True,
-        error_score="raise",
-    )
-    y = y.reset_index().set_index(["SMILES", "Zeolite"])
-    search.fit(X, y)
-    report_best_scores(search.cv_results_, 1)
+        y = y.reset_index().set_index(["SMILES", "Zeolite"])
+        search.fit(X, y)
+    elif search_type == "hyperopt":
+        from test_hyperopt import HyperoptSearchCV
+
+        fixed_params = {
+            "objective": objective,
+            "random_state": random_seed,
+            "nthread": nthread,
+        }
+        search = HyperoptSearchCV(X, y, cv=cv_generator, fixed_params=fixed_params)
+        search.fit()
+
+    # results
+    breakpoint()
+    report_best_scores(search, n_top=1, search_type=search_type)
     tuned_xgb = xgboost.XGBRegressor(
         objective=objective,
         random_state=random_seed,
@@ -195,26 +123,32 @@ def get_tuned_model(
 def main(
     energy_type=Energy_Type.BINDING,
     split_type=SplitType.OSDA_ISOMER_SPLITS,
-    k_folds=10,
-    seed=MODEL_SEED,
-    model=None,
-    prior="CustomOSDAVector",
+    k_folds=5,
+    prior_method="CustomOSDAandZeoliteAsRows",  # "CustomOSDAVector",
     stack_combined_priors="all",
     osda_prior_file=OSDA_CONFORMER_PRIOR_FILE_CLIPPED,  # TODO: generalize to substrate too
     optimize_hyperparameters=True,
     model_file=XGBOOST_MODEL_FILE,
+    search_type="random",
+    model=None,
 ):
+    # clean data
     sieved_priors_index = pd.read_pickle(OSDA_CONFORMER_PRIOR_FILE_CLIPPED).index
     sieved_priors_index.name = "SMILES"
-    ground_truth = pd.read_csv(BINDING_CSV)
+    if energy_type == Energy_Type.BINDING:
+        ground_truth = pd.read_csv(BINDING_CSV)
+    else:
+        print("Please work only with binding energies")
+        breakpoint()
     ground_truth = ground_truth[ground_truth["SMILES"].isin(sieved_priors_index)]
     ground_truth = ground_truth.set_index(["SMILES", "Zeolite"])
     ground_truth = ground_truth[["Binding (SiO2)"]]
 
+    # get priors
     X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior = make_prior(
         test=None,
         train=None,
-        method="CustomOSDAandZeoliteAsRows",
+        method=prior_method,
         normalization_factor=0,
         all_data=ground_truth,
         stack_combined_priors=False,
@@ -226,6 +160,7 @@ def main(
         X_osda_getaway_prior.shape,
         X_zeolite_prior.shape,
     )
+
     ### what to do with the retrieved priors
     if stack_combined_priors == "all":
         X = np.concatenate(
@@ -240,10 +175,16 @@ def main(
         breakpoint()
     X = pd.DataFrame(X, index=ground_truth.index)
     print("Final prior X shape:", X.shape)
+
+    # split data
     ground_truth = ground_truth.reset_index("Zeolite")
-    # get train_test_split by isomers
-    clustered_isomers = pd.Series(cluster_isomers(ground_truth.index).values())
-    clustered_isomers = clustered_isomers.sample(frac=1, random_state=ISOMER_SEED)
+    if split_type == SplitType.OSDA_ISOMER_SPLITS:
+        # get train_test_split by isomers
+        clustered_isomers = pd.Series(cluster_isomers(ground_truth.index).values())
+        clustered_isomers = clustered_isomers.sample(frac=1, random_state=ISOMER_SEED)
+    else:
+        print("What data splits do you want?")
+        breakpoint()
     clustered_isomers_train, clustered_isomers_test = train_test_split(
         clustered_isomers, test_size=0.1, random_state=ISOMER_SEED
     )
@@ -257,16 +198,19 @@ def main(
     )
     X_train = X.loc[smiles_train]
     X_test = X.loc[smiles_test]
+
     # hyperparameter tuning
     if optimize_hyperparameters:
         model, search = get_tuned_model(
-            model,
             params=None,
             X=X_train,
             y=ground_truth_train,
-            model_file=model_file,
+            k_folds=k_folds,
+            search_type=search_type,
         )
+
     # fit and predict tuned model
+    print("Using tuned model")
     breakpoint()
     model.fit(X_train, ground_truth_train)
     model.save_model(model_file)
@@ -274,15 +218,22 @@ def main(
     print("Train score: ", np.sqrt(mean_squared_error(ground_truth_train, y_pred)))
     y_pred = model.predict(X_test)
     print("Test score: ", np.sqrt(mean_squared_error(ground_truth_test, y_pred)))
+    y_pred - model.predict(X)
+    print("Overall score: ", np.sqrt(mean_squared_error(ground_truth, y_pred)))
+    breakpoint()
+    xgboost.plot_importance(model)
+    plt.figure(figsize = (16, 12))
+    plt.savefig("data/output/baseline_model/xgb_feature_importance.png")
     breakpoint()
 
 
 if __name__ == "__main__":
     # test_xgboost()
+
     main(
-        model=None,
         optimize_hyperparameters=True,
-        stack_combined_priors="osda"
+        stack_combined_priors="osda",
+        search_type="hyperopt",
     )
 
     # params = {
