@@ -57,13 +57,13 @@ sys.path.insert(
 
 # This method calculates binding energies for the 78K new OSDAs
 # using the Ground truth set of 1.19K x 200 matrix
-def calculate_energies_for_78K_osdas(energy='binding'):
+def calculate_energies_for_78K_osdas(energy="binding"):
     # training_data ends up as 1190 rows x 209 columns
-    if energy == 'binding':
+    if energy == "binding":
         training_data, _binary_data = get_ground_truth_energy_matrix(
             energy_type=Energy_Type.BINDING,
         )
-    elif energy == 'templating':
+    elif energy == "templating":
         training_data, _binary_data = get_ground_truth_energy_matrix(
             energy_type=Energy_Type.TEMPLATING,
         )
@@ -72,7 +72,9 @@ def calculate_energies_for_78K_osdas(energy='binding'):
     precomputed_priors = pd.read_pickle(OSDA_HYPOTHETICAL_PRIOR_FILE)
     # TODO(YITONG): look up all the columns that are not in the intersection with training_data
     # Drop those columns.
-    daniel_energies = daniel_energies.reindex(precomputed_priors.index).drop('inchi', axis =1)
+    daniel_energies = daniel_energies.reindex(precomputed_priors.index).drop(
+        "inchi", axis=1
+    )
 
     truth = daniel_energies.to_numpy()
     # We need to dedup indices so we're not testing on training samples. (only 2 overlap??? crazy)
@@ -108,7 +110,7 @@ def calculate_energies_for_78K_osdas(energy='binding'):
         # breakpoint()
         results = predict(all_data, mask, len(chunk), X)
         # predict energies for the OSDAs of chunk_size & append predictions to our growing list
-        predicted_energies = predicted_energies.append( 
+        predicted_energies = predicted_energies.append(
             pd.DataFrame(
                 results,
                 columns=all_data_columns,
@@ -147,7 +149,7 @@ def lets_look_at_predicted_energies():
         bag_where_we_beat_existing_OSDAs_with_labels.append((difference, col_index))
     plt.hist(bag_of_differences, bins=100)
     plt.show()
-    plt.savefig("histogram_where_were_lower_than_literature.png", dpi=30)
+    plt.savefig("data/output/histogram_where_were_lower_than_literature.png", dpi=30)
 
     bag_where_we_beat_existing_OSDAs_with_labels.sort(key=lambda x: x[0])
 
@@ -187,13 +189,13 @@ def lets_look_at_predicted_energies():
 
     plt.hist(differences_between_last_two, bins=30)
     plt.show()
-    plt.savefig("predicted_energy_difference_histogram.png", dpi=100)
+    plt.savefig("data/output/predicted_energy_difference_histogram.png", dpi=100)
     pdb.set_trace()
 
     # predicted_energies.mean(axis=1).max()
     skinny_energies = make_skinny(predicted_energies, col_1="Zeolite", col_2="index")
     skinny_energies.plot.hist(bins=30)
-    plt.savefig("predicted_energy_histogram.png", dpi=100)
+    plt.savefig("data/output/predicted_energy_histogram.png", dpi=100)
 
     # Sorted each energy
     skinny_energies = skinny_energies.sort_values(by=["value"])
@@ -236,7 +238,7 @@ def calculate_energies_for_tricyclohexylmethylphosphonium():
     mask[len(all_data) - len(chunk) :, :] = 0
     results = predict(all_data, mask, len(chunk), X)
     # predict energies for the OSDAs of chunk_size & append predictions to our growing list
-    predicted_energies = predicted_energies.append( 
+    predicted_energies = predicted_energies.append(
         pd.DataFrame(
             results,
             index=daniel_energies_chunk.index,
@@ -246,7 +248,6 @@ def calculate_energies_for_tricyclohexylmethylphosphonium():
     save_matrix(predicted_energies, OSDA_HYPOTHETICAL_PREDICTED_ENERGIES)
 
 
-
 def calculate_energies_for_new_zeolite():
     """
     Calculate energies for Zeo-1 using our ground truth matrix.
@@ -254,6 +255,7 @@ def calculate_energies_for_new_zeolite():
     ground_truth, binary_data = get_ground_truth_energy_matrix(
         energy_type=Energy_Type.TEMPLATING, transpose=True
     )
+
     def predict_for_new_zeolite(ground_truth, new_zeolites_df, zeolite):
         num_new_zeolites = len(new_zeolites_df)
         # add new zeolites to training data
@@ -281,8 +283,8 @@ def calculate_energies_for_new_zeolite():
 
     prediction_ntk = pd.DataFrame(series)
     prediction_ntk = prediction_ntk.T
-    prediction_ntk.to_csv("predicted_zeo1_osdas.csv")
-    prediction_ntk.to_pickle("predicted_zeo1_osdas.pkl")
+    prediction_ntk.to_csv("data/output/predicted_zeo1_osdas.csv")
+    prediction_ntk.to_pickle("data/output/predicted_zeo1_osdas.pkl")
 
     metrics_per_heldout_zeolite = []
     for zeolite in ground_truth.index:
@@ -301,7 +303,7 @@ def calculate_energies_for_new_zeolite():
         x_val = [x[0] for x in volume_rmse_pairs]
         y_val = [x[1] for x in volume_rmse_pairs]
         plt.scatter(x_val, y_val)
-        plt.savefig(feature + "_vs_volume.png", dpi=150)
+        plt.savefig("data/output/" + feature + "_vs_volume.png", dpi=150)
         slope, intercept, r_value, p_value, std_err = sp.stats.linregress(x_val, y_val)
         pdb.set_trace()
 
@@ -372,7 +374,7 @@ def calculate_energies_for_new_zeolite_skinny_style():
         x_val = [x[0] for x in volume_rmse_pairs]
         y_val = [x[1] for x in volume_rmse_pairs]
         plt.scatter(x_val, y_val)
-        plt.savefig(feature + "_vs_volume.png", dpi=150)
+        plt.savefig("data/output/" + feature + "_vs_volume.png", dpi=150)
         slope, intercept, r_value, p_value, std_err = sp.stats.linregress(x_val, y_val)
         print(
             feature + "_vs_volume ",
@@ -396,7 +398,7 @@ def calculate_energies_for_new_zeolite_skinny_style():
 
 if __name__ == "__main__":
     # calculate_energies_for_tricyclohexylmethylphosphonium()
-    calculate_energies_for_78K_osdas(energy='binding')
+    calculate_energies_for_78K_osdas(energy="binding")
     # lets_look_at_predicted_energies()
     # calculate_energies_for_new_zeolite()
     # calculate_energies_for_new_zeolite_skinny_style()
