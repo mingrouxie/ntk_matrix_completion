@@ -4,7 +4,7 @@ import pdb
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.absolute().parent))
 
-from neural_tangent_kernel.utilities import cluster_isomers
+from utils.utilities import cluster_isomers
 import unittest
 
 

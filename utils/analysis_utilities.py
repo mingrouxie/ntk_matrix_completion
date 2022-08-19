@@ -17,11 +17,11 @@ from sklearn.metrics import mean_squared_error
 from scipy.stats import spearmanr
 from sklearn.metrics import top_k_accuracy_score
 
-from package_matrix import Energy_Type
-from path_constants import PERFORMANCE_METRICS
+from utils.package_matrix import Energy_Type
+from utils.path_constants import PERFORMANCE_METRICS
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
-from utilities import (
+from utils.utilities import (
     plot_matrix,
 )
 

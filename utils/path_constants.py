@@ -42,11 +42,11 @@ OSDA_HYPOTHETICAL_PRIOR_FILE = (
 NTK OUTPUTS
 """
 OSDA_HYPOTHETICAL_PREDICTED_ENERGIES = (
-    "data/output/predicted_energies_for_78K_OSDAs.pkl"
+    "output/predicted_energies_for_78K_OSDAs.pkl"
 )
-ZEOLITE_HYPOTHETICAL_PREDICTED_ENERGIES = "data/output/predicted_energies_for_zeo1.pkl"
-TEN_FOLD_CROSS_VALIDATION_ENERGIES = "data/output/energy_predictions.pkl"
-PERFORMANCE_METRICS = "data/output/peformance_metrics.pkl"
-ZEOLITE_PRIOR_SELECTION_FILE = "data/output/zeolite_prior_selection.csv"
-OUTPUT_DIR = "data/output/"
-XGBOOST_MODEL_FILE = "data/output/baseline_model/xgboost.json"
+ZEOLITE_HYPOTHETICAL_PREDICTED_ENERGIES = "output/predicted_energies_for_zeo1.pkl"
+TEN_FOLD_CROSS_VALIDATION_ENERGIES = "output/energy_predictions.pkl"
+PERFORMANCE_METRICS = "output/peformance_metrics.pkl"
+ZEOLITE_PRIOR_SELECTION_FILE = "output/zeolite_prior_selection.csv"
+OUTPUT_DIR = "output/"
+XGBOOST_MODEL_FILE = "output/baseline_model/xgboost.json"

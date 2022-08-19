@@ -14,7 +14,7 @@ from rdkit.Chem import RemoveAllHs, AddHs
 # from rdkit.Chem import RemoveAllHs
 import random
 
-from random_seeds import ISOMER_SEED, SUBSTRATE_SEED
+from utils.random_seeds import ISOMER_SEED, SUBSTRATE_SEED
 
 
 def plot_matrix(M, file_name, mask=None, vmin=16, vmax=23, to_save=True):

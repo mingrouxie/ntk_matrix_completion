@@ -3,10 +3,10 @@ import pathlib
 
 import pdb
 from typing import List
-from utilities import plot_matrix
-from analysis_utilities import plot_top_k_curves
+from utils.utilities import plot_matrix
+from utils.analysis_utilities import plot_top_k_curves
 import numpy as np
-from package_matrix import package_dataloader
+from utils.package_matrix import package_dataloader
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -15,7 +15,7 @@ from ntk import run_ntk, skinny_ntk_sampled_not_sliced
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 
-from package_matrix import (
+from utils.package_matrix import (
     Energy_Type,
     get_ground_truth_energy_matrix,
     make_skinny,
@@ -27,7 +27,7 @@ from utilities import (
 
 import torch
 import torch.nn as nn
-from analysis_utilities import calculate_metrics
+from utils.analysis_utilities import calculate_metrics
 from path_constants import (
     TEN_FOLD_CROSS_VALIDATION_ENERGIES,
 )

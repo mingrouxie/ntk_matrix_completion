@@ -6,16 +6,16 @@ import torch
 import numpy as np
 import pandas as pd
 from enum import Enum
-from path_constants import BINDING_GROUND_TRUTH, TEMPLATING_GROUND_TRUTH, BINDING_CSV, OSDA_PRIOR_FILE
+from utils.path_constants import BINDING_GROUND_TRUTH, TEMPLATING_GROUND_TRUTH, BINDING_CSV, OSDA_PRIOR_FILE
 from sklearn.model_selection import train_test_split
-from precompute_osda_priors import precompute_priors_for_780K_Osdas
-from prior import make_prior
+from features.precompute_osda_priors import precompute_priors_for_780K_Osdas
+from features.prior import make_prior
 from torch.utils.data import TensorDataset
-from random_seeds import PACKAGE_LOADER_SEED
-from non_binding import NonBinding, fill_non_bind
+from utils.random_seeds import PACKAGE_LOADER_SEED
+from utils.non_binding import NonBinding, fill_non_bind
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
-from utilities import (
+from utils.utilities import (
     save_matrix,
 )
 

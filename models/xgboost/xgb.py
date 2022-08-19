@@ -1,14 +1,13 @@
-from path_constants import (
+from utils.path_constants import (
     BINDING_CSV,
     OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
     OSDA_CONFORMER_PRIOR_FILE_SIEVED,
     OSDA_PRIOR_FILE,
     XGBOOST_MODEL_FILE,
 )
-from utilities import get_isomer_chunks, report_best_scores, cluster_isomers
-from utilities import IsomerKFold
-from package_matrix import Energy_Type, get_ground_truth_energy_matrix
-from prior import make_prior
+from utils.utilities import get_isomer_chunks, report_best_scores, cluster_isomers, IsomerKFold
+from utils.package_matrix import Energy_Type, get_ground_truth_energy_matrix
+from features.prior import make_prior
 from ntk import create_iterator, SplitType
 import os
 import sys
@@ -31,11 +30,10 @@ from sklearn.model_selection import (
     RandomizedSearchCV,
     train_test_split,
 )
-from scipy.stats import uniform, randint
 import xgboost
-from random_seeds import HYPPARAM_SEED, ISOMER_SEED, MODEL_SEED
+from utils.random_seeds import HYPPARAM_SEED, ISOMER_SEED, MODEL_SEED
 import matplotlib.pyplot as plt
-
+from configs.xgb_hp import get_hp_space
 
 
 def get_tuned_model(
@@ -45,7 +43,7 @@ def get_tuned_model(
     k_folds=5,
     split_type=SplitType.OSDA_ISOMER_SPLITS,
     random_seed=MODEL_SEED,
-    objective="reg:squarederror", # "neg_root_mean_squared_error"
+    objective="reg:squarederror",  # "neg_root_mean_squared_error"
     nthread=5,
     search_type="random",
     # test_cross_val=False, # change here
@@ -72,17 +70,7 @@ def get_tuned_model(
         model = xgboost.XGBRegressor(
             objective=objective, random_state=random_seed, nthread=nthread
         )
-        params = {
-            "colsample_bytree": uniform(0.0, 1.0),
-            "gamma": uniform(0, 0.5),
-            "learning_rate": uniform(0.03, 0.3),  # default 0.1
-            "max_depth": randint(2, 8),  # default 3
-            "n_estimators": randint(100, 150),  # default 100
-            "subsample": uniform(0.6, 0.4),
-            "reg_alpha": uniform(0.0, 1.0),
-            "reg_lambda": uniform(0.0, 1.0),
-            "min_child_weight": uniform(1.0, 10),
-        }
+        params = get_hp_space()
         search = RandomizedSearchCV(
             model,
             param_distributions=params,
@@ -96,7 +84,26 @@ def get_tuned_model(
         )
         y = y.reset_index().set_index(["SMILES", "Zeolite"])
         search.fit(X, y)
-    elif search_type == "hyperopt":
+
+    elif search_type == "grid":
+        model = xgboost.XGBRegressor(
+            objective=objective, random_state=random_seed, nthread=nthread
+        )
+        params = get_hp_space()
+        search = GridSearchCV(
+            model,
+            param_grid=params,
+            random_state=HYPPARAM_SEED,
+            cv=cv_generator,
+            verbose=3,
+            n_jobs=1,
+            return_train_score=True,
+            error_score="raise",
+        )
+        y = y.reset_index().set_index(["SMILES", "Zeolite"])
+        search.fit(X, y)
+        
+    elif search_type == "hyperopt":  # TODO: DOES THIS WORK???
         from tests.test_hyperopt import HyperoptSearchCV
 
         fixed_params = {
@@ -201,6 +208,7 @@ def main(
 
     # hyperparameter tuning
     if optimize_hyperparameters:
+        print("Tuning hyperparameters now")
         model, search = get_tuned_model(
             params=None,
             X=X_train,
@@ -222,7 +230,7 @@ def main(
     print("Overall score: ", np.sqrt(mean_squared_error(ground_truth, y_pred)))
     breakpoint()
     xgboost.plot_importance(model)
-    plt.figure(figsize = (16, 12))
+    plt.figure(figsize=(16, 12))
     plt.savefig("data/output/baseline_model/xgb_feature_importance.png")
     breakpoint()
 

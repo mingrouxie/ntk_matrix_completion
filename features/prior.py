@@ -1,7 +1,7 @@
 import multiprocessing
 from math import ceil
 from itertools import product
-from path_constants import (
+from utils.path_constants import (
     HYPOTHETICAL_OSDA_ENERGIES,
     ZEOLITE_PRIOR_FILE,
     HANDCRAFTED_ZEOLITE_PRIOR_FILE,
@@ -16,7 +16,7 @@ from path_constants import (
     # TEMP_0D_PRIOR_FILE,
     OSDA_ZEO1_PRIOR_FILE,
 )
-from weights import ZEOLITE_PRIOR_LOOKUP, OSDA_PRIOR_LOOKUP
+from configs.weights import ZEOLITE_PRIOR_LOOKUP, OSDA_PRIOR_LOOKUP
 import numpy as np
 from numpy.linalg import norm
 import pandas as pd

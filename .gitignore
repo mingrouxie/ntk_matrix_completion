@@ -145,3 +145,4 @@ data/truths/README.md
 data/*
 runs/
 tests/
+models/neural_tangent_kernel/.DS_Store

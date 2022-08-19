@@ -1,7 +1,7 @@
 import multiprocessing
 from math import ceil
 from itertools import product
-from path_constants import (
+from utils.path_constants import (
     BINDING_GROUND_TRUTH,
     OSDA_PRIOR_FILE,
     OSDA_HYPOTHETICAL_PRIOR_FILE,

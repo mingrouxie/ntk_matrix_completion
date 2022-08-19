@@ -3,13 +3,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-from package_matrix import get_ground_truth_energy_matrix
-from prior import load_vector_priors
+from utils.package_matrix import get_ground_truth_energy_matrix
+from features.prior import load_vector_priors
 import pdb
 import os
-from package_matrix import make_skinny
-from precompute_osda_priors import smile_to_property
-from path_constants import (
+from utils.package_matrix import make_skinny
+from features.precompute_osda_priors import smile_to_property
+from utils.path_constants import (
     HYPOTHETICAL_OSDA_ENERGIES,
     OSDA_HYPOTHETICAL_PRIOR_FILE,
     OSDA_HYPOTHETICAL_PREDICTED_ENERGIES,

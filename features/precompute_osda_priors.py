@@ -12,14 +12,14 @@ import os
 import pathlib
 import time
 
-from path_constants import (
+from utils.path_constants import (
     TEMPLATING_GROUND_TRUTH,
     HYPOTHETICAL_OSDA_ENERGIES,
     HYPOTHETICAL_OSDA_BOXES,
     OSDA_PRIOR_FILE,
     OSDA_HYPOTHETICAL_PRIOR_FILE,
 )
-from utilities import save_matrix
+from utils.utilities import save_matrix
 
 
 @lru_cache(maxsize=16384)

@@ -1,4 +1,4 @@
-from path_constants import (
+from utils.path_constants import (
     OSDA_CONFORMER_PRIOR_FILE_SIEVED,
     OSDA_PRIOR_FILE,
     TEN_FOLD_CROSS_VALIDATION_ENERGIES,
@@ -8,11 +8,11 @@ from path_constants import (
     OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
     BINDING_GROUND_TRUTH,
 )
-from analysis_utilities import calculate_metrics
-from utilities import (
+from utils.analysis_utilities import calculate_metrics
+from utils.utilities import (
     save_matrix,
 )
-from package_matrix import (
+from utils.package_matrix import (
     Energy_Type,
     get_ground_truth_energy_matrix,
     make_skinny,
@@ -26,12 +26,12 @@ import os
 from sklearn.model_selection import train_test_split
 
 import pdb
-from utilities import plot_matrix
-from analysis_utilities import plot_top_k_curves
-from weights import ZEOLITE_PRIOR_LOOKUP, OSDA_PRIOR_LOOKUP
+from utils.utilities import plot_matrix
+from utils.analysis_utilities import plot_top_k_curves
+from configs.weights import ZEOLITE_PRIOR_LOOKUP, OSDA_PRIOR_LOOKUP
 from ntk import run_ntk, skinny_ntk_sampled_not_sliced, SplitType
-from precompute_osda_priors import smile_to_property
-from random_seeds import SUBSTRATE_PRIOR_SELECTION_SEED
+from features.precompute_osda_priors import smile_to_property
+from utils.random_seeds import SUBSTRATE_PRIOR_SELECTION_SEED
 import numpy as np
 import time
 

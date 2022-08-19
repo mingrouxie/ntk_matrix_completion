@@ -3,29 +3,29 @@ import pathlib
 import os
 from typing_extensions import TypedDict
 
-from prior import make_prior
+from features.prior import make_prior
 import matplotlib.pyplot as plt
 import pdb
 import numpy as np
 import pandas as pd
 from auto_tqdm import tqdm
-from precompute_osda_priors import smile_to_property
+from features.precompute_osda_priors import smile_to_property
 from scipy.sparse import csc_matrix
 import scipy as sp
 import time
-from utilities import plot_matrix
+from utils.utilities import plot_matrix
 
-from prior import zeolite_prior
-from analysis_utilities import calculate_top_k_accuracy
-from ooc_matrix_multiplication import ooc_dot
+from features.prior import zeolite_prior
+from utils.analysis_utilities import calculate_top_k_accuracy
+from tests.ooc_matrix_multiplication import ooc_dot
 from eigenpro.eigenpro import FKR_EigenPro
-from analysis_utilities import examine_osda_feature_causes, plot_volume
+from utils.analysis_utilities import examine_osda_feature_causes, plot_volume
 
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 
 from ntk import predict
-from package_matrix import (
+from utils.package_matrix import (
     Energy_Type,
     get_ground_truth_energy_matrix,
     make_skinny,
@@ -37,7 +37,7 @@ from utilities import (
     save_matrix,
     chunks,
 )
-from analysis_utilities import calculate_metrics
+from utils.analysis_utilities import calculate_metrics
 from path_constants import (
     HYPOTHETICAL_OSDA_ENERGIES,
     HYPOTHETICAL_OSDA_BOXES,
