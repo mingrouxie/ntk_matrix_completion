@@ -12,7 +12,7 @@ from precompute_osda_priors import precompute_priors_for_780K_Osdas
 from prior import make_prior
 from torch.utils.data import TensorDataset
 from random_seeds import PACKAGE_LOADER_SEED
-from non_binding import NonBinding
+from non_binding import NonBinding, fill_non_bind
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 from utilities import (
@@ -123,18 +123,7 @@ def get_ground_truth_energy_matrix(
     binary_data[binary_data != 0] = 1
 
     # treat non-binding entries
-    if non_binding == NonBinding.ROW_MEAN:
-        ground_truth = ground_truth.apply(lambda row: row.fillna(row.mean()), axis=1)
-    elif non_binding == NonBinding.SMALL_POS:
-        ground_truth = ground_truth.apply(lambda row: row.fillna(1e-5), axis=1)
-    elif non_binding == NonBinding.LARGE_POS:
-        # ground_truth = ground_truth.apply(lambda row: row.fillna(5), axis=1)
-        ground_truth = ground_truth.apply(lambda row: row.fillna(10), axis=1)
-        # ground_truth = ground_truth.apply(lambda row: row.fillna(30), axis=1)
-    elif non_binding == NonBinding.MAX_PLUS:
-        ground_truth = ground_truth.apply(lambda row: row.fillna(row.max() * 1.01), axis=1)
-    else:
-        raise Exception("Non-binding treatment unrecognised:", non_binding)
+    ground_truth = fill_non_bind(ground_truth, non_binding)
 
     ground_truth = ground_truth.dropna(thresh=1)
     # Let's take out rows that have just no  energies at all...
