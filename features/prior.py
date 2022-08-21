@@ -1,7 +1,21 @@
-import multiprocessing
-from math import ceil
-from itertools import product
-from utils.path_constants import (
+import numpy as np
+import pandas as pd
+import os
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+
+# from auto_tqdm import tqdm
+import os
+import pathlib
+import math
+import scipy as sp
+
+from scipy.sparse import csc_matrix
+from functools import lru_cache
+from numpy.linalg import norm
+from sklearn.preprocessing import normalize, OneHotEncoder
+
+from ntk_matrix_completion.utils.path_constants import (
     HYPOTHETICAL_OSDA_ENERGIES,
     ZEOLITE_PRIOR_FILE,
     HANDCRAFTED_ZEOLITE_PRIOR_FILE,
@@ -16,27 +30,10 @@ from utils.path_constants import (
     # TEMP_0D_PRIOR_FILE,
     OSDA_ZEO1_PRIOR_FILE,
 )
-from configs.weights import ZEOLITE_PRIOR_LOOKUP, OSDA_PRIOR_LOOKUP
-import numpy as np
-from numpy.linalg import norm
-import pandas as pd
-import pdb
-import os
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-import pdb
-from functools import lru_cache
-
-# from auto_tqdm import tqdm
-import os
-import pathlib
-import math
-from scipy.sparse import csc_matrix
-import scipy as sp
-from functools import lru_cache
-
-from sklearn.preprocessing import normalize, OneHotEncoder
-import time
+from ntk_matrix_completion.configs.weights import (
+    ZEOLITE_PRIOR_LOOKUP,
+    OSDA_PRIOR_LOOKUP,
+)
 
 VALID_METHODS = {
     "identity",
@@ -239,7 +236,10 @@ def load_prior(
     # TODO: this line obscures changes in data points (dropping rows when priors are NaN etc.)
     # We NEED TO CHANGE THIS
     # ring sizes as well for zeolites, after ring_size_1
-    print(f"Precomputed prior has this many NaN entries:", precomputed_prior.isna().sum().sum())
+    print(
+        f"Precomputed prior has this many NaN entries:",
+        precomputed_prior.isna().sum().sum(),
+    )
     # results = precomputed_prior.fillna(0.0)
     results = precomputed_prior.dropna()
 
@@ -252,7 +252,7 @@ def load_prior(
         results = precomputed_prior.apply(
             lambda x: x * column_weights[x.name] / normalization_factor
         )
-    
+
     return (1 - identity_weight) * results
 
 
@@ -343,7 +343,7 @@ def zeolite_prior(
         identity_weight,
         normalize,
         ZEOLITE_PRIOR_MAP,
-        other_prior_to_concat=None, #ZEO_1_PRIOR,
+        other_prior_to_concat=None,  # ZEO_1_PRIOR,
     )
 
 
@@ -406,7 +406,7 @@ def osda_zeolite_combined_prior(
         identity_weight,
         normalize,
         ZEOLITE_PRIOR_MAP,
-        other_prior_to_concat=None
+        other_prior_to_concat=None,
     ).to_numpy()
     if not stack:
         # pdb.set_trace()

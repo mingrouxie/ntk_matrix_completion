@@ -1,37 +1,34 @@
 import sys
 import pathlib
-
 import pdb
 from typing import List
-from utils.utilities import plot_matrix
-from utils.analysis_utilities import plot_top_k_curves
 import numpy as np
-from utils.package_matrix import package_dataloader
-from torch.utils.tensorboard import SummaryWriter
+import torch
+import torch.nn as nn
+from dataclasses import dataclass
 
 
-from ntk import run_ntk, skinny_ntk_sampled_not_sliced
-
-
-sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
-
-from utils.package_matrix import (
+from ntk_matrix_completion.utils.analysis_utilities import (
+    plot_top_k_curves,
+    calculate_metrics,
+)
+from ntk_matrix_completion.models.neural_tangent_kernel.ntk import (
+    run_ntk,
+    skinny_ntk_sampled_not_sliced,
+)
+from ntk_matrix_completion.utils.package_matrix import (
     Energy_Type,
     get_ground_truth_energy_matrix,
     make_skinny,
     unmake_skinny,
+    package_dataloader,
 )
-from utilities import (
-    save_matrix,
-)
-
-import torch
-import torch.nn as nn
-from utils.analysis_utilities import calculate_metrics
-from path_constants import (
+from ntk_matrix_completion.utils.utilities import save_matrix, plot_matrix
+from ntk_matrix_completion.utils.path_constants import (
     TEN_FOLD_CROSS_VALIDATION_ENERGIES,
 )
-from dataclasses import dataclass
+
+sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 
 
 class MLP(nn.Module):
@@ -161,5 +158,6 @@ def main():
     print("hello yitong")
     writer.close()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

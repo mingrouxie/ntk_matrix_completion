@@ -1,39 +1,38 @@
 import sys
 import pathlib
 import os
-from typing_extensions import TypedDict
+import torch
 
 from features.prior import make_prior
-import matplotlib.pyplot as plt
 import pdb
 import numpy as np
 import pandas as pd
 from auto_tqdm import tqdm
-from features.precompute_osda_priors import smile_to_property
-from scipy.sparse import csc_matrix
-import scipy as sp
-import time
-from utils.utilities import plot_matrix
+from enum import Enum
 
-from features.prior import zeolite_prior
-from utils.analysis_utilities import calculate_top_k_accuracy
-from tests.ooc_matrix_multiplication import ooc_dot
-from eigenpro.eigenpro import FKR_EigenPro
-import torch
-
-
-sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
-
-from utils.package_matrix import (
+from ntk_matrix_completion.features.precompute_osda_priors import smile_to_property
+from ntk_matrix_completion.features.prior import zeolite_prior
+from ntk_matrix_completion.tests.ooc_matrix_multiplication import ooc_dot
+from ntk_matrix_completion.models.neural_tangent_kernel.eigenpro.eigenpro import (
+    FKR_EigenPro,
+)
+from ntk_matrix_completion.utils.package_matrix import (
     Energy_Type,
     get_ground_truth_energy_matrix,
     make_skinny,
     unmake_skinny,
 )
-from utils.utilities import get_splits_in_zeolite_type, save_matrix, chunks, get_isomer_chunks
-from enum import Enum
-from utils.analysis_utilities import calculate_metrics
-from utils.path_constants import (
+from ntk_matrix_completion.utils.utilities import (
+    get_splits_in_zeolite_type,
+    save_matrix,
+    chunks,
+    get_isomer_chunks,
+)
+from ntk_matrix_completion.utils.analysis_utilities import (
+    calculate_metrics,
+    calculate_top_k_accuracy,
+)
+from ntk_matrix_completion.utils.path_constants import (
     HYPOTHETICAL_OSDA_ENERGIES,
     HYPOTHETICAL_OSDA_BOXES,
     OSDA_HYPOTHETICAL_PRIOR_FILE,
@@ -41,10 +40,11 @@ from utils.path_constants import (
     ZEOLITE_HYPOTHETICAL_PREDICTED_ENERGIES,
     TEN_FOLD_CROSS_VALIDATION_ENERGIES,
     ZEO_1_PRIOR,
-    OSDA_PRIOR_FILE
+    OSDA_PRIOR_FILE,
 )
-from utils.random_seeds import MODEL_SEED
+from ntk_matrix_completion.utils.random_seeds import MODEL_SEED
 
+sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 sys.path.insert(
     1, os.path.join(str(pathlib.Path(__file__).parent.absolute().parent), "graphical")
 )
@@ -75,12 +75,12 @@ def predict(all_data, mask, num_test_rows, X, reduce_footprint=False):
     Run the NTK Matrix Completion Algorithm
     https://arxiv.org/abs/2108.00131
     """
-    if reduce_footprint: 
+    if reduce_footprint:
         # For whatever reason this throws everything off...
         X = X.astype(np.float32)
         all_data = all_data.astype(np.float32)
         mask = mask.astype(np.float32)
-    all_data = all_data.T # columns are being filled in
+    all_data = all_data.T  # columns are being filled in
     mask = mask.T
     num_observed = int(np.sum(mask[0:1, :]))
     num_missing = mask[0:1, :].shape[-1] - num_observed
@@ -89,7 +89,7 @@ def predict(all_data, mask, num_test_rows, X, reduce_footprint=False):
     k_matrix = np.zeros((num_observed, num_missing))
     observed_data = all_data[:, :num_observed]
     observed_data = observed_data.astype("float64")
-    X_cross_terms = kappa(np.clip(X @ X.T, -1, 1)) # kernel
+    X_cross_terms = kappa(np.clip(X @ X.T, -1, 1))  # kernel
     K_matrix[:, :] = X_cross_terms[:num_observed, :num_observed]
     k_matrix[:, :] = X_cross_terms[
         :num_observed, num_observed : num_observed + num_missing
@@ -99,7 +99,7 @@ def predict(all_data, mask, num_test_rows, X, reduce_footprint=False):
     # plot_matrix(K_matrix, 'big_K', vmin=0, vmax=2)
     # plot_matrix(X, 'X', vmin=0, vmax=1)
 
-    results = np.linalg.solve(K_matrix, observed_data.T).T @ k_matrix #pg21 in paper
+    results = np.linalg.solve(K_matrix, observed_data.T).T @ k_matrix  # pg21 in paper
     assert results.shape == (all_data.shape[0], num_test_rows), "Results malformed"
     # breakpoint()
 
@@ -186,14 +186,19 @@ def run_ntk(
         X = np.nan_to_num(X, copy=True, nan=0.0)
         # breakpoint()
         # TODO (Mingrou): Check with Yitong why the code worked before without this line
-        # TODO: another fillna? Oh dear. Please extract all data preprocessing into one script 
+        # TODO: another fillna? Oh dear. Please extract all data preprocessing into one script
         # And, also, just have cleaner data files in general. Use percentile?
         # DEBUG 1092 and 1096. These look suspiciously familiar
-        # {'C[C@H]1C[N+]2(CCCCC[N+]3(C)CCCCC3)CCC1CC2', 
-        # 'C[C@@H]1C[N+]2(CCCCC[N+]3(C)CCCCC3)CCC1CC2', 
-        # 'C1CN2CCC1CC2', 
+        # {'C[C@H]1C[N+]2(CCCCC[N+]3(C)CCCCC3)CCC1CC2',
+        # 'C[C@@H]1C[N+]2(CCCCC[N+]3(C)CCCCC3)CCC1CC2',
+        # 'C1CN2CCC1CC2',
         # 'C[N+]1(CC2CCCCC2)CCC(CCCC2CC[N+](C)(CC3CCCCC3)CC2)CC1'}
-        print("ntk/run_ntk: Predicting for data of shape", all_data.shape, mask.shape, X.shape)
+        print(
+            "ntk/run_ntk: Predicting for data of shape",
+            all_data.shape,
+            mask.shape,
+            X.shape,
+        )
         print("Test set size:", test.shape)
         results_ntk = predict(all_data, mask, len(test), X=X)
         print("results_ntk of shape", results_ntk.shape)
@@ -217,7 +222,12 @@ def run_ntk(
     # We return aggregate_pred, aggregate_true, aggregate_mask.
     # Aggregate_mask is necessary to keep track of which cells in the matrix are
     # non-binding (for spearman & rmse calculation) when shuffled_iterator=True
-    print("Returning data of shape", aggregate_pred.shape, aggregate_true.shape, aggregate_mask.shape)
+    print(
+        "Returning data of shape",
+        aggregate_pred.shape,
+        aggregate_true.shape,
+        aggregate_mask.shape,
+    )
     return aggregate_pred, aggregate_true, aggregate_mask
 
 
@@ -230,11 +240,11 @@ def euclidean_distances(samples, centers, squared=True):
     Returns:
         pointwise distances (n_sample, n_center).
     """
-    samples_norm = torch.sum(samples ** 2, dim=1, keepdim=True)
+    samples_norm = torch.sum(samples**2, dim=1, keepdim=True)
     if samples is centers:
         centers_norm = samples_norm
     else:
-        centers_norm = torch.sum(centers ** 2, dim=1, keepdim=True)
+        centers_norm = torch.sum(centers**2, dim=1, keepdim=True)
     centers_norm = torch.reshape(centers_norm, (1, -1))
 
     distances = samples.mm(torch.t(centers))
@@ -260,7 +270,7 @@ def gaussian(samples, centers, bandwidth):
     assert bandwidth > 0
     kernel_mat = euclidean_distances(samples, centers)
     kernel_mat.clamp_(min=0)
-    gamma = 1.0 / (2 * bandwidth ** 2)
+    gamma = 1.0 / (2 * bandwidth**2)
     kernel_mat.mul_(-gamma)
     kernel_mat.exp_()
     return kernel_mat

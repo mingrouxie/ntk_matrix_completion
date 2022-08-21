@@ -12,14 +12,14 @@ import os
 import pathlib
 import time
 
-from utils.path_constants import (
+from ntk_matrix_completion.utils.path_constants import (
     TEMPLATING_GROUND_TRUTH,
     HYPOTHETICAL_OSDA_ENERGIES,
     HYPOTHETICAL_OSDA_BOXES,
     OSDA_PRIOR_FILE,
     OSDA_HYPOTHETICAL_PRIOR_FILE,
 )
-from utils.utilities import save_matrix
+from ntk_matrix_completion.utils.utilities import save_matrix
 
 
 @lru_cache(maxsize=16384)
@@ -324,10 +324,11 @@ def append_oneoff_prior(
 
 
 if __name__ == "__main__":
+    from utils.random_seeds import ISOMER_SEED, SUBSTRATE_SEED
     # precompute_oneoff_prior("CC[N+]12C[N@]3C[N@@](C1)C[N@](C2)C3", "missing_OSDA_1.pkl", 150)
     # precompute_oneoff_prior(
     #     "C[C@H]1CC[N+](C)(C)[C@@H]2C[C@@H]1C2(C)C", "missing_OSDA_2.pkl"
     # )
-    prior_from_ground_truth_matrix()
+    # prior_from_ground_truth_matrix()
     # precompute_oneoff_prior()
     # precompute_priors_for_780K_Osdas()

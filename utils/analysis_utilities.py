@@ -4,21 +4,21 @@ import pathlib
 import os
 from tabnanny import verbose
 import scipy as sp
+import numpy as np
 import pandas as pd
 import pdb
-from pandas.core.frame import DataFrame
-
 import math
+
+from pandas.core.frame import DataFrame
 import matplotlib.pyplot as plt
-import numpy as np
 from scipy.spatial.distance import cosine
 from sklearn.metrics import r2_score
 from sklearn.metrics import mean_squared_error
 from scipy.stats import spearmanr
 from sklearn.metrics import top_k_accuracy_score
 
-from utils.package_matrix import Energy_Type
-from utils.path_constants import PERFORMANCE_METRICS
+from ntk_matrix_completion.utils.package_matrix import Energy_Type
+from ntk_matrix_completion.utils.path_constants import PERFORMANCE_METRICS
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 from utils.utilities import (
@@ -107,7 +107,12 @@ def calculate_metrics(
     """
     All metrics as calculated by ROW
     """
-    print("analysis_utilities/calculate_metrics: truth, pred and mask are of shape", true.shape, pred.shape, mask.shape)
+    print(
+        "analysis_utilities/calculate_metrics: truth, pred and mask are of shape",
+        true.shape,
+        pred.shape,
+        mask.shape,
+    )
     try:
         cosims, r2_scores, rmse_scores, spearman_scores = calculate_row_metrics(
             true, pred, mask
@@ -138,7 +143,8 @@ def calculate_metrics(
         top_20 = calculate_top_n_in_top_k_accuracy(true, pred, k=20)
         if to_plot:
             top_20_accuracies = [
-                calculate_top_n_in_top_k_accuracy(true, pred, k=k) for k in range(1, 209)
+                calculate_top_n_in_top_k_accuracy(true, pred, k=k)
+                for k in range(1, 209)
             ]
     elif method == "top_k":
         top_1 = calculate_top_k_accuracy(true, pred, 1)

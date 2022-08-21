@@ -1,44 +1,39 @@
 import sys
 import pathlib
 import os
-from typing_extensions import TypedDict
-
-from features.prior import make_prior
-import matplotlib.pyplot as plt
 import pdb
 import numpy as np
 import pandas as pd
-from auto_tqdm import tqdm
-from features.precompute_osda_priors import smile_to_property
-from scipy.sparse import csc_matrix
 import scipy as sp
-import time
-from utils.utilities import plot_matrix
 
-from features.prior import zeolite_prior
-from utils.analysis_utilities import calculate_top_k_accuracy
-from tests.ooc_matrix_multiplication import ooc_dot
-from eigenpro.eigenpro import FKR_EigenPro
-from utils.analysis_utilities import examine_osda_feature_causes, plot_volume
+from auto_tqdm import tqdm
+import matplotlib.pyplot as plt
 
-
-sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
-
-from ntk import predict
-from utils.package_matrix import (
+from ntk_matrix_completion.features.precompute_osda_priors import smile_to_property
+from ntk_matrix_completion.features.prior import zeolite_prior, make_prior
+from ntk_matrix_completion.models.neural_tangent_kernel.ntk import predict
+from ntk_matrix_completion.models.neural_tangent_kernel.eigenpro.eigenpro import (
+    FKR_EigenPro,
+)
+from ntk_matrix_completion.utils.analysis_utilities import (
+    examine_osda_feature_causes,
+    plot_volume,
+    calculate_metrics,
+)
+from ntk_matrix_completion.utils.package_matrix import (
     Energy_Type,
     get_ground_truth_energy_matrix,
     make_skinny,
     unmake_skinny,
 )
-from utilities import (
+from ntk_matrix_completion.utils.utilities import (
     get_splits_in_zeolite_type,
     plot_two_matrices,
     save_matrix,
     chunks,
+    plot_matrix,
 )
-from utils.analysis_utilities import calculate_metrics
-from path_constants import (
+from ntk_matrix_completion.utils.path_constants import (
     HYPOTHETICAL_OSDA_ENERGIES,
     HYPOTHETICAL_OSDA_BOXES,
     OSDA_HYPOTHETICAL_PRIOR_FILE,
@@ -47,6 +42,8 @@ from path_constants import (
     TEN_FOLD_CROSS_VALIDATION_ENERGIES,
     ZEO_1_PRIOR,
 )
+
+sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 
 NORM_FACTOR = 0.001
 

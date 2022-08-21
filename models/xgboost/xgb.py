@@ -1,19 +1,11 @@
-from utils.path_constants import (
-    BINDING_CSV,
-    OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
-    OSDA_CONFORMER_PRIOR_FILE_SIEVED,
-    OSDA_PRIOR_FILE,
-    XGBOOST_MODEL_FILE,
-)
-from utils.utilities import get_isomer_chunks, report_best_scores, cluster_isomers, IsomerKFold
-from utils.package_matrix import Energy_Type, get_ground_truth_energy_matrix
-from features.prior import make_prior
-from ntk import create_iterator, SplitType
 import os
 import sys
 import time
 import pandas as pd
 import numpy as np
+import xgboost
+
+import matplotlib.pyplot as plt
 from sklearn.linear_model import (
     LogisticRegressionCV,
     LinearRegression,
@@ -30,10 +22,35 @@ from sklearn.model_selection import (
     RandomizedSearchCV,
     train_test_split,
 )
-import xgboost
-from utils.random_seeds import HYPPARAM_SEED, ISOMER_SEED, MODEL_SEED
-import matplotlib.pyplot as plt
-from configs.xgb_hp import get_hp_space
+
+from ntk_matrix_completion.utils.path_constants import (
+    BINDING_CSV,
+    OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
+    OSDA_CONFORMER_PRIOR_FILE_SIEVED,
+    OSDA_PRIOR_FILE,
+    XGBOOST_MODEL_FILE,
+)
+from ntk_matrix_completion.utils.utilities import (
+    get_isomer_chunks,
+    report_best_scores,
+    cluster_isomers,
+    IsomerKFold,
+)
+from ntk_matrix_completion.utils.package_matrix import (
+    Energy_Type,
+    get_ground_truth_energy_matrix,
+)
+from ntk_matrix_completion.features.prior import make_prior
+from ntk_matrix_completion.models.neural_tangent_kernel.ntk import (
+    create_iterator,
+    SplitType,
+)
+from ntk_matrix_completion.utils.random_seeds import (
+    HYPPARAM_SEED,
+    ISOMER_SEED,
+    MODEL_SEED,
+)
+from ntk_matrix_completion.configs.xgb_hp import get_hp_space
 
 
 def get_tuned_model(
@@ -102,7 +119,7 @@ def get_tuned_model(
         )
         y = y.reset_index().set_index(["SMILES", "Zeolite"])
         search.fit(X, y)
-        
+
     elif search_type == "hyperopt":  # TODO: DOES THIS WORK???
         from tests.test_hyperopt import HyperoptSearchCV
 

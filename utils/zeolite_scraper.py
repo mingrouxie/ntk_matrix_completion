@@ -7,8 +7,8 @@ import os
 import pathlib
 from tqdm import tqdm
 
-from utils.path_constants import ZEOLITE_PRIOR_FILE
-from utils.utilities import save_matrix
+from ntk_matrix_completion.utils.path_constants import ZEOLITE_PRIOR_FILE
+from ntk_matrix_completion.utils.utilities import save_matrix
 
 
 def scrape_main_page(url):

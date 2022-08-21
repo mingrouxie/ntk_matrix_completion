@@ -1,20 +1,22 @@
 import pandas as pd
 import numpy as np
+import pdb
+import os
+
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-from utils.package_matrix import get_ground_truth_energy_matrix
-from features.prior import load_vector_priors
-import pdb
-import os
-from utils.package_matrix import make_skinny
-from features.precompute_osda_priors import smile_to_property
-from utils.path_constants import (
+from scipy.spatial import distance
+
+from ntk_matrix_completion.features.precompute_osda_priors import smile_to_property
+from ntk_matrix_completion.utils.package_matrix import get_ground_truth_energy_matrix
+from ntk_matrix_completion.features.prior import load_vector_priors
+from ntk_matrix_completion.utils.package_matrix import make_skinny
+from ntk_matrix_completion.utils.path_constants import (
     HYPOTHETICAL_OSDA_ENERGIES,
     OSDA_HYPOTHETICAL_PRIOR_FILE,
     OSDA_HYPOTHETICAL_PREDICTED_ENERGIES,
 )
-from scipy.spatial import distance
 
 
 def get_literature_osdas(finalDf, zeolite):

@@ -1,4 +1,24 @@
-from utils.path_constants import (
+import sys
+import pathlib
+import pandas as pd
+import numpy as np
+
+from sklearn.model_selection import train_test_split
+
+from ntk_matrix_completion.utils.utilities import plot_matrix
+from ntk_matrix_completion.utils.analysis_utilities import plot_top_k_curves
+from ntk_matrix_completion.configs.weights import (
+    ZEOLITE_PRIOR_LOOKUP,
+    OSDA_PRIOR_LOOKUP,
+)
+from ntk_matrix_completion.models.neural_tangent_kernel.ntk import (
+    run_ntk,
+    skinny_ntk_sampled_not_sliced,
+    SplitType,
+)
+from features.precompute_osda_priors import smile_to_property
+from utils.random_seeds import SUBSTRATE_PRIOR_SELECTION_SEED
+from ntk_matrix_completion.utils.path_constants import (
     OSDA_CONFORMER_PRIOR_FILE_SIEVED,
     OSDA_PRIOR_FILE,
     TEN_FOLD_CROSS_VALIDATION_ENERGIES,
@@ -8,36 +28,22 @@ from utils.path_constants import (
     OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
     BINDING_GROUND_TRUTH,
 )
-from utils.analysis_utilities import calculate_metrics
-from utils.utilities import (
+from ntk_matrix_completion.utils.analysis_utilities import calculate_metrics
+from ntk_matrix_completion.utils.utilities import (
     save_matrix,
 )
-from utils.package_matrix import (
+from ntk_matrix_completion.utils.package_matrix import (
     Energy_Type,
     get_ground_truth_energy_matrix,
     make_skinny,
     unmake_skinny,
 )
-import sys
-import pathlib
-import pandas as pd
-import io
-import os
-from sklearn.model_selection import train_test_split
 
-import pdb
-from utils.utilities import plot_matrix
-from utils.analysis_utilities import plot_top_k_curves
-from configs.weights import ZEOLITE_PRIOR_LOOKUP, OSDA_PRIOR_LOOKUP
-from ntk import run_ntk, skinny_ntk_sampled_not_sliced, SplitType
-from features.precompute_osda_priors import smile_to_property
-from utils.random_seeds import SUBSTRATE_PRIOR_SELECTION_SEED
-import numpy as np
-import time
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 
 # TODO: change zeolite to substrate...
+
 
 def select_zeolite_priors(
     energy_type,

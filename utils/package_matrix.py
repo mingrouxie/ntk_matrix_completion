@@ -6,13 +6,22 @@ import torch
 import numpy as np
 import pandas as pd
 from enum import Enum
-from utils.path_constants import BINDING_GROUND_TRUTH, TEMPLATING_GROUND_TRUTH, BINDING_CSV, OSDA_PRIOR_FILE
+
 from sklearn.model_selection import train_test_split
-from features.precompute_osda_priors import precompute_priors_for_780K_Osdas
-from features.prior import make_prior
 from torch.utils.data import TensorDataset
-from utils.random_seeds import PACKAGE_LOADER_SEED
-from utils.non_binding import NonBinding, fill_non_bind
+
+from ntk_matrix_completion.utils.path_constants import (
+    BINDING_GROUND_TRUTH,
+    TEMPLATING_GROUND_TRUTH,
+    BINDING_CSV,
+    OSDA_PRIOR_FILE,
+)
+from ntk_matrix_completion.features.prior import make_prior
+from ntk_matrix_completion.features.precompute_osda_priors import (
+    precompute_priors_for_780K_Osdas,
+)
+from ntk_matrix_completion.utils.random_seeds import PACKAGE_LOADER_SEED
+from ntk_matrix_completion.utils.non_binding import NonBinding, fill_non_bind
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 from utils.utilities import (
@@ -78,7 +87,7 @@ def get_ground_truth_energy_matrix(
     minimum_row_length=2,
     transpose=False,
     prune_index=None,
-    non_binding=NonBinding.ROW_MEAN
+    non_binding=NonBinding.ROW_MEAN,
 ):
     if energy_type == Energy_Type.TEMPLATING:
         ground_truth = pd.read_pickle(TEMPLATING_GROUND_TRUTH)
@@ -178,7 +187,7 @@ def package_dataloader(
     batch_size=256,
     test_proportion=0.1,
     random_seed=PACKAGE_LOADER_SEED,
-    osda_prior_file=OSDA_PRIOR_FILE
+    osda_prior_file=OSDA_PRIOR_FILE,
 ):
     if energy_type == Energy_Type.TEMPLATING:
         ground_truth = pd.read_pickle(TEMPLATING_GROUND_TRUTH)
@@ -206,7 +215,7 @@ def package_dataloader(
         normalization_factor=0,
         all_data=skinny_ground_truth,
         stack_combined_priors=False,
-        osda_prior_file=osda_prior_file
+        osda_prior_file=osda_prior_file,
     )
     # This is taking advantage of the fact that embedding_shapes
     # contains information for the shape of zeolite & osda priors

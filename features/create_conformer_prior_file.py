@@ -1,18 +1,18 @@
 import multiprocessing
 from math import ceil
 from itertools import product
-from utils.path_constants import (
+import pandas as pd
+import os
+# from auto_tqdm import tqdm
+from sklearn.preprocessing import normalize, OneHotEncoder
+import time
+
+from ntk_matrix_completion.utils.path_constants import (
     BINDING_GROUND_TRUTH,
     OSDA_PRIOR_FILE,
     OSDA_HYPOTHETICAL_PRIOR_FILE,
     OSDA_CONFORMER_PRIOR_FILE,
 )
-import pandas as pd
-import os
-# from auto_tqdm import tqdm
-import os
-from sklearn.preprocessing import normalize, OneHotEncoder
-import time
 
 def source_prior_files(): # TODO: hard coded, will not need this after the prior extraction is revamped
     file_names = [
