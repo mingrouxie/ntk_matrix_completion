@@ -25,7 +25,7 @@ from ntk_matrix_completion.configs.weights import OSDA_PRIOR_LOOKUP, ZEOLITE_PRI
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 
 
-def ntk_cv(
+def ntk_cv(     # was business_as_normal
     split_type=SplitType.NAIVE_SPLITS,
     debug=False,
     prune_index=None,
@@ -35,8 +35,7 @@ def ntk_cv(
     metric_method="top_k_in_top_k",
     verbose=True,
     use_eigenpro=False,
-    to_write=True,
-    to_plot=False,
+    to_plot=True,
 ):
     """
     This method runs 10-fold cross validation on the 1194x209 Ground Truth matrix.
@@ -50,7 +49,7 @@ def ntk_cv(
     energy_type: Type of ground truth (default is binding energy)
     use_eigenpro: If True, uses eigenpro. Not yet implemented
     to_write: If True, writes analysis results to file
-    to_plot: If True, pltos analysis results
+    to_plot: If True, plots analysis results
     """
     ground_truth, binary_data = get_ground_truth_energy_matrix(
         prune_index=prune_index, energy_type=energy_type
@@ -76,7 +75,6 @@ def ntk_cv(
         mask.to_numpy(),
         verbose=verbose,
         method=metric_method,
-        to_write=to_write,
         to_plot=to_plot,
     )
     plot_matrix(pred, "pred", vmin=-30, vmax=5)
@@ -261,6 +259,8 @@ def ntk_cv_compare_priors(
 
 
 if __name__ == "__main__":
+
+
     start = time.time()
     sieved_priors_index = pd.read_pickle(OSDA_CONFORMER_PRIOR_FILE_CLIPPED).index
 

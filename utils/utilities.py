@@ -14,6 +14,7 @@ from rdkit.Chem import RemoveAllHs, AddHs
 # from rdkit.Chem import RemoveAllHs
 
 from ntk_matrix_completion.utils.random_seeds import ISOMER_SEED, SUBSTRATE_SEED
+from utils.path_constants import OUTPUT_DIR
 
 
 def plot_matrix(M, file_name, mask=None, vmin=16, vmax=23, to_save=True):
@@ -32,7 +33,7 @@ def plot_matrix(M, file_name, mask=None, vmin=16, vmax=23, to_save=True):
     im = ax.imshow(masked_M, interpolation="nearest", cmap=cmap, vmin=vmin, vmax=vmax)
     fig.colorbar(im)
     if to_save:
-        fig.savefig("data/output/" + file_name + ".png", dpi=150)
+        fig.savefig(OUTPUT_DIR + "/" + file_name + ".png", dpi=150)
 
 
 def plot_two_matrices(
@@ -64,7 +65,7 @@ def plot_two_matrices(
     ax2.set_title(M2_title)
     fig.text(0.6, 0.04, "Zeolites", ha="center", va="center")
     fig.colorbar(im)
-    fig.savefig("../data/output/" + file_name + ".png", dpi=150)
+    fig.savefig(OUTPUT_DIR + "/" + file_name + ".png", dpi=150)
 
 
 def chunks(lst, n, chunk_train=False, chunk_metrics=None):

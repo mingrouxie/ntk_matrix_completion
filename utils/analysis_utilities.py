@@ -18,7 +18,7 @@ from scipy.stats import spearmanr
 from sklearn.metrics import top_k_accuracy_score
 
 from ntk_matrix_completion.utils.package_matrix import Energy_Type
-from ntk_matrix_completion.utils.path_constants import PERFORMANCE_METRICS
+from ntk_matrix_completion.utils.path_constants import PERFORMANCE_METRICS, OUTPUT_DIR
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))
 from utils.utilities import (
@@ -38,7 +38,7 @@ def plot_top_k_curves(top_accuracies, method):
     plt.xticks(np.arange(0, len(top_accuracies) + 1, step=5))
     plt.show()
     plt.draw()
-    plt.savefig(f"data/output/{method}_accuracies.png", dpi=100)
+    plt.savefig(OUTPUT_DIR + f"/{method}_accuracies.png", dpi=100)
 
 
 def get_cosims(true, pred, bypass_epsilon_check=False, filter_value=None):
@@ -101,12 +101,12 @@ def calculate_metrics(
     verbose=True,
     meta=None,
     method="top_k_in_top_k",
-    to_write=True,
     to_plot=True,
+    top_20_accuracies=True,
 ):
     """
-    All metrics as calculated by ROW
-    """
+    All metrics as calculated by ROW. 
+    """ 
     print(
         "analysis_utilities/calculate_metrics: truth, pred and mask are of shape",
         true.shape,
@@ -119,6 +119,7 @@ def calculate_metrics(
         )
     except:
         breakpoint()
+
     if method == "top_n_in_top_k":
         top_1 = []
         top_3 = []
@@ -129,32 +130,35 @@ def calculate_metrics(
             top_3.append(calculate_top_n_in_top_k_accuracy(true, pred, k=3, n=n))
             top_5.append(calculate_top_n_in_top_k_accuracy(true, pred, k=5, n=n))
             top_20.append(calculate_top_n_in_top_k_accuracy(true, pred, k=20, n=n))
-            if to_plot:
+            if top_20_accuracies:
                 top_20_accuracies.append(
                     [
                         calculate_top_n_in_top_k_accuracy(true, pred, k=k, n=n)
                         for k in range(1, 21)  # cannot do 0 because of division by k
                     ]
                 )
+
     elif method == "top_k_in_top_k":
         top_1 = calculate_top_n_in_top_k_accuracy(true, pred, k=1)
         top_3 = calculate_top_n_in_top_k_accuracy(true, pred, k=3)
         top_5 = calculate_top_n_in_top_k_accuracy(true, pred, k=5)
         top_20 = calculate_top_n_in_top_k_accuracy(true, pred, k=20)
-        if to_plot:
+        if top_20_accuracies:
             top_20_accuracies = [
                 calculate_top_n_in_top_k_accuracy(true, pred, k=k)
                 for k in range(1, 209)
             ]
+
     elif method == "top_k":
         top_1 = calculate_top_k_accuracy(true, pred, 1)
         top_3 = calculate_top_k_accuracy(true, pred, 3)
         top_5 = calculate_top_k_accuracy(true, pred, 5)
         top_20 = calculate_top_k_accuracy(true, pred, 20)
-        if to_plot:
+        if top_20_accuracies:
             top_20_accuracies = [
                 calculate_top_k_accuracy(true, pred, k) for k in range(0, 21)
             ]
+
     results = {
         "cosim": np.mean(np.mean(cosims).round(4)),
         "r2_scores": np.mean(np.mean(r2_scores).round(4)),
@@ -164,8 +168,10 @@ def calculate_metrics(
         "top_3_accuracy": np.array(top_3).round(4),
         "top_5_accuracy": np.array(top_5).round(4),
         "top_20_accuracy": np.array(top_20).round(4),
-        "top_20_accuracies": top_20_accuracies,
     }
+    if top_20_accuracies:
+        results["top_20_accuracies"] = top_20_accuracies 
+
     if verbose:
         print(
             "\ncosim: ",
@@ -185,6 +191,7 @@ def calculate_metrics(
             "\ntop_20_accuracy: ",
             np.array(top_20).mean().round(4),
         )
+
     if to_plot:
         plot_top_k_curves(top_20_accuracies, method)
         if energy_type == Energy_Type.BINDING:
@@ -195,9 +202,11 @@ def calculate_metrics(
             vmax = 23
         plot_matrix(true, "regression_truth", vmin=vmin, vmax=vmax)
         plot_matrix(pred, "regression_prediction", vmin=vmin, vmax=vmax)
-    if to_write:
+
+    if top_20_accuracies:
         df = pd.DataFrame(top_20_accuracies).T
         df.to_pickle(PERFORMANCE_METRICS)
+
     return results
 
 
