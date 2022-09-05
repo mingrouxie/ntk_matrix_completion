@@ -108,6 +108,21 @@ def predict(all_data, mask, num_test_rows, X, reduce_footprint=False):
 
 
 def create_iterator(split_type, all_data, metrics_mask, k_folds, seed):
+    """
+    Inputs:
+
+        split_type: method of constructing data splits
+        all_data: for NTK< this is a matrix of binding energies. 
+        metrics_mask: array with 1 for binding and 0 for non-binding entries
+        k_folds: number of folds to create
+        seed: seed for splits in zeolite_types
+
+    Returns:
+
+        train: portion of all_data for training
+        test: portion of all_data for testing
+        test_mask_chunk: binding/non-binding mask for test
+    """
     if split_type == SplitType.NAIVE_SPLITS:
         # The iterator shuffles the data which is why we need to pass in metrics_mask together.
         iterator = tqdm(
@@ -119,7 +134,7 @@ def create_iterator(split_type, all_data, metrics_mask, k_folds, seed):
         # we chunk by folds to be sure we don't spill zeolites/OSDA rows
         # between training & test sets
         assert len(all_data) % k_folds == 0, (
-            "A bit silly, but we do require skinny_matrices to be perfectly modulo"
+            "[create_iterator] A bit silly, but we do require skinny_matrices to be perfectly modulo"
             + " by k_folds in order to avoid leaking training/testing data"
         )
         iterator = tqdm(
@@ -132,10 +147,11 @@ def create_iterator(split_type, all_data, metrics_mask, k_folds, seed):
             total=k_folds,
         )
     elif split_type == SplitType.OSDA_ISOMER_SPLITS:
-        # breakpoint()
+        # split OSDAs by isomers. The number of OSDAs in each split might not be equal 
+        # due to different number of OSDAs in each isomer cluster
         assert (
             all_data.index.name == "SMILES"
-        ), "The OSDA isomer split is currently only implemented for OSDAs as rows"
+        ), "[create_iterator] The OSDA isomer split is currently only implemented for OSDAs as rows"
         iterator = tqdm(
             get_isomer_chunks(
                 all_data,
@@ -144,7 +160,8 @@ def create_iterator(split_type, all_data, metrics_mask, k_folds, seed):
             )
         )
     else:
-        raise Exception("Need to provide a SplitType for run_ntk()")
+        raise Exception("[create_iterator] Need to provide a SplitType for run_ntk()")
+    breakpoint()
     return iterator
 
 
@@ -160,6 +177,33 @@ def run_ntk(
     use_eigenpro=False,
     osda_prior_file=OSDA_PRIOR_FILE,
 ):
+    """
+    From a given full matrix of binding energies, produces an identically-shaped matrix of 
+    binding energies predicted with matrix completion. This matrix of predicted energies
+    is created by splitting the matrix into filled and unfilled matrices, in a fashion similar
+    to cross validation, completing the unfilled matrix, and aggregating all of the completed
+    matrices into the full-sized matrix. 
+
+    Note that the priors are created within the loop that iterates over different filled-unfilled
+    splits. 
+
+    Inputs:
+
+    all_data: full matrix of binding energies
+    prior (str): desired prior_type
+    metrics_mask: array of same shape as all_data, containing 1 for binding and 0 for non-binding
+    split_type: SplitType.<split_type> to indicate how the data is split
+    k_folds: number of splits to make
+    seed: integer for model reproducibility
+    prior_map: dictionary containing weights for each prior (TODO: please confirm)
+    norm_factor: 0.001 for identity weight (TODO: please confirm purpose)
+    use_eigenpro: for future use when data size gets large
+    osda_prior_file: OSDA prior file to read from. Only gets used when certain `prior` names are specified
+    
+    Returns:
+
+    Three arrays or DataFrames of the same shape: Predictions, truth and mask (in this order)
+    """
     iterator = create_iterator(split_type, all_data, metrics_mask, k_folds, seed)
     aggregate_pred = None  # Predictions for all fold(s)
     aggregate_true = None  # Ground truths for all fold(s)
@@ -194,14 +238,14 @@ def run_ntk(
         # 'C1CN2CCC1CC2',
         # 'C[N+]1(CC2CCCCC2)CCC(CCCC2CC[N+](C)(CC3CCCCC3)CC2)CC1'}
         print(
-            "ntk/run_ntk: Predicting for data of shape",
+            "[run_ntk] Predicting for data of shape",
             all_data.shape,
             mask.shape,
             X.shape,
         )
-        print("Test set size:", test.shape)
+        print("[run_ntk] Test set of shape", test.shape)
         results_ntk = predict(all_data, mask, len(test), X=X)
-        print("results_ntk of shape", results_ntk.shape)
+        print("[run_ntk] results_ntk of shape", results_ntk.shape)
         prediction_ntk = pd.DataFrame(
             data=results_ntk, index=test.index, columns=test.columns
         )
