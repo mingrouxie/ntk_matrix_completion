@@ -252,7 +252,6 @@ def load_prior(
         results = precomputed_prior.apply(
             lambda x: x * column_weights[x.name] / normalization_factor
         )
-
     return (1 - identity_weight) * results
 
 
@@ -264,8 +263,14 @@ def osda_prior(
     normalize=True,
     other_prior_to_concat=OSDA_HYPOTHETICAL_PRIOR_FILE,
 ):
+    # some data files have SMILES and Zeolite as the index. TODO: hacky solution
+    if type(all_data_df.index[0]) == tuple:
+        target_index = all_data_df.reset_index()["SMILES"]
+    else:
+        target_index = tuple(all_data_df.index)
+
     return load_prior(
-        target_index=tuple(all_data_df.index),
+        target_index=target_index,
         column_weights=prior_map if prior_map is not None else OSDA_PRIOR_LOOKUP,
         precomputed_file_name=osda_prior,
         identity_weight=identity_weight,
@@ -282,25 +287,35 @@ def osda_vector_prior(
     osda_prior_file=OSDA_PRIOR_FILE,
     second_vector_feature=None,
 ):
+    if type(all_data_df.index[0]) == tuple:
+        target_index = all_data_df.reset_index()["SMILES"]
+    else:
+        target_index = tuple(all_data_df.index)
+
     prior = osda_prior(
         all_data_df,
         identity_weight,
         osda_prior=osda_prior_file,
         normalize=False,
+        other_prior_to_concat=other_prior_to_concat
     ).to_numpy()
+
     getaway_prior = load_vector_priors(
-        all_data_df.index,
+        # target_index=all_data_df.index,
+        target_index=target_index,
         vector_feature=vector_feature,
         precomputed_file_name=osda_prior_file,
         identity_weight=identity_weight,
         normalize=False,
         other_prior_to_concat=other_prior_to_concat,
     ).to_numpy()
+
     prior_stack = [getaway_prior, prior]
 
-    if second_vector_feature is not None:
+    if second_vector_feature is not None: # TODO: hacky
         whims_prior = load_vector_priors(
-            all_data_df.index,
+            # all_data_df.index,
+            target_index=target_index,
             vector_feature=second_vector_feature,
             precomputed_file_name=osda_prior_file,
             identity_weight=identity_weight,
@@ -308,9 +323,9 @@ def osda_vector_prior(
             other_prior_to_concat=other_prior_to_concat,
         ).to_numpy()
         prior_stack.append(whims_prior)
+
     # Splitting the original prior and the vector prior 50-50
     # And a quick normalization by dividing by the sum of the row
-
     normalized_prior_stack = [
         p / (len(prior_stack) * max(p, key=sum).sum()) for p in prior_stack
     ]
@@ -519,7 +534,9 @@ def make_prior(
             identity_weight=normalization_factor,
             osda_prior_file=osda_prior_file,
         )
-        return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
+        if normalization_factor:
+            return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
+        return prior
 
     elif method == "CustomZeolite":
         # CustomZeolite takes all of the priors from the data file specified in zeolite_prior()
