@@ -1,20 +1,23 @@
-import numpy as np
-import pandas as pd
 import os
 import pdb
-from sklearn import metrics
-from math import ceil, floor
 import random
+from math import ceil, floor
 
-from sklearn.model_selection import KFold
-import matplotlib.pyplot as plt
 import matplotlib as mpl
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from ntk_matrix_completion.utils.random_seeds import (ISOMER_SEED,
+                                                      SUBSTRATE_SEED)
 from rdkit import Chem
-from rdkit.Chem import RemoveAllHs, AddHs
+from rdkit.Chem import AddHs, RemoveAllHs
+from sklearn import metrics
+from sklearn.model_selection import KFold, StratifiedKFold
+
+from utils.path_constants import OUTPUT_DIR
+
 # from rdkit.Chem import RemoveAllHs
 
-from ntk_matrix_completion.utils.random_seeds import ISOMER_SEED, SUBSTRATE_SEED
-from utils.path_constants import OUTPUT_DIR
 
 
 def plot_matrix(M, file_name, mask=None, vmin=16, vmax=23, to_save=True):
@@ -69,7 +72,20 @@ def plot_two_matrices(
 
 
 def chunks(lst, n, chunk_train=False, chunk_metrics=None):
-    """Yield successive n-sized chunks from lst."""
+    """
+    Yield successive n-sized chunks from lst.
+    
+    Inputs:
+
+    lst: a list of entries 
+    n: size of chunks
+    chunk_train: True if train_chunk is returned (TODO: when is this False)
+    chunk_metrics: a list 
+    
+    Returns:
+    
+    train_chunk, test_chunk, metrics_chunk
+    """
     for i in range(0, len(lst) - n, n):
         leftside_index = i
         rightside_index = i + n
@@ -90,8 +106,21 @@ def chunks(lst, n, chunk_train=False, chunk_metrics=None):
 
 
 def get_isomer_chunks(all_data, metrics_mask, k_folds, random_seed=ISOMER_SEED):
-    # random.seed(random_seed) # TODO: commented out because sample already uses a random_state
-    clustered_isomers = pd.Series(cluster_isomers(all_data.index).values())
+    """
+    Inputs:
+    
+    all_data: Dataframe with an index of SMILES strings
+    metrics_mask: array of same shape as all_data? 
+    k_folds: number of chunks to create
+    random_seed: seed for shuffling isomer clusters
+    
+    Returns:
+    
+    An iterable of tuples (train, test and metrics (typically a mask))
+    
+    """
+    clustered_isomers = pd.Series(cluster_isomers(smiles=all_data.index).values())
+    # Shuffle the isomer clusters
     clustered_isomers = clustered_isomers.sample(frac=1, random_state=random_seed)
     # Chunk by the isomer sets (train / test sets will not be balanced perfectly)
     nested_iterator = chunks(
@@ -99,7 +128,7 @@ def get_isomer_chunks(all_data, metrics_mask, k_folds, random_seed=ISOMER_SEED):
         n=floor(len(clustered_isomers) / k_folds),
         chunk_train=True,
     )
-    # Now flatten the iterated isomer train / test sets
+    # Flatten the iterated isomer train / test sets
     for train, test, _ in nested_iterator:
         train_osdas = list(set().union(*train))
         test_osdas = list(set().union(*test))
@@ -137,17 +166,6 @@ def get_splits_in_zeolite_type(
         ]
 
 
-def plot_binding_energies(datas):
-    print(f"plot_binding_energies not coded yet")
-    return
-
-
-def plot_spheres(datas):
-    print("plot_spheres not coded yet")
-    return
-
-
-from sklearn.model_selection import StratifiedKFold, KFold
 
 
 class IsomerKFold:
@@ -205,4 +223,5 @@ def report_best_scores(search, n_top=3, search_type='hyperopt'):
                 print("Parameters: {0}".format(results["params"][candidate]))
                 print("")
     elif search_type == 'hyperopt':
-        breakpoint()
+        print("Best parameters:", search.best_params_)
+        print("")
