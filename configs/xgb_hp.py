@@ -1,6 +1,10 @@
 from scipy.stats import uniform, randint
+from hyperopt.pyll import scope
+from hyperopt import hp
+import numpy as np
 
-def get_hp_space():
+
+def get_xgb_space():
     return {
         "colsample_bytree": uniform(0.0, 1.0),
         "gamma": uniform(0, 0.5),
@@ -11,4 +15,36 @@ def get_hp_space():
         "reg_alpha": uniform(0.0, 1.0),
         "reg_lambda": uniform(0.0, 1.0),
         "min_child_weight": uniform(1.0, 10),
+    }
+
+
+def get_hyperopt_xgb_space():
+    return {
+        "colsample_bytree": hp.uniform("colsample_bytree", 0.01, 1.0),
+        "gamma": hp.uniform("gamma", 0.0, 0.5),
+        "learning_rate": hp.uniform("learning_rate", 0.03, 0.5),  # default 0.1
+        # "max_depth": hp.choice("max_depth", np.arange(2, 8, dtype=int)),  # default 3
+        # "n_estimators": hp.choice(
+        #     "n_estimators", np.arange(100, 150, dtype=int)
+        # ),  # default 100
+        "subsample": hp.uniform("subsample", 0.4, 0.6),
+        "reg_alpha": hp.uniform("reg_alpha", 0.0, 1.0),
+        "reg_lambda": hp.uniform("reg_lambda", 0.0, 1.0),
+        "min_child_weight": hp.uniform("min_child_weight", 1.0, 10),
+
+        # "max_depth": scope.int(hp.quniform("max_depth", 2, 8, 1)),  # default 3
+        # "n_estimators": scope.int(
+        #     hp.quniform("n_estimators", 100, 150, 1)
+        # ),  # default 100
+
+
+        # "max_depth": scope.int(hp.quniform('max_depth', 3, 18, q=1)),
+        # # "max_depth": hp.quniform("max_depth", 3, 18, 1),
+        # "gamma": hp.uniform("gamma", 1, 9),
+        # "reg_alpha": scope.int(hp.quniform("reg_alpha", 40, 180, 1)),
+        # "reg_lambda": hp.uniform("reg_lambda", 0, 1),
+        # "colsample_bytree": hp.uniform("colsample_bytree", 0.5, 1),
+        # "min_child_weight": scope.int(hp.quniform("min_child_weight", 0, 10, 1)),
+        # "n_estimators": 180,
+        # "seed": 0,
     }
