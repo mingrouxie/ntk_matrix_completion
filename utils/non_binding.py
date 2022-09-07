@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import Enum, IntEnum
 
 
-class NonBinding(Enum):
+class NonBinding(IntEnum):
     ROW_MEAN = 1
     SMALL_POS = 2
     LARGE_POS = 3

@@ -8,7 +8,7 @@ import pdb
 import numpy as np
 import pandas as pd
 from auto_tqdm import tqdm
-from enum import Enum
+from enum import Enum, IntEnum
 
 from ntk_matrix_completion.features.precompute_osda_priors import smile_to_property
 from ntk_matrix_completion.features.prior import zeolite_prior
@@ -53,7 +53,7 @@ NORM_FACTOR = 0.001
 PI = np.pi
 
 
-class SplitType(Enum):
+class SplitType(IntEnum):
     NAIVE_SPLITS = 1
     ZEOLITE_SPLITS = 2
     OSDA_ISOMER_SPLITS = 3
@@ -112,7 +112,8 @@ def create_iterator(split_type, all_data, metrics_mask, k_folds, seed):
     Inputs:
 
         split_type: method of constructing data splits
-        all_data: for NTK< this is a matrix of binding energies. 
+        all_data: for NTK this is a DataFrame of binding energies. For XGB this is a DataFrame of priors.
+        For both the index of the DataFrame is SMILES
         metrics_mask: array with 1 for binding and 0 for non-binding entries
         k_folds: number of folds to create
         seed: seed for splits in zeolite_types
@@ -161,7 +162,6 @@ def create_iterator(split_type, all_data, metrics_mask, k_folds, seed):
         )
     else:
         raise Exception("[create_iterator] Need to provide a SplitType for run_ntk()")
-    breakpoint()
     return iterator
 
 

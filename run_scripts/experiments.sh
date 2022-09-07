@@ -9,4 +9,9 @@ source /home/mrx/bin/miniconda3/bin/activate /home/mrx/bin/miniconda3/envs/ntk
 
 ROOT='/home/mrx/projects/matrix_completion/ntk_matrix_completion'
 
-python $ROOT/run_scripts/train.py 
+## NTK train
+# python $ROOT/run_scripts/train.py 
+
+## XGB
+# python $ROOT/models/xgboost/xgb.py
+python -m cProfile -o $ROOT/output/2022_IZC/xgb_with_nb_hyperopt/program.prof $ROOT/models/xgboost/xgb.py
