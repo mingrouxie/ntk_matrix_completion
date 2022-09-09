@@ -7,11 +7,12 @@
 source /home/mrx/.bashrc
 source /home/mrx/bin/miniconda3/bin/activate /home/mrx/bin/miniconda3/envs/ntk
 
-ROOT='/home/mrx/projects/matrix_completion/ntk_matrix_completion'
+ROOT="/home/mrx/projects/matrix_completion/ntk_matrix_completion"
+OUTPUT="${ROOT}/output/2022_IZC/xgb_with_nb_hyperopt"
 
 ## NTK train
 # python $ROOT/run_scripts/train.py 
 
 ## XGB
 # python $ROOT/models/xgboost/xgb.py
-python -m cProfile -o $ROOT/output/2022_IZC/xgb_with_nb_hyperopt/program.prof $ROOT/models/xgboost/xgb.py
+python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --stack_combined_priors 'osda' --search_type 'hyperopt'

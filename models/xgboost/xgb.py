@@ -4,7 +4,11 @@ import time
 import pandas as pd
 import numpy as np
 import xgboost
-import matplotlib; matplotlib.use('Agg')
+import matplotlib
+
+matplotlib.use("Agg")
+import argparse
+
 
 import matplotlib.pyplot as plt
 from sklearn.linear_model import (
@@ -75,7 +79,7 @@ def get_tuned_model(
     start = time.time()
 
     # mask=None for IZC 2022 results. It is also not possible to implement for random and grid searches
-    if not search_type == 'hyperopt':
+    if not search_type == "hyperopt":
         mask = None
 
     # get iterator for train-evaluation splits
@@ -135,7 +139,9 @@ def get_tuned_model(
             "random_state": random_seed,
             "nthread": nthread,
         }
-        search = HyperoptSearchCV(X, y, cv=cv_generator, fixed_params=fixed_params, mask=mask)
+        search = HyperoptSearchCV(
+            X, y, cv=cv_generator, fixed_params=fixed_params, mask=mask
+        )
         breakpoint()
         search.fit()
 
@@ -151,25 +157,34 @@ def get_tuned_model(
     return tuned_xgb, search
 
 
-def main(
-    energy_type=Energy_Type.BINDING,
-    split_type=SplitType.OSDA_ISOMER_SPLITS,
-    k_folds=5,
-    # prior_method="CustomOSDAandZeoliteAsRows",
-    prior_method="CustomOSDAVector",
-    stack_combined_priors="all",
-    osda_prior_file=OSDA_CONFORMER_PRIOR_FILE_CLIPPED,  # TODO: generalize to substrate too
-    optimize_hyperparameters=True,
-    output_dir=XGBOOST_OUTPUT_DIR,
-    search_type="random",
-    model=None,
-):
+def main(kwargs):
+    breakpoint()
+    """
+    sieved_file: Pickle file that is read into a DataFrame, where the index contains the entries of interest
+    """
+    # make output directory
+    if os.path.isdir(kwargs["output"]):
+        print("[XGB] Output directory already exists, adding time to directory name")
+        from datetime import datetime
+
+        now = "_%d%d%d_%d%d%d" % ( 
+            datetime.now().year,
+            datetime.now().month,
+            datetime.now().day,
+            datetime.now().hour,
+            datetime.now().minute,
+            datetime.now().second,
+        )
+        kwargs["output"] = kwargs["output"] + now
+    print("[XGB] Output file is", kwargs['output'])
+    os.mkdir(kwargs["output"])
+
     # clean data
-    sieved_priors_index = pd.read_pickle(OSDA_CONFORMER_PRIOR_FILE_CLIPPED).index
+    sieved_priors_index = pd.read_pickle(kwargs["sieved_file"]).index
     sieved_priors_index.name = "SMILES"
-    if energy_type == Energy_Type.BINDING:
+    if kwargs["energy_type"] == Energy_Type.BINDING:
         # ground_truth = pd.read_csv(BINDING_CSV) # binding values only
-        ground_truth = pd.read_csv(BINDING_NB_CSV) # binding with non-binding values
+        ground_truth = pd.read_csv(BINDING_NB_CSV)  # binding with non-binding values
     else:
         print("[XGB] Please work only with binding energies")
         breakpoint()
@@ -179,26 +194,26 @@ def main(
     mask = pd.read_csv(MASK_CSV)
 
     # get priors
-    print("[XGB] prior_method used is", prior_method)
+    print("[XGB] prior_method used is", kwargs["prior_method"])
     prior = make_prior(
         test=None,
         train=None,
-        method=prior_method,
+        method=kwargs["prior_method"],
         normalization_factor=0,
         all_data=ground_truth,
         stack_combined_priors=False,
         osda_prior_file=OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
     )
 
-    if prior_method == "CustomOSDAVector":
+    if kwargs["prior_method"] == "CustomOSDAVector":
         X = prior
         print(f"[XGB] Prior of shape {prior.shape}")
 
-    elif prior_method == "CustomOSDAandVectorAsRows":
-        X_osda_handcrafted_prior = prior[0] 
+    elif kwargs["prior_method"] == "CustomOSDAandVectorAsRows":
+        X_osda_handcrafted_prior = prior[0]
         X_osda_getaway_prior = prior[1]
         X_zeolite_prior = prior[2]
-        
+
         print(
             f"Check prior shapes:",
             X_osda_handcrafted_prior.shape,
@@ -207,13 +222,14 @@ def main(
         )
 
         ### what to do with the retrieved priors
-        if stack_combined_priors == "all":
+        if kwargs["stack_combined_priors"] == "all":
             X = np.concatenate(
-                [X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior], axis=1
+                [X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior],
+                axis=1,
             )
-        elif stack_combined_priors == "osda":
+        elif kwargs["stack_combined_priors"] == "osda":
             X = np.concatenate([X_osda_handcrafted_prior, X_osda_getaway_prior], axis=1)
-        elif stack_combined_priors == "zeolite":
+        elif kwargs["stack_combined_priors"] == "zeolite":
             X = X_zeolite_prior
         else:
             print(f"[XGB] What do you want to do with the priors??")
@@ -225,7 +241,7 @@ def main(
     # split data
     ground_truth = ground_truth.reset_index("Zeolite")
 
-    if split_type == SplitType.OSDA_ISOMER_SPLITS:
+    if kwargs["split_type"] == SplitType.OSDA_ISOMER_SPLITS:
         # get train_test_split by isomers
         clustered_isomers = pd.Series(cluster_isomers(ground_truth.index).values())
         clustered_isomers = clustered_isomers.sample(frac=1, random_state=ISOMER_SEED)
@@ -249,56 +265,62 @@ def main(
     X_train = X.loc[smiles_train]
     X_test = X.loc[smiles_test]
 
-    mask_train = mask.set_index('SMILES').loc[smiles_train]
-    mask_test = mask.set_index('SMILES').loc[smiles_test]
+    mask_train = mask.set_index("SMILES").loc[smiles_train]
+    mask_test = mask.set_index("SMILES").loc[smiles_test]
 
     print("[XGB] DEBUG: Check X and mask have been created properly")
     breakpoint()
-    
+
     # hyperparameter tuning
-    if optimize_hyperparameters:
+    if kwargs["optimize_hyperparameters"]:
         print("[XGB] Tuning hyperparameters")
         model, search = get_tuned_model(
             params=None,
             X=X_train,
             y=ground_truth_train,
-            k_folds=k_folds,
-            search_type=search_type,
-            mask=mask_train
+            k_folds=kwargs["k_folds"],
+            search_type=kwargs["search_type"],
+            mask=mask_train,
         )
 
     # fit and predict tuned model
     print("[XGB] Using tuned model")
-    # model.set_params(eval_metric=) # TODO: figure this out 
+    # model.set_params(eval_metric=) # TODO: figure this out
     # disable_default_eval_metric - do we need this?
     model.fit(
-        X_train, 
+        X_train,
         ground_truth_train,
         # eval_set=[(X_train, ground_truth_train), (X_test, ground_truth_test)],
         verbose=True,
         # feature_weights=
-        )
-    model.save_model(os.path.join(XGBOOST_OUTPUT_DIR, "xgboost.json"))
+    )
+    model.save_model(os.path.join(kwargs["output"], "xgboost.json"))
 
     y_pred_train = model.predict(X_train)
-    df = pd.DataFrame(y_pred_train, columns=["Prediction"], index=ground_truth_train.index)
+    df = pd.DataFrame(
+        y_pred_train, columns=["Prediction"], index=ground_truth_train.index
+    )
     df["Binding (SiO2)"] = ground_truth_train["Binding (SiO2)"]
-    df.to_pickle(os.path.join(XGBOOST_OUTPUT_DIR, "train.pkl"))
+    df.to_pickle(os.path.join(kwargs["output"], "train.pkl"))
 
     y_pred_test = model.predict(X_test)
-    df = pd.DataFrame(y_pred_test, columns=["Prediction"], index=ground_truth_test.index)
+    df = pd.DataFrame(
+        y_pred_test, columns=["Prediction"], index=ground_truth_test.index
+    )
     df["Binding (SiO2)"] = ground_truth_test["Binding (SiO2)"]
-    df.to_pickle(os.path.join(XGBOOST_OUTPUT_DIR, "test.pkl"))
+    df.to_pickle(os.path.join(kwargs["output"], "test.pkl"))
 
     y_pred_all = model.predict(X)
     g = ground_truth.reset_index().set_index(["SMILES", "Zeolite"])
     df = pd.DataFrame(y_pred_all, columns=["Prediction"], index=g.index)
     df["Binding (SiO2)"] = g["Binding (SiO2)"]
-    df.to_pickle(os.path.join(XGBOOST_OUTPUT_DIR, "all.pkl"))
+    df.to_pickle(os.path.join(kwargs["output"], "all.pkl"))
 
     # TODO: dumb way to check the RMSE is going down
     print("[XGB] Sanity check RMSE for train/test, includes non-bind:")
-    print("Train score: ", np.sqrt(mean_squared_error(ground_truth_train, y_pred_train)))
+    print(
+        "Train score: ", np.sqrt(mean_squared_error(ground_truth_train, y_pred_train))
+    )
     print("Test score: ", np.sqrt(mean_squared_error(ground_truth_test, y_pred_test)))
 
     # feature importance
@@ -311,27 +333,84 @@ def main(
     # ax = xgboost.plot_importance(model, max_num_features=10, ax=ax)
     # fig.savefig(os.path.join(XGBOOST_OUTPUT_DIR, "xgb_feature_importance.png"), dpi=300)
 
+
+def preprocess(input):
+    """
+    Preprocess argparsed arguments into readable format
+    """
+    args = {
+        "energy_type": Energy_Type.BINDING,
+        "split_type": SplitType.OSDA_ISOMER_SPLITS,
+        "k_folds": 5,
+        # "prior_method" : "CustomOSDAandZeoliteAsRows",
+        "prior_method": "CustomOSDAVector",
+        "stack_combined_priors": "all",
+        "osda_prior_file": OSDA_CONFORMER_PRIOR_FILE_CLIPPED,  # TODO: generalize to substrate too
+        "sieved_file": OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
+        "optimize_hyperparameters": True,
+        "output_dir": XGBOOST_OUTPUT_DIR,
+        "search_type": "random",
+        "model": None,
+    }
+
+    input = input.__dict__
+
+    input["energy_type"] = (
+        Energy_Type.BINDING
+        if input.get("energy_type", None) == "binding"
+        else Energy_Type.TEMPLATING
+    )
+
+    if input.get("split_type", None) == "naive":
+        input["split_type"] = SplitType.NAIVE_SPLITS
+    elif input.get("split_type", None) == "zeolite":
+        input["split_type"] = SplitType.ZEOLITE_SPLITS
+    elif input.get("split_type", None) == "osda":
+        input["split_type"] = SplitType.OSDA_ISOMER_SPLITS
+
+    args.update(input)
+    return args
+
+
 if __name__ == "__main__":
     # test_xgboost()
 
     # TODO
-    # import argparse
-    # parser = argparse.ArgumentParser(
-    #     description='XGBoost model')
+    parser = argparse.ArgumentParser(description="XGBoost")
     # parser.add_argument(
-    #     '--opt_hp',
+    #     "--opt_hp",
     #     type=int,
-    #     action='store_true',
+    #     action="store_true",
     #     default=1,
-    #     help='True to tune hyperparameters')
-    # args = parser.parse_args()
-    # main(args)
-
-    main(
-        optimize_hyperparameters=True,
-        stack_combined_priors="osda",
-        search_type="hyperopt",
+    #     help="If True, tune hyperparameters",
+    # )
+    parser.add_argument("--output", help="Output directory", type=str, required=True)
+    parser.add_argument(
+        "--energy_type",
+        help="Binding or templating energy",
+        type=str,
+        default="binding",
     )
+    parser.add_argument(
+        "--stack_combined_priors",
+        help="treatment for stacking priors",
+        type=str,
+        required=True,
+    )
+    parser.add_argument(
+        "--search_type", help="Hyperparameter tuning method", type=str, required=True
+    )
+    args = parser.parse_args()
+    kwargs = preprocess(args)
+    main(kwargs)
+
+
+    
+    # main(
+    #     optimize_hyperparameters=True,
+    #     stack_combined_priors="osda",
+    #     search_type="hyperopt",
+    # )
 
     # params = {
     #     "colsample_bytree": 0.3181689154948444,
