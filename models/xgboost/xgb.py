@@ -1,33 +1,29 @@
 import os
 import sys
 import time
-import pandas as pd
-import numpy as np
-import xgboost
-import matplotlib
+from datetime import datetime
 
-matplotlib.use("Agg")
+import matplotlib
+import numpy as np
+import pandas as pd
+import xgboost
 import argparse
 
-
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from sklearn.linear_model import (
-    LogisticRegressionCV,
-    LinearRegression,
-    RidgeCV,
-    SGDRegressor,
-    LassoCV,
-)
-from sklearn.metrics import auc, accuracy_score, confusion_matrix, mean_squared_error
-from sklearn.model_selection import (
-    StratifiedKFold,
-    cross_val_score,
-    GridSearchCV,
-    KFold,
-    RandomizedSearchCV,
-    train_test_split,
-)
 
+from ntk_matrix_completion.configs.xgb_hp import get_xgb_space
+from ntk_matrix_completion.features.prior import make_prior
+from ntk_matrix_completion.models.neural_tangent_kernel.ntk import (
+    SplitType,
+    create_iterator,
+)
+from ntk_matrix_completion.utils.hyperopt import HyperoptSearchCV
+from ntk_matrix_completion.utils.loss import masked_rmse
+from ntk_matrix_completion.utils.package_matrix import (
+    Energy_Type,
+    get_ground_truth_energy_matrix,
+)
 from ntk_matrix_completion.utils.path_constants import (
     BINDING_CSV,
     BINDING_NB_CSV,
@@ -37,28 +33,33 @@ from ntk_matrix_completion.utils.path_constants import (
     OSDA_PRIOR_FILE,
     XGBOOST_OUTPUT_DIR,
 )
-from ntk_matrix_completion.utils.utilities import (
-    get_isomer_chunks,
-    report_best_scores,
-    cluster_isomers,
-    IsomerKFold,
-)
-from ntk_matrix_completion.utils.package_matrix import (
-    Energy_Type,
-    get_ground_truth_energy_matrix,
-)
-from ntk_matrix_completion.features.prior import make_prior
-from ntk_matrix_completion.models.neural_tangent_kernel.ntk import (
-    create_iterator,
-    SplitType,
-)
 from ntk_matrix_completion.utils.random_seeds import (
     HYPPARAM_SEED,
     ISOMER_SEED,
     MODEL_SEED,
 )
-from ntk_matrix_completion.configs.xgb_hp import get_xgb_space
-from utils.hyperopt import HyperoptSearchCV
+from ntk_matrix_completion.utils.utilities import (
+    IsomerKFold,
+    cluster_isomers,
+    get_isomer_chunks,
+    report_best_scores,
+)
+from sklearn.linear_model import (
+    LassoCV,
+    LinearRegression,
+    LogisticRegressionCV,
+    RidgeCV,
+    SGDRegressor,
+)
+from sklearn.metrics import accuracy_score, auc, confusion_matrix, mean_squared_error
+from sklearn.model_selection import (
+    GridSearchCV,
+    KFold,
+    RandomizedSearchCV,
+    StratifiedKFold,
+    cross_val_score,
+    train_test_split,
+)
 
 
 def get_tuned_model(
@@ -71,7 +72,8 @@ def get_tuned_model(
     objective="reg:squarederror",  # "neg_root_mean_squared_error"
     nthread=5,
     search_type="random",
-    mask=None
+    mask=None,
+    debug=False,
     # test_cross_val=False, # change here
 ):
     """Hyperparameter search for XGBRegressor"""
@@ -140,10 +142,15 @@ def get_tuned_model(
             "nthread": nthread,
         }
         search = HyperoptSearchCV(
-            X, y, cv=cv_generator, fixed_params=fixed_params, mask=mask
+            X,
+            y,
+            cv=cv_generator,
+            fixed_params=fixed_params,
+            mask=mask,
+            output=kwargs["output"],
         )
-        breakpoint()
-        search.fit()
+        # breakpoint()
+        search.fit(debug=debug)
 
     # results
     report_best_scores(search, n_top=1, search_type=search_type)
@@ -158,16 +165,14 @@ def get_tuned_model(
 
 
 def main(kwargs):
-    breakpoint()
     """
-    sieved_file: Pickle file that is read into a DataFrame, where the index contains the entries of interest
+    sieved_file: Pickle file that is read into a DataFrame,
+        where the index contains the entries of interest
     """
     # make output directory
     if os.path.isdir(kwargs["output"]):
         print("[XGB] Output directory already exists, adding time to directory name")
-        from datetime import datetime
-
-        now = "_%d%d%d_%d%d%d" % ( 
+        now = "_%d%d%d_%d%d%d" % (
             datetime.now().year,
             datetime.now().month,
             datetime.now().day,
@@ -176,7 +181,7 @@ def main(kwargs):
             datetime.now().second,
         )
         kwargs["output"] = kwargs["output"] + now
-    print("[XGB] Output file is", kwargs['output'])
+    print("[XGB] Output file is", kwargs["output"])
     os.mkdir(kwargs["output"])
 
     # clean data
@@ -184,14 +189,14 @@ def main(kwargs):
     sieved_priors_index.name = "SMILES"
     if kwargs["energy_type"] == Energy_Type.BINDING:
         # ground_truth = pd.read_csv(BINDING_CSV) # binding values only
-        ground_truth = pd.read_csv(BINDING_NB_CSV)  # binding with non-binding values
+        ground_truth = pd.read_csv(kwargs["truth"])  # binding with non-binding values
     else:
         print("[XGB] Please work only with binding energies")
         breakpoint()
     ground_truth = ground_truth[ground_truth["SMILES"].isin(sieved_priors_index)]
     ground_truth = ground_truth.set_index(["SMILES", "Zeolite"])
     ground_truth = ground_truth[["Binding (SiO2)"]]
-    mask = pd.read_csv(MASK_CSV)
+    mask = pd.read_csv(kwargs["mask"])
 
     # get priors
     print("[XGB] prior_method used is", kwargs["prior_method"])
@@ -266,10 +271,12 @@ def main(kwargs):
     X_test = X.loc[smiles_test]
 
     mask_train = mask.set_index("SMILES").loc[smiles_train]
+    mask_train.to_pickle(os.path.join(kwargs["output"], "mask_train.pkl"))
     mask_test = mask.set_index("SMILES").loc[smiles_test]
+    mask_test.to_pickle(os.path.join(kwargs["output"], "mask_test.pkl"))
 
-    print("[XGB] DEBUG: Check X and mask have been created properly")
-    breakpoint()
+    # print("[XGB] DEBUG: Check X and mask have been created properly")
+    # breakpoint()
 
     # hyperparameter tuning
     if kwargs["optimize_hyperparameters"]:
@@ -281,6 +288,7 @@ def main(kwargs):
             k_folds=kwargs["k_folds"],
             search_type=kwargs["search_type"],
             mask=mask_train,
+            debug=kwargs["debug"],
         )
 
     # fit and predict tuned model
@@ -316,22 +324,41 @@ def main(kwargs):
     df["Binding (SiO2)"] = g["Binding (SiO2)"]
     df.to_pickle(os.path.join(kwargs["output"], "all.pkl"))
 
-    # TODO: dumb way to check the RMSE is going down
-    print("[XGB] Sanity check RMSE for train/test, includes non-bind:")
+    # performance
     print(
-        "Train score: ", np.sqrt(mean_squared_error(ground_truth_train, y_pred_train))
+        "[XGB] Train score:",
+        masked_rmse(
+            ground_truth_train["Binding (SiO2)"].values, y_pred_train, mask_train.exists
+        ),
     )
-    print("Test score: ", np.sqrt(mean_squared_error(ground_truth_test, y_pred_test)))
+    print(
+        "[XGB] Test score:",
+        masked_rmse(
+            ground_truth_test["Binding (SiO2)"].values, y_pred_test, mask_test.exists
+        ),
+    )
+    print(
+        "[XBG] Unmasked train score:",
+        np.sqrt(mean_squared_error(ground_truth_train, y_pred_train)),
+    )
+    print(
+        "[XBG] Unmasked test score:",
+        np.sqrt(mean_squared_error(ground_truth_test, y_pred_test)),
+    )
 
     # feature importance
-    breakpoint()
-    print("[XGB] model.feature_importances", model.feature_importances_)
     print(
-        "[XGB] model.feature_importances shape", model.feature_importances_.shape
-    )  # handcrafted 16 + getaway 273
+        "[XGB] model.feature_importances", model.feature_importances_
+    )  # handcrafted 16 + getaway 273 = 289 x 1
+    np.save(
+        os.path.join(kwargs["output"], "feature_importance"), model.feature_importances_
+    )
+
     # fig, ax = plt.subplots(figsize=(16, 12))
     # ax = xgboost.plot_importance(model, max_num_features=10, ax=ax)
     # fig.savefig(os.path.join(XGBOOST_OUTPUT_DIR, "xgb_feature_importance.png"), dpi=300)
+
+    print(f"[XGB] Finished. Output directory is {kwargs['output']}")
 
 
 def preprocess(input):
@@ -351,6 +378,7 @@ def preprocess(input):
         "output_dir": XGBOOST_OUTPUT_DIR,
         "search_type": "random",
         "model": None,
+        "debug": False,
     }
 
     input = input.__dict__
@@ -385,6 +413,7 @@ if __name__ == "__main__":
     #     help="If True, tune hyperparameters",
     # )
     parser.add_argument("--output", help="Output directory", type=str, required=True)
+    parser.add_argument("--debug", action="store_true", dest="debug")
     parser.add_argument(
         "--energy_type",
         help="Binding or templating energy",
@@ -393,19 +422,19 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--stack_combined_priors",
-        help="treatment for stacking priors",
+        help="Treatment for stacking priors",
         type=str,
         required=True,
     )
     parser.add_argument(
         "--search_type", help="Hyperparameter tuning method", type=str, required=True
     )
+    parser.add_argument("--truth", help="Ground truth file", type=str, required=True)
+    parser.add_argument("--mask", help="Mask file", type=str, required=True)
     args = parser.parse_args()
     kwargs = preprocess(args)
     main(kwargs)
 
-
-    
     # main(
     #     optimize_hyperparameters=True,
     #     stack_combined_priors="osda",

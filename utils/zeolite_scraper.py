@@ -81,6 +81,35 @@ def scrape_framework_cs(url):
     properties["vertex_symbol"] = divs[13].text
     return properties
 
+def scrape_framework_cbu(url):
+    cbus = []
+    properties = {}
+    page = requests.get(url)
+
+    soup = BeautifulSoup(page.content, "html.parser")
+    results = soup.find(id="containerbody")
+
+    top_table = results.find_all("tr")[0].find_all("tr")
+
+    for idx, tab in enumerate(top_table):
+        if "Composite Building Unit" in tab.text:
+            trunc_table = top_table[idx+1:]
+
+    img_table = []
+    for idx, tab in enumerate(trunc_table):
+        if tab.find("img"):
+            img_table.append(tab)
+    
+    for idx, tab in enumerate(img_table):
+        imgs = tab.find_all("img")
+        for img in imgs:
+            src = img['src']
+            if 'CBU' in src or 'Chains' in src:
+                cbus.append(src.split("/")[-1].split(".")[0])
+    properties["cbu"] = cbus
+    return properties
+
+
 if __name__ == '__main__':
     TABLE = "https://america.iza-structure.org/IZA-SC/ftc_table.php"
     URL_STEM = "https://america.iza-structure.org/IZA-SC/"
@@ -95,6 +124,7 @@ if __name__ == '__main__':
         code = zeolite.find("a").text.replace(" ", "")
         url = URL_STEM + zeolite.find("a")["href"]
         properties = scrape_main_page(url)
+        properties.update(scrape_framework_cbu(url))
         # This .replace() call is a bit hacky... but it works so...
         framework_url = URL_STEM + zeolite.find("a")["href"].replace(
             "framework.php", "framework_cs.php"
@@ -103,5 +133,6 @@ if __name__ == '__main__':
         series = pd.Series(properties)
         series.name = code
         zeolite_data = zeolite_data.append(series)
-
-    save_matrix(zeolite_data, ZEOLITE_PRIOR_FILE)
+    breakpoint()
+    # save_matrix(zeolite_data, ZEOLITE_PRIOR_FILE)
+    save_matrix(zeolite_data, "ntk_matrix_completion/data/handcrafted/scraped_zeolite_data_with_rings_with_cbus.pkl")

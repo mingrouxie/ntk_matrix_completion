@@ -31,14 +31,13 @@ sys.path.insert(
 
 
 def plot_top_k_curves(top_accuracies, method):
-    plt.plot(top_accuracies)
-    plt.title(f"{method} Accuracy")
-    plt.xlabel("K")
-    plt.ylabel("Accuracy")
-    plt.xticks(np.arange(0, len(top_accuracies) + 1, step=5))
-    plt.show()
-    plt.draw()
-    plt.savefig(OUTPUT_DIR + f"/{method}_accuracies.png", dpi=100)
+    fig, axs = plt.subplots(figsize=(10,10))
+    axs.plot(top_accuracies)
+    axs.set_title(f"{method} Accuracy")
+    axs.set_xlabel("K")
+    axs.set_ylabel("Accuracy")
+    axs.set_xticks(np.arange(0, len(top_accuracies) + 1, step=5))
+    fig.savefig(OUTPUT_DIR + f"/{method}_accuracies.png", dpi=100)
 
 
 def get_cosims(true, pred, bypass_epsilon_check=False, filter_value=None):

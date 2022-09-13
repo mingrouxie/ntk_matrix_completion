@@ -88,7 +88,7 @@ def hp_obj_old(space):
 
 class HyperoptSearchCV:
     # TODO: check space same as randomizedsearchcv
-    def __init__(self, X, y, mask, params=None, cv=5, fixed_params=None) -> None:
+    def __init__(self, X, y, mask, params=None, cv=5, fixed_params=None, output=XGBOOST_OUTPUT_DIR) -> None:
         """
         Inputs:
 
@@ -98,6 +98,7 @@ class HyperoptSearchCV:
         params: search space for hyperparameters
         cv: generator or integer (default: 5)
         fixed_params: hyperparameters that are fixed. Overrides params.
+        output: Output directory
         """
         if not params:
             self.space = get_hyperopt_xgb_space()
@@ -108,6 +109,7 @@ class HyperoptSearchCV:
         self.cv = cv  # where do I even use this??????
         self.fixed_params = fixed_params
         self.mask = mask
+        self.output = output
 
     def model_eval(self, params):
         # https://www.kaggle.com/code/ilialar/hyperparameters-tunning-with-hyperopt/notebook
@@ -125,9 +127,9 @@ class HyperoptSearchCV:
         """
         params.update(**self.fixed_params)  # overwrites
         model = xgb.XGBRegressor(**params)
-        print(
-            f"[HyperoptSearchCV] check, is params changing?: {params['learning_rate']}"
-        )  # params)
+        # print(
+        #     f"[HyperoptSearchCV] check, is params changing?: {params['learning_rate']}"
+        # )  # params)
 
         iterator = create_iterator(
             split_type=SplitType.OSDA_ISOMER_SPLITS,
@@ -152,10 +154,11 @@ class HyperoptSearchCV:
             mask_train = mask_train.set_index([mask_train.index, "Zeolite"]).values
             mask_test = self.mask.loc[test.index]
             mask_test = mask_test.set_index([mask_test.index, "Zeolite"]).values
+
             model.fit(X_train, y_train)
             pred_train = model.predict(X_train)
             pred_test = model.predict(X_test)
-            metrics = "masked_rmse"  # TODO: remove
+
             if metrics == "masked_rmse":
                 train_scores.append(
                     masked_rmse(y_train, pred_train, np.squeeze(mask_train))
@@ -168,23 +171,24 @@ class HyperoptSearchCV:
                     f"[cross_val] metrics {metrics} not implemented"
                 )
 
-        print(
-            f"[cross_val] Train, test scores: {np.mean(train_scores)}, {np.mean(test_scores)}"
-        )
+        # print(
+        #     f"[cross_val] Train, test scores: {np.mean(train_scores)}, {np.mean(test_scores)}"
+        # )
         return {
             "loss": np.mean(test_scores),
             "status": STATUS_OK,
             "loss_variance": np.std(test_scores),
+            "train_loss": np.mean(train_scores),
+            "train_loss_variance": np.std(train_scores)
         }
 
-    def fit(self, debug=True):
+    def fit(self, debug=False):
         if debug:
-            max_evals = 5
+            max_evals = 50
         else:
             max_evals = 500
-        self.trials = (
-            Trials()
-        )  # TODO: will this get changed? Should it be trials and the assign to self.trials aftre fmin??
+        self.trials = Trials()
+        print(f"[HyperoptSearchCV] fmin seed is {HyperoptSearchCV}")
         self.best_params_ = fmin(
             fn=self.model_eval,  # objective function
             space=self.space,
@@ -198,7 +202,7 @@ class HyperoptSearchCV:
 
         # Save Trials object which contains information about each step in fmin
         pickle.dump(
-            self.trials, open(os.path.join(XGBOOST_OUTPUT_DIR, "trials.pkl"), "wb")
+            self.trials, open(os.path.join(self.output, "trials.pkl"), "wb")
         )
 
     @property

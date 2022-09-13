@@ -3,7 +3,7 @@ import pathlib
 import os
 import torch
 
-from features.prior import make_prior
+from ntk_matrix_completion.features.prior import make_prior
 import pdb
 import numpy as np
 import pandas as pd

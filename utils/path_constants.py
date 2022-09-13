@@ -1,7 +1,6 @@
 import argparse
 
 # TODO: add some path wizardry to make sure these work despite the directory it's called in...
-DEBUG = True
 
 """
 INPUT DATA
@@ -19,13 +18,12 @@ HYPOTHETICAL_OSDA_ENERGIES = (
 )
 HYPOTHETICAL_OSDA_BOXES = "ntk_matrix_completion/data/daniels_data/211221_boxes.csv"
 
-# Debugging files - uncomment when debugging
-if DEBUG:
-    BINDING_CSV = (
-        "ntk_matrix_completion/data/daniels_data/science_paper/binding_debug.csv"
-    ) # note this does not contain all the pairs found in the NB_CSV version 
-    BINDING_NB_CSV = "ntk_matrix_completion/data/daniels_data/science_paper/binding_nb_rowmean_debug.csv"  # with row mean for non binding entries
-    MASK_CSV = "ntk_matrix_completion/data/daniels_data/science_paper/mask_debug.csv"
+## Debugging files
+# BINDING_CSV = (
+#     "ntk_matrix_completion/data/daniels_data/science_paper/binding_debug.csv"
+# ) # note this does not contain all the pairs found in the NB_CSV version 
+# BINDING_NB_CSV = "ntk_matrix_completion/data/daniels_data/science_paper/binding_nb_rowmean_debug.csv"  # with row mean for non binding entries
+# MASK_CSV = "ntk_matrix_completion/data/daniels_data/science_paper/mask_debug.csv"
 
 """
 GENERATED PRIORS
