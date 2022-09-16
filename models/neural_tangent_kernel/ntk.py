@@ -1,6 +1,7 @@
 import sys
 import pathlib
 import os
+from typing import Iterable
 import torch
 
 from ntk_matrix_completion.features.prior import make_prior
@@ -107,22 +108,24 @@ def predict(all_data, mask, num_test_rows, X, reduce_footprint=False):
     return results.T
 
 
-def create_iterator(split_type, all_data, metrics_mask, k_folds, seed):
+def create_iterator(split_type, all_data, metrics_mask, k_folds, seed): 
     """
     Inputs:
 
         split_type: method of constructing data splits
-        all_data: for NTK this is a DataFrame of binding energies. For XGB this is a DataFrame of priors.
-        For both the index of the DataFrame is SMILES
+        all_data: Dataframe where the index is used to create the iterator based on the split_type
+        E.g. for NTK this is a DataFrame of binding energies. For XGB this is a DataFrame of priors.
+        For both examples the index of the DataFrame is SMILES
         metrics_mask: array with 1 for binding and 0 for non-binding entries
         k_folds: number of folds to create
         seed: seed for splits in zeolite_types
 
     Returns:
-
-        train: portion of all_data for training
-        test: portion of all_data for testing
-        test_mask_chunk: binding/non-binding mask for test
+        
+        An iterator that returns the following in each iteration:
+        - train: portion of all_data for training
+        - test: portion of all_data for testing
+        - test_mask_chunk: binding/non-binding mask for test
     """
     if split_type == SplitType.NAIVE_SPLITS:
         # The iterator shuffles the data which is why we need to pass in metrics_mask together.
@@ -158,6 +161,7 @@ def create_iterator(split_type, all_data, metrics_mask, k_folds, seed):
                 all_data,
                 metrics_mask,
                 k_folds,
+                random_seed=seed
             )
         )
     else:

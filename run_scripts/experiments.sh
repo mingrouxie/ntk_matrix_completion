@@ -17,7 +17,6 @@ OUTPUT="${ROOT}/output/2022_IZC/xgb_with_nb_hyperopt"
 # python $ROOT/models/xgboost/xgb.py
 TRUTH='ntk_matrix_completion/data/daniels_data/science_paper/binding_nb_rowmean_debug.csv'
 MASK='ntk_matrix_completion/data/daniels_data/science_paper/mask_debug.csv'
-python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --stack_combined_priors 'osda' --truth $TRUTH --mask $MASK --search_type 'hyperopt'
-
 TRUTH='ntk_matrix_completion/data/daniels_data/science_paper/binding_nb_rowmean.csv'
 MASK='ntk_matrix_completion/data/daniels_data/science_paper/mask.csv'
+python -m cProfile -o $ROOT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --stack_combined_priors 'osda' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --debug

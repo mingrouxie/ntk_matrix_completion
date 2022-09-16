@@ -144,10 +144,11 @@ def get_tuned_model(
         search = HyperoptSearchCV(
             X,
             y,
-            cv=cv_generator,
+            # cv=cv_generator,
             fixed_params=fixed_params,
             mask=mask,
             output=kwargs["output"],
+            seed=kwargs["split_seed"] # not very sure
         )
         # breakpoint()
         search.fit(debug=debug)
@@ -207,9 +208,10 @@ def main(kwargs):
         normalization_factor=0,
         all_data=ground_truth,
         stack_combined_priors=False,
-        osda_prior_file=OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
+        osda_prior_file=kwargs["osda_prior_file"],
     )
 
+    # TODO: THIS IF THREAD IS RATHER UNKEMPT. WHEN WE GENERALIZE TO ZEOLITES.... 
     if kwargs["prior_method"] == "CustomOSDAVector":
         X = prior
         print(f"[XGB] Prior of shape {prior.shape}")
@@ -240,6 +242,10 @@ def main(kwargs):
             print(f"[XGB] What do you want to do with the priors??")
             breakpoint()
 
+    else:
+        print(f"[XGB] prior_method {kwargs['prior_method']} not implemented")
+        breakpoint()
+
     X = pd.DataFrame(X, index=ground_truth.index)
     print("[XGB] Final prior X shape:", X.shape)
 
@@ -253,12 +259,11 @@ def main(kwargs):
     else:
         print("[XGB] What data splits do you want?")
         breakpoint()
-
     clustered_isomers_train, clustered_isomers_test = train_test_split(
-        clustered_isomers, test_size=0.1, random_state=ISOMER_SEED
+        clustered_isomers, test_size=0.1, shuffle=False, random_state=ISOMER_SEED
     )
-    smiles_train = list(set().union(*clustered_isomers_train))
-    smiles_test = list(set().union(*clustered_isomers_test))
+    smiles_train = sorted(list(set().union(*clustered_isomers_train)))
+    smiles_test = sorted(list(set().union(*clustered_isomers_test)))
 
     ground_truth_train = (
         ground_truth.loc[smiles_train].reset_index().set_index(["SMILES", "Zeolite"])
@@ -279,7 +284,7 @@ def main(kwargs):
     # breakpoint()
 
     # hyperparameter tuning
-    if kwargs["optimize_hyperparameters"]:
+    if kwargs["tune"]:
         print("[XGB] Tuning hyperparameters")
         model, search = get_tuned_model(
             params=None,
@@ -369,16 +374,7 @@ def preprocess(input):
         "energy_type": Energy_Type.BINDING,
         "split_type": SplitType.OSDA_ISOMER_SPLITS,
         "k_folds": 5,
-        # "prior_method" : "CustomOSDAandZeoliteAsRows",
-        "prior_method": "CustomOSDAVector",
-        "stack_combined_priors": "all",
-        "osda_prior_file": OSDA_CONFORMER_PRIOR_FILE_CLIPPED,  # TODO: generalize to substrate too
-        "sieved_file": OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
-        "optimize_hyperparameters": True,
-        "output_dir": XGBOOST_OUTPUT_DIR,
-        "search_type": "random",
-        "model": None,
-        "debug": False,
+        # "model": None,
     }
 
     input = input.__dict__
@@ -405,14 +401,19 @@ if __name__ == "__main__":
 
     # TODO
     parser = argparse.ArgumentParser(description="XGBoost")
-    # parser.add_argument(
-    #     "--opt_hp",
-    #     type=int,
-    #     action="store_true",
-    #     default=1,
-    #     help="If True, tune hyperparameters",
-    # )
     parser.add_argument("--output", help="Output directory", type=str, required=True)
+    parser.add_argument(
+        "--tune",
+        help="Tune hyperparameters",
+        action="store_true",
+        dest="tune",
+    )
+    parser.add_argument(
+        "--prior_method",
+        help="method var in make_prior",
+        type=str,
+        default="CustomOSDAVector",
+    )
     parser.add_argument("--debug", action="store_true", dest="debug")
     parser.add_argument(
         "--energy_type",
@@ -425,18 +426,36 @@ if __name__ == "__main__":
         help="Treatment for stacking priors",
         type=str,
         required=True,
+        default="all",
     )
     parser.add_argument(
-        "--search_type", help="Hyperparameter tuning method", type=str, required=True
+        "--search_type",
+        help="Hyperparameter tuning method",
+        type=str,
+        required=True,
+        default="hyperopt",
     )
     parser.add_argument("--truth", help="Ground truth file", type=str, required=True)
     parser.add_argument("--mask", help="Mask file", type=str, required=True)
+    parser.add_argument(
+        "--sieved_file",
+        help="Dataframe whose index is used to sieve for desired data points",
+        type=str,
+        default=OSDA_CONFORMER_PRIOR_FILE_CLIPPED, # TODO: generalize to substrate
+    )
+    parser.add_argument(
+        "--osda_prior_file",
+        help="OSDA prior file, only read if prior_method is CustomOSDAVector or CustomOSDAandZeoliteAsRows",
+        type=str,
+        default=OSDA_CONFORMER_PRIOR_FILE_CLIPPED,  # TODO: generalize to substrate
+    )
+    parser.add_argument("--split_seed", help="Data split seed", type=str, default=ISOMER_SEED)
     args = parser.parse_args()
     kwargs = preprocess(args)
     main(kwargs)
 
     # main(
-    #     optimize_hyperparameters=True,
+    #     tune=True,
     #     stack_combined_priors="osda",
     #     search_type="hyperopt",
     # )
@@ -458,7 +477,7 @@ if __name__ == "__main__":
     #     nthread=5,
     #     **params
     # )
-    # main(model=model, optimize_hyperparameters=False, stack_combined_priors="osda")
+    # main(model=model, tune=False, stack_combined_priors="osda")
 
 # print("[XGB] Scores: {0}\nMean: {1:.3f}\nStd: {2:.3f}".format(scores, np.mean(scores), np.std(scores)))
 # 553 isomer groups from 1096 data points. very interesting

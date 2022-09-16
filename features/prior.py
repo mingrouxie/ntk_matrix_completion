@@ -174,7 +174,7 @@ def load_vector_priors(
 
     exploded_prior = exploded_prior.clip(clip_boundaries[0], clip_boundaries[1])
     print(
-        f"Sanity check on clipped values with boundaries {clip_boundaries}",
+        f"[prior/load_vector_priors] Sanity check on clipped values with boundaries {clip_boundaries}",
         exploded_prior.shape,
         exploded_prior.min().min(),
         exploded_prior.max().max(),
@@ -214,7 +214,7 @@ def load_prior(
     other_prior_to_concat=OSDA_HYPOTHETICAL_PRIOR_FILE,
 ):
     precomputed_prior = pd.read_pickle(precomputed_file_name)
-    print(f"Precomputed prior file {precomputed_file_name} read")
+    print(f"[prior/load_prior] Precomputed prior file {precomputed_file_name} read")
     if other_prior_to_concat:
         print(f"Other prior to concat {other_prior_to_concat} read")
         big_precomputed_priors = pd.read_pickle(other_prior_to_concat)
@@ -237,7 +237,7 @@ def load_prior(
     # We NEED TO CHANGE THIS
     # ring sizes as well for zeolites, after ring_size_1
     print(
-        f"Precomputed prior has this many NaN entries:",
+        f"[prior/load_prior] Precomputed prior has this many NaN entries:",
         precomputed_prior.isna().sum().sum(),
     )
     # results = precomputed_prior.fillna(0.0)
@@ -494,6 +494,9 @@ def make_prior(
 
     stack_combined_priors: This is only for the two tower NN where we would like to separate the
     embeddings for zeolite and OSDAs.
+
+    osda_prior_file: used in osda_vector_prior in CustomOSDAVector and 
+    in osda_zeolite_combined_prior in CustomOSDAandZeoliteAsRows
     """
     assert method in VALID_METHODS, f"Invalid method used, pick one of {VALID_METHODS}"
     if all_data is not None:
