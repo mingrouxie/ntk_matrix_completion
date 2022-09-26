@@ -88,7 +88,17 @@ def hp_obj_old(space):
 
 class HyperoptSearchCV:
     # TODO: check space same as randomizedsearchcv
-    def __init__(self, X, y, mask, params=None, cv=5, fixed_params=None, output=XGBOOST_OUTPUT_DIR) -> None:
+    def __init__(
+        self,
+        X,
+        y,
+        mask,
+        seed=HYPEROPT_SEED,
+        params=None,
+        fixed_params=None,
+        output=XGBOOST_OUTPUT_DIR,
+        split_type=SplitType.OSDA_ISOMER_SPLITS,
+    ) -> None:
         """
         Inputs:
 
@@ -106,10 +116,57 @@ class HyperoptSearchCV:
             self.space = params
         self.X = X
         self.y = y
-        self.cv = cv  # where do I even use this??????
+        # self.cv = cv
+        # TODO: remove this, or change it to an input of smiles strings, and then create an iterator here each time from X and y and mask
         self.fixed_params = fixed_params
         self.mask = mask
         self.output = output
+        self.seed = seed
+        self.split_type = split_type
+        if self.split_type == SplitType.OSDA_ISOMER_SPLITS:
+            self.split_name = "SMILES"
+        elif self.split_type == SplitType.ZEOLITE_SPLITS:
+            self.split_name = "Zeolite"
+        else:
+            print("[HyperoptCVSearch] no split_name")
+        self.index_splits = self._create_index_splits()
+
+
+    def _create_index_splits(self):
+        '''
+        Returns:
+        
+        A list of tuples. Each tuple contains
+        
+        - DataFrame where the index identifies the training data
+        - DataFrame where the index identifies the test data
+        - DataFrame that is a subset of self.mask, otherwise None
+        '''
+        index = pd.DataFrame(
+            index=self.X.reset_index().set_index(self.split_name).index
+        )
+        splits = create_iterator(
+            split_type=self.split_type,
+            all_data=index,
+            metrics_mask=self.mask,
+            k_folds=5,
+            seed=self.seed,
+        )
+        splits = [tup for tup in splits]
+        return splits
+
+    def _create_iterator(self):
+        for split in self.index_splits:
+            all_y = self.y.reset_index()
+            train = all_y[all_y[self.split_name].isin(split[0].index)].set_index(['SMILES', "Zeolite"]).index.to_list()
+            test = all_y[all_y[self.split_name].isin(split[1].index)].set_index(['SMILES', "Zeolite"]).index.to_list()
+            if self.mask is None:
+                yield train, test
+            else:
+                m = self.mask.reset_index()
+                m = m[m[self.split_name].isin(split[2].reset_index()[self.split_name])].set_index(self.split_name)
+                yield train, test, m
+                
 
     def model_eval(self, params):
         # https://www.kaggle.com/code/ilialar/hyperparameters-tunning-with-hyperopt/notebook
@@ -123,7 +180,7 @@ class HyperoptSearchCV:
         metrics: (str) metric for evaluating performance
 
         Returns:
-        Dictionary containing `loss`, `status` and `loss_variance` as keys
+        Dictionary containing `loss`, `status`, `loss_variance`, `train_loss`, `train_loss_variance` as keys
         """
         params.update(**self.fixed_params)  # overwrites
         model = xgb.XGBRegressor(**params)
@@ -131,29 +188,25 @@ class HyperoptSearchCV:
         #     f"[HyperoptSearchCV] check, is params changing?: {params['learning_rate']}"
         # )  # params)
 
-        iterator = create_iterator(
-            split_type=SplitType.OSDA_ISOMER_SPLITS,
-            all_data=self.X.reset_index().set_index("SMILES"),
-            metrics_mask=self.mask,
-            k_folds=5,
-            seed=HYPEROPT_SEED,
-        )
-
+        iterator = self._create_iterator()
         results = self.cross_val(model, cv_generator=iterator)
+        # results = self.cross_val(model, cv_generator=self.cv)
         return results
 
     def cross_val(self, model, cv_generator, metrics="masked_rmse"):
         train_scores = []
         test_scores = []
+        # breakpoint()
         for train, test, test_mask_chunk in cv_generator:
-            X_train = self.X.loc[train.index]
-            X_test = self.X.loc[test.index]
-            y_train = self.y.loc[train.index]["Binding (SiO2)"].values
-            y_test = self.y.loc[test.index]["Binding (SiO2)"].values
-            mask_train = self.mask.loc[train.index]
-            mask_train = mask_train.set_index([mask_train.index, "Zeolite"]).values
-            mask_test = self.mask.loc[test.index]
-            mask_test = mask_test.set_index([mask_test.index, "Zeolite"]).values
+            # TODO: might have to change the code below. anyways
+            X_train = self.X.loc[train]
+            X_test = self.X.loc[test]
+            y_train = self.y.loc[train]["Binding (SiO2)"].values
+            y_test = self.y.loc[test]["Binding (SiO2)"].values
+            mask_train = self.mask.reset_index().set_index(['SMILES', 'Zeolite']).loc[train].values
+            # mask_train = mask_train.set_index([mask_train.index, "Zeolite"]).values
+            mask_test = self.mask.reset_index().set_index(['SMILES', 'Zeolite']).loc[test].values
+            # mask_test = mask_test.set_index([mask_test.index, "Zeolite"]).values
 
             model.fit(X_train, y_train)
             pred_train = model.predict(X_train)
@@ -179,16 +232,16 @@ class HyperoptSearchCV:
             "status": STATUS_OK,
             "loss_variance": np.std(test_scores),
             "train_loss": np.mean(train_scores),
-            "train_loss_variance": np.std(train_scores)
+            "train_loss_variance": np.std(train_scores),
         }
 
     def fit(self, debug=False):
         if debug:
-            max_evals = 50
+            max_evals = 5
         else:
-            max_evals = 500
+            max_evals = 200
+        print(f'[HyperOptSearchCV] max_evals={max_evals}')
         self.trials = Trials()
-        print(f"[HyperoptSearchCV] fmin seed is {HyperoptSearchCV}")
         self.best_params_ = fmin(
             fn=self.model_eval,  # objective function
             space=self.space,
@@ -201,9 +254,7 @@ class HyperoptSearchCV:
         print(f"[HyperoptSearchCV] Best parameters are {self.best_params_}")
 
         # Save Trials object which contains information about each step in fmin
-        pickle.dump(
-            self.trials, open(os.path.join(self.output, "trials.pkl"), "wb")
-        )
+        pickle.dump(self.trials, open(os.path.join(self.output, "trials_tuning.pkl"), "wb"))
 
     @property
     def cv_results_(self):  # dict of numpy (masked) ndarrays in sklearn CV methods
