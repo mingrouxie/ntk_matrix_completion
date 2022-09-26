@@ -68,7 +68,7 @@ def get_tuned_model(
     y,
     k_folds=5,  # TODO: cv=5 arbitrary
     split_type=SplitType.OSDA_ISOMER_SPLITS,
-    random_seed=MODEL_SEED,
+    model_seed=MODEL_SEED,
     objective="reg:squarederror",  # "neg_root_mean_squared_error"
     nthread=5,
     search_type="random",
@@ -100,7 +100,7 @@ def get_tuned_model(
     if search_type == "random":
         # IZC 2022 results were from this (no non-binding entries, no mask)
         model = xgboost.XGBRegressor(
-            objective=objective, random_state=random_seed, nthread=nthread
+            objective=objective, random_state=model_seed, nthread=nthread
         )
         params = get_xgb_space()
         search = RandomizedSearchCV(
@@ -119,7 +119,7 @@ def get_tuned_model(
 
     elif search_type == "grid":
         model = xgboost.XGBRegressor(
-            objective=objective, random_state=random_seed, nthread=nthread
+            objective=objective, random_state=model_seed, nthread=nthread
         )
         params = get_xgb_space()
         search = GridSearchCV(
@@ -138,7 +138,7 @@ def get_tuned_model(
     elif search_type == "hyperopt":
         fixed_params = {
             "objective": objective,
-            "random_state": random_seed,
+            "random_state": model_seed,
             "nthread": nthread,
         }
         search = HyperoptSearchCV(
@@ -148,7 +148,7 @@ def get_tuned_model(
             fixed_params=fixed_params,
             mask=mask,
             output=kwargs["output"],
-            seed=kwargs["split_seed"] # not very sure
+            seed=kwargs["split_seed"],  # not very sure
         )
         # breakpoint()
         search.fit(debug=debug)
@@ -157,7 +157,7 @@ def get_tuned_model(
     report_best_scores(search, n_top=1, search_type=search_type)
     tuned_xgb = xgboost.XGBRegressor(
         objective=objective,
-        random_state=random_seed,
+        random_state=model_seed,
         nthread=nthread,
         **search.best_params_,
     )
@@ -211,7 +211,7 @@ def main(kwargs):
         osda_prior_file=kwargs["osda_prior_file"],
     )
 
-    # TODO: THIS IF THREAD IS RATHER UNKEMPT. WHEN WE GENERALIZE TO ZEOLITES.... 
+    # TODO: THIS IF THREAD IS RATHER UNKEMPT. WHEN WE GENERALIZE TO ZEOLITES....
     if kwargs["prior_method"] == "CustomOSDAVector":
         X = prior
         print(f"[XGB] Prior of shape {prior.shape}")
@@ -294,20 +294,41 @@ def main(kwargs):
             search_type=kwargs["search_type"],
             mask=mask_train,
             debug=kwargs["debug"],
+            nthread=kwargs["nthread"],
+            objective=kwargs["objective"],
+            model_seed=kwargs["model_seed"],
         )
+    else:
+        model = xgboost.XGBRegressor()
+        model.load_model(kwargs["model_file"])
 
     # fit and predict tuned model
     print("[XGB] Using tuned model")
     # model.set_params(eval_metric=) # TODO: figure this out
     # disable_default_eval_metric - do we need this?
+
+    # TODO: save the information from here in order to plot train and test loss curves
+    # eval_metric does not seem to allow custom eval_metrics from the most recent documentation, but
+    # https://datascience.stackexchange.com/questions/99505/xgboost-fit-wont-recognize-my-custom-eval-metric-why
+
+    model.set_params(
+        eval_metric='rmse', # TODO: change to a custom eval_metric fn? Currently this means NB also included. Also change this to a parser argument if not custom
+        # disable_default_eval_metric= 
+        early_stopping_rounds=10,
+        )
     model.fit(
         X_train,
         ground_truth_train,
-        # eval_set=[(X_train, ground_truth_train), (X_test, ground_truth_test)],
+        eval_set=[(X_train, ground_truth_train), (X_test, ground_truth_test)],
         verbose=True,
         # feature_weights=
     )
     model.save_model(os.path.join(kwargs["output"], "xgboost.json"))
+    results = model.evals_result() # 
+    np.save(kwargs['output']+'/'+'train_loss.npy', results['validation_0']['rmse'])
+    np.save(kwargs['output']+'/'+'test_loss.npy', results['validation_1']['rmse'])
+    # breakpoint()
+
 
     y_pred_train = model.predict(X_train)
     df = pd.DataFrame(
@@ -441,7 +462,7 @@ if __name__ == "__main__":
         "--sieved_file",
         help="Dataframe whose index is used to sieve for desired data points",
         type=str,
-        default=OSDA_CONFORMER_PRIOR_FILE_CLIPPED, # TODO: generalize to substrate
+        default=OSDA_CONFORMER_PRIOR_FILE_CLIPPED,  # TODO: generalize to substrate
     )
     parser.add_argument(
         "--osda_prior_file",
@@ -449,7 +470,22 @@ if __name__ == "__main__":
         type=str,
         default=OSDA_CONFORMER_PRIOR_FILE_CLIPPED,  # TODO: generalize to substrate
     )
-    parser.add_argument("--split_seed", help="Data split seed", type=str, default=ISOMER_SEED)
+    parser.add_argument(
+        "--split_seed", help="Data split seed", type=str, default=ISOMER_SEED
+    )
+    parser.add_argument(
+        "--nthread", help="Number of threads for XGBoost", type=int, default=5
+    )
+    parser.add_argument(
+        "--objective",
+        help="Objective for XGBoost",
+        type=str,
+        default="reg:squarederror",
+    )
+    parser.add_argument(
+        "--model_seed", help="Seed for model", type=int, default=MODEL_SEED
+    )
+    parser.add_argument("--model_file", help="file to load model from", type=str)
     args = parser.parse_args()
     kwargs = preprocess(args)
     main(kwargs)
