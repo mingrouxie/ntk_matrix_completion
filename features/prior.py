@@ -143,33 +143,58 @@ def load_vector_priors(
     clip_boundaries=(
         0.0,
         200,
-    ),  # TODO: This is very ugly and needs to be corrected if we want to use WHIMS
+    ),
 ):
     """
-    Return normalized prior as a dataframe of series, each series containing the embeddings.
-    The normalization is to the biggest value + identity_weight (why?)
+    Inputs:
+
+        target index: List of substrates or ligands that we are interested in
+
+        vector_feature: (str) name of the vector fingerprint we want. Currently 'getaway' or 'whims'
+
+        precomputed_file_name: (str) Path of file containing the priors
+
+        identity_weight: (float) priors are normalized to (1-identity_weight). See normalize
+
+        normalize: If True, normalizes the priors across each row. See identity_weight
+
+        other_prior_to_concat: For now, this looks like the prior file of new ligands/ substrates to predict for
+
+        replace_nan: Replace NaN entries in the prior file with NaN. Stopgap, really shouldn't be used
+
+        already_exploded: If False, grabs the vector fingerprint from the initial prior DataFrame
+
+        clip_boundaries: Clip values in vector fingerprint. Currently manually set at (0.0, 200) for GETAWAY fingerprints,
+            and needs to be corrected if we want to use WHIMS
+
+    Returns:
+
+        Normalized prior as a dataframe of series, each series containing the embeddings.
     """
     precomputed_prior = pd.read_pickle(precomputed_file_name)
+
     if other_prior_to_concat:
         big_precomputed_priors = pd.read_pickle(other_prior_to_concat)
         precomputed_prior = pd.concat([big_precomputed_priors, precomputed_prior])
         precomputed_prior = precomputed_prior[
             ~precomputed_prior.index.duplicated(keep="first")
         ]  # keeps entry from big_precomputed_priors if there are repeats
+
     if not already_exploded:  # grab just the embedding priors from the data
 
         def vector_explode(x):
             return pd.Series(x[vector_feature])
 
         precomputed_prior = precomputed_prior.apply(vector_explode, axis=1)
-    # TODO(Yitong): 'CC[N+]12C[N@]3C[N@@](C1)C[N@](C2)C3'
-    # it seems we are missing precomputed priors for one energy OSDAs...
     exploded_prior = precomputed_prior.reindex(target_index)
 
     # TODO(Yitong): Exchanged .loc[] with .reindex() to fix a break. Was there a reason to use loc[]?
     # exploded_prior = precomputed_prior.loc[target_index] # target_index=all_data_df.index for gcnn embeddings
 
     if replace_nan is not None:
+        print(
+            f"[prior/load_vector_prior] WARNING: there are {exploded_prior.isna().sum().sum()} NaN entries in prior, filling with {replace_nan}"
+        )
         exploded_prior = exploded_prior.fillna(replace_nan)
 
     exploded_prior = exploded_prior.clip(clip_boundaries[0], clip_boundaries[1])
@@ -179,23 +204,17 @@ def load_vector_priors(
         exploded_prior.min().min(),
         exploded_prior.max().max(),
     )
-    # Check & normalize if anything is negative
+
+    # Check & translate if anything is negative, as NTK prior only takes positive values
     lowest_value = exploded_prior.min().min()
     if lowest_value < 0:
-        exploded_prior += (
-            -lowest_value
-        )  # TODO: Mingrou ask Yitong, is it safe to do this translation?
-        # Response(Yitong): Lolol, great question. I did it for the sake of the NTK algorithm
-        # Which can only take positive values in its priors.
-        # I can't think of why it would be an issue regarding the algorithm which only
-        # finds a separating hyperplane (linear translation should not be an issue)
-        # It does probably take away some of the literal interpretability of the priors, but
-        # does that matter so much?
+        exploded_prior += -lowest_value
 
     # Normalize by the largest row sum
     if normalize:
         exploded_prior = exploded_prior / max(exploded_prior.sum(axis=1))
         exploded_prior = (1 - identity_weight) * exploded_prior
+
     return exploded_prior
 
 
@@ -213,45 +232,69 @@ def load_prior(
     prior_index_map=None,
     other_prior_to_concat=OSDA_HYPOTHETICAL_PRIOR_FILE,
 ):
+    """
+    Inputs:
+
+        target_index: List of substrates or ligands that we are interested in
+
+        column_weights: (dict) Keys are columns names and values are how much to weigh each feature
+
+        precomputed_file_name: (str) Path of prior file to read from. See other_prior_to_concat
+
+        identity_weight: (float) priors are normalized to (1-identity_weight). See normalize
+
+        normalize: If True, normalizes the priors across each row. See identity_weight
+
+        prior_index_map: (dict) Dictionary for renaming some entries in the index. Default is None
+
+        other_prior_to_concat: (str) Path of second prior file to read from. In case of repeats, priors from the first file is kept
+
+    Returns:
+
+        A DataFrame with priors in the columns
+    """
     precomputed_prior = pd.read_pickle(precomputed_file_name)
     print(f"[prior/load_prior] Precomputed prior file {precomputed_file_name} read")
+
     if other_prior_to_concat:
-        print(f"Other prior to concat {other_prior_to_concat} read")
         big_precomputed_priors = pd.read_pickle(other_prior_to_concat)
         precomputed_prior = pd.concat([big_precomputed_priors, precomputed_prior])
         precomputed_prior = precomputed_prior[
             ~precomputed_prior.index.duplicated(keep="first")
         ]
+        print(f"Other prior to concat {other_prior_to_concat} read")
+
     if prior_index_map:  # rename some zeolites
 
         def x(i):
             return prior_index_map[i] if i in prior_index_map else i
 
         precomputed_prior.index = precomputed_prior.index.map(x)
+
     precomputed_prior = precomputed_prior.reindex(
         target_index
     )  # keeps rows with index in target_index, assigns NaN to other indices in target_index
     precomputed_prior = precomputed_prior.filter(items=list(column_weights.keys()))
     precomputed_prior = precomputed_prior.apply(pd.to_numeric)
-    # TODO: this line obscures changes in data points (dropping rows when priors are NaN etc.)
-    # We NEED TO CHANGE THIS
-    # ring sizes as well for zeolites, after ring_size_1
+
     print(
-        f"[prior/load_prior] Precomputed prior has this many NaN entries:",
-        precomputed_prior.isna().sum().sum(),
+        f"[prior/load_prior] Precomputed prior has {precomputed_prior.isna().sum().sum()} NaN entries\n"
     )
+    print("[prior/load_prior] WARNING: Will drop data points with NaN entries")
     # results = precomputed_prior.fillna(0.0)
     results = precomputed_prior.dropna()
+    print(f"Prior of shape {precomputed_prior.shape} now of size {results.shape}")
 
     if normalize:
         # Normalize down each column to between 0 & 1
         precomputed_prior = precomputed_prior.apply(lambda x: x / x.max())
-        # Now time to weigh each column, taking into account identity_weight to make sure
+        # Weigh each column, taking into account identity_weight to make sure
         # later when we add the identity matrix we don't go over 1.0 total per row...
         normalization_factor = sum(column_weights.values())
         results = precomputed_prior.apply(
             lambda x: x * column_weights[x.name] / normalization_factor
         )
+
     return (1 - identity_weight) * results
 
 
@@ -263,15 +306,36 @@ def osda_prior(
     normalize=True,
     other_prior_to_concat=OSDA_HYPOTHETICAL_PRIOR_FILE,
 ):
+    """
+    Inputs:
+
+        all_data_df: (Dataframe)
+
+        identity_weight: (float) priors are normalized to (1-identity_weight). See normalize
+
+        osda_prior: (str) Path of prior file to read from
+
+        prior_map: For CustomZeolite, CustomOSDA, and CustomOSDAVector: how do you want to weight the
+        individual descriptors? Default is to weight all descriptors equally (check out ZEOLITE_PRIOR_LOOKUP &
+        OSDA_PRIOR_LOOKUP). This might be a good thing to tweak for calibrated ensemble uncertainty.
+
+        normalize: If True, normalizes the priors across each row. See identity_weight
+
+        other_prior_to_concat: (str) Path of second prior file to read from. In case of repeats, priors from the first file is kept
+
+    Returns:
+
+        Output from the load_prior method, which is a DataFrame
+    """
     # some data files have SMILES and Zeolite as the index. TODO: hacky solution
     if type(all_data_df.index[0]) == tuple:
-        target_index = all_data_df.reset_index()["SMILES"]
+        target_index = all_data_df.reset_index()["SMILES"] 
     else:
         target_index = tuple(all_data_df.index)
 
     return load_prior(
         target_index=target_index,
-        column_weights=prior_map if prior_map is not None else OSDA_PRIOR_LOOKUP,
+        column_weights=prior_map if prior_map is not None else OSDA_PRIOR_LOOKUP, 
         precomputed_file_name=osda_prior,
         identity_weight=identity_weight,
         normalize=normalize,
@@ -287,6 +351,26 @@ def osda_vector_prior(
     osda_prior_file=OSDA_PRIOR_FILE,
     second_vector_feature=None,
 ):
+    """
+    Inputs:
+
+        all_data_df: (Dataframe)
+
+        vector_feature: (str) name of the vector fingerprint we want. Currently 'getaway' or 'whims'
+
+        identity_weight: (float) priors are normalized to (1-identity_weight). See normalize
+
+        other_prior_to_concat: (str) Path of second prior file to read from. In case of repeats, priors from the first file is kept
+        
+        osda_prior_file: (str) Path of prior file to read from. See other_prior_to_concat
+        
+        second_vector_feature: hacky argument to incorporate a second vector fingerprint if desired
+
+
+    Returns:
+
+        Output from the load_prior method, which is a DataFrame
+    """
     if type(all_data_df.index[0]) == tuple:
         target_index = all_data_df.reset_index()["SMILES"]
     else:
@@ -297,8 +381,10 @@ def osda_vector_prior(
         identity_weight,
         osda_prior=osda_prior_file,
         normalize=False,
-        other_prior_to_concat=other_prior_to_concat
-    ).to_numpy()
+        other_prior_to_concat=other_prior_to_concat,
+    )
+
+    prior = prior.to_numpy()
 
     getaway_prior = load_vector_priors(
         # target_index=all_data_df.index,
@@ -308,11 +394,11 @@ def osda_vector_prior(
         identity_weight=identity_weight,
         normalize=False,
         other_prior_to_concat=other_prior_to_concat,
-    ).to_numpy()
-
+    )
+    getaway_prior = getaway_prior.to_numpy()
     prior_stack = [getaway_prior, prior]
 
-    if second_vector_feature is not None: # TODO: hacky
+    if second_vector_feature is not None:  # TODO: hacky PAUSED HERE
         whims_prior = load_vector_priors(
             # all_data_df.index,
             target_index=target_index,
@@ -490,12 +576,11 @@ def make_prior(
 
     test_train_axis: kinda no longer useful, but originally created if you want to join
     test or train by row or column. I don't think you'll ever need to change this.
-    prior_map:
 
     stack_combined_priors: This is only for the two tower NN where we would like to separate the
     embeddings for zeolite and OSDAs.
 
-    osda_prior_file: used in osda_vector_prior in CustomOSDAVector and 
+    osda_prior_file: used in osda_vector_prior in CustomOSDAVector and
     in osda_zeolite_combined_prior in CustomOSDAandZeoliteAsRows
     """
     assert method in VALID_METHODS, f"Invalid method used, pick one of {VALID_METHODS}"
@@ -532,8 +617,8 @@ def make_prior(
         # CustomOSDAVector takes all of the handcrafted OSDA descriptors
         # and appends it to the GETAWAY prior
         prior = osda_vector_prior(
-            all_data_df,
-            "getaway",
+            all_data_df=all_data_df,
+            vector_feature="getaway",
             identity_weight=normalization_factor,
             osda_prior_file=osda_prior_file,
         )
