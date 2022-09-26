@@ -15,8 +15,25 @@ OUTPUT="${ROOT}/output/2022_IZC/xgb_with_nb_hyperopt"
 
 ## XGB
 # python $ROOT/models/xgboost/xgb.py
-TRUTH='ntk_matrix_completion/data/daniels_data/science_paper/binding_nb_rowmean_debug.csv'
-MASK='ntk_matrix_completion/data/daniels_data/science_paper/mask_debug.csv'
+OSDA_CONFORMER_PRIOR_FILE_CLIPPED='ntk_matrix_completion/data/priors/IZC_conformer_priors_clipped.pkl'
+# TRUTH='ntk_matrix_completion/data/daniels_data/science_paper/binding_nb_rowmean_debug.csv'
+# MASK='ntk_matrix_completion/data/daniels_data/science_paper/mask_debug.csv'
 TRUTH='ntk_matrix_completion/data/daniels_data/science_paper/binding_nb_rowmean.csv'
 MASK='ntk_matrix_completion/data/daniels_data/science_paper/mask.csv'
-python -m cProfile -o $ROOT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --stack_combined_priors 'osda' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --debug
+# MODEL='/home/mrx/projects/matrix_completion/ntk_matrix_completion/output/2022_IZC/xgb_with_nb_hyperopt_2022916_104456/xgboost.json'
+
+echo 'root' $ROOT
+echo 'output' $OUTPUT
+echo 'truth file' $TRUTH
+echo 'mask file' $MASK
+echo 'osda_prior_file' $OSDA_CONFORMER_PRIOR_FILE_CLIPPED
+
+# echo 'debug'
+# echo 'debug tune' `date`
+# python -m cProfile -o $ROOT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --stack_combined_priors 'osda' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --debug
+# echo 'debug load from model file' `date`
+# python -m cProfile -o $ROOT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_CONFORMER_PRIOR_FILE_CLIPPED --stack_combined_priors 'osda' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --debug --model_file $MODEL
+
+# echo '200 max_evals, full file, tune' `date`
+# python -m cProfile -o $ROOT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_CONFORMER_PRIOR_FILE_CLIPPED --stack_combined_priors 'osda' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune
+
