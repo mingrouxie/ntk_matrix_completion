@@ -73,7 +73,8 @@ def plot_two_matrices(
 
 def chunks(lst, n, chunk_train=False, chunk_metrics=None):
     """
-    Yield successive n-sized chunks from lst.
+    Yield successive n-sized chunks from lst. Note the absence of seeds here. 
+    This method is purely to yield chunks. 
     
     Inputs:
 
