@@ -27,11 +27,14 @@ from ntk_matrix_completion.utils.package_matrix import (
 from ntk_matrix_completion.utils.path_constants import (
     BINDING_CSV,
     BINDING_NB_CSV,
+    HANDCRAFTED_ZEOLITE_PRIOR_FILE,
     MASK_CSV,
     OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
     OSDA_CONFORMER_PRIOR_FILE_SIEVED,
     OSDA_PRIOR_FILE,
     XGBOOST_OUTPUT_DIR,
+    ZEOLITE_PRIOR_LOOKUP,
+    OSDA_PRIOR_LOOKUP
 )
 from ntk_matrix_completion.utils.random_seeds import (
     HYPPARAM_SEED,
@@ -206,17 +209,21 @@ def main(kwargs):
         train=None,
         method=kwargs["prior_method"],
         normalization_factor=0,
+        prior_map=kwargs["prior_map"],
         all_data=ground_truth,
         stack_combined_priors=False,
         osda_prior_file=kwargs["osda_prior_file"],
+        zeolite_prior_file=kwargs["zeolite_prior_file"],
+        osda_prior_map=kwargs["osda_prior_map"],
+        zeolite_prior_map=kwargs["zeolite_prior_map"]
     )
-
+    breakpoint()
     # TODO: THIS IF THREAD IS RATHER UNKEMPT. WHEN WE GENERALIZE TO ZEOLITES....
     if kwargs["prior_method"] == "CustomOSDAVector":
         X = prior
         print(f"[XGB] Prior of shape {prior.shape}")
 
-    elif kwargs["prior_method"] == "CustomOSDAandVectorAsRows":
+    elif kwargs["prior_method"] == "CustomOSDAandZeoliteAsRows":
         X_osda_handcrafted_prior = prior[0]
         X_osda_getaway_prior = prior[1]
         X_zeolite_prior = prior[2]
@@ -227,7 +234,7 @@ def main(kwargs):
             X_osda_getaway_prior.shape,
             X_zeolite_prior.shape,
         )
-
+        
         ### what to do with the retrieved priors
         if kwargs["stack_combined_priors"] == "all":
             X = np.concatenate(
@@ -248,7 +255,7 @@ def main(kwargs):
 
     X = pd.DataFrame(X, index=ground_truth.index)
     print("[XGB] Final prior X shape:", X.shape)
-
+    breakpoint()
     # split data
     ground_truth = ground_truth.reset_index("Zeolite")
 
@@ -274,6 +281,9 @@ def main(kwargs):
 
     X_train = X.loc[smiles_train]
     X_test = X.loc[smiles_test]
+
+    # normalization of train and test sets
+    # TODO: AHHHHHHHHHHHhhhhhhhhhhhhhhhhhhhhhhhhhh
 
     mask_train = mask.set_index("SMILES").loc[smiles_train]
     mask_train.to_pickle(os.path.join(kwargs["output"], "mask_train.pkl"))
@@ -469,6 +479,24 @@ if __name__ == "__main__":
         help="OSDA prior file, only read if prior_method is CustomOSDAVector or CustomOSDAandZeoliteAsRows",
         type=str,
         default=OSDA_CONFORMER_PRIOR_FILE_CLIPPED,  # TODO: generalize to substrate
+    )
+    parser.add_argument(
+        "--zeolite_prior_file",
+        help="Zeolite prior file, only read if prior_method is CustomOSDAandZeoliteAsRows",
+        type=str,
+        default=HANDCRAFTED_ZEOLITE_PRIOR_FILE,
+    )
+    parser.add_argument(
+        "--osda_prior_map",
+        help='Path to json file containing weights for OSDA descriptors',
+        type=str,
+        default=OSDA_PRIOR_LOOKUP
+    )
+    parser.add_argument(
+        "--zeolite_prior_map",
+        help='Path to json file containing weights for zeolite descriptors',
+        type=str,
+        default=ZEOLITE_PRIOR_LOOKUP
     )
     parser.add_argument(
         "--split_seed", help="Data split seed", type=str, default=ISOMER_SEED
