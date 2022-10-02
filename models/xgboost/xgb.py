@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 import xgboost
 import argparse
+from sklearn import preprocessing
+
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -235,7 +237,6 @@ def main(kwargs):
 
         ### what to do with the retrieved priors
         if kwargs["stack_combined_priors"] == "all":
-            breakpoint()
             X = np.concatenate(
                 [X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior],
                 axis=1,
@@ -281,8 +282,10 @@ def main(kwargs):
     X_train = X.loc[smiles_train]
     X_test = X.loc[smiles_test]
 
-    # normalization of train and test sets
-    # TODO: AHHHHHHHHHHHhhhhhhhhhhhhhhhhhhhhhhhhhh
+    # scale inputs
+    scaler = preprocessing.StandardScaler().fit(X_train)
+    X_train_scaled = pd.DataFrame(scaler.transform(X_train), index=X_train.index, columns=X_train.columns)
+    X_test_scaled = pd.DataFrame(scaler.transform(X_test), index=X_test.index, columns=X_test.columns)
 
     mask_train = mask.set_index("SMILES").loc[smiles_train]
     mask_train.to_pickle(os.path.join(kwargs["output"], "mask_train.pkl"))
@@ -297,7 +300,7 @@ def main(kwargs):
         print("[XGB] Tuning hyperparameters")
         model, search = get_tuned_model(
             params=None,
-            X=X_train,
+            X=X_train_scaled, #X_train,
             y=ground_truth_train,
             k_folds=kwargs["k_folds"],
             search_type=kwargs["search_type"],
@@ -321,14 +324,18 @@ def main(kwargs):
     # https://datascience.stackexchange.com/questions/99505/xgboost-fit-wont-recognize-my-custom-eval-metric-why
 
     model.set_params(
-        eval_metric="rmse",  # TODO: change to a custom eval_metric fn? Currently this means NB also included. Also change this to a parser argument if not custom
+        eval_metric="rmse",  
+        # TODO: AHHHHHHHHHHHhhhhhhhhhhhhhhhhhhhhhhhhhh
+        # TODO: change to a custom eval_metric fn? Currently this means NB also included. 
+        # Also change this to a parser argument if not custom
         # disable_default_eval_metric=
         early_stopping_rounds=10,
     )
     model.fit(
-        X_train,
+        X_train_scaled, #X_train,
         ground_truth_train,
-        eval_set=[(X_train, ground_truth_train), (X_test, ground_truth_test)],
+        eval_set=[(X_train_scaled, ground_truth_train), (X_test_scaled, ground_truth_test)],
+        # [(X_train, ground_truth_train), (X_test, ground_truth_test)],
         verbose=True,
         # feature_weights=
     )
@@ -336,16 +343,15 @@ def main(kwargs):
     results = model.evals_result()  #
     np.save(kwargs["output"] + "/" + "train_loss.npy", results["validation_0"]["rmse"])
     np.save(kwargs["output"] + "/" + "test_loss.npy", results["validation_1"]["rmse"])
-    # breakpoint()
 
-    y_pred_train = model.predict(X_train)
+    y_pred_train = model.predict(X_train_scaled)
     df = pd.DataFrame(
         y_pred_train, columns=["Prediction"], index=ground_truth_train.index
     )
     df["Binding (SiO2)"] = ground_truth_train["Binding (SiO2)"]
     df.to_pickle(os.path.join(kwargs["output"], "train.pkl"))
 
-    y_pred_test = model.predict(X_test)
+    y_pred_test = model.predict(X_test_scaled)
     df = pd.DataFrame(
         y_pred_test, columns=["Prediction"], index=ground_truth_test.index
     )
@@ -431,7 +437,6 @@ def preprocess(input):
 if __name__ == "__main__":
     # test_xgboost()
 
-    # TODO
     parser = argparse.ArgumentParser(description="XGBoost")
     parser.add_argument("--output", help="Output directory", type=str, required=True)
     parser.add_argument(
@@ -479,7 +484,7 @@ if __name__ == "__main__":
         "--osda_prior_file",
         help="OSDA prior file, only read if prior_method is CustomOSDAVector or CustomOSDAandZeoliteAsRows",
         type=str,
-        default=OSDA_CONFORMER_PRIOR_FILE_CLIPPED,  # TODO: generalize to substrate
+        default=OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
     )
     parser.add_argument(
         "--zeolite_prior_file",
