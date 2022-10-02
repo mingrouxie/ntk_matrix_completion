@@ -59,6 +59,7 @@ ZEOLITE_PRIOR_MAP = {
     "*STO": "STO",
     "*UOE": "UOE",
     "*BEA": "BEA",
+    "_CON": "CON"
 }
 
 
@@ -272,9 +273,8 @@ def load_prior(
 
         precomputed_prior.index = precomputed_prior.index.map(x)
 
-    precomputed_prior = precomputed_prior.reindex(
-        target_index
-    )  # keeps rows with index in target_index, assigns NaN to other indices in target_index
+    precomputed_prior = precomputed_prior.reindex(target_index)  
+    # keeps rows with index in target_index, assigns NaN to other indices in target_index
     with open(column_weights, "r") as f:
         column_weights = json.load(f)
     precomputed_prior = precomputed_prior.filter(items=list(column_weights.keys()))
@@ -523,7 +523,7 @@ def osda_zeolite_combined_prior(
         precomputed_file_name=zeolite_prior_file,
         identity_weight=identity_weight,
         normalize=normalize,
-        prior_index_map=zeolite_prior_map,
+        prior_index_map=ZEOLITE_PRIOR_MAP,
         other_prior_to_concat=None,
     ).to_numpy()
 
@@ -712,8 +712,9 @@ def make_prior(
             osda_prior_map=osda_prior_map,
             zeolite_prior_map=zeolite_prior_map,
         )
-        # For now remove the identity concat to test eigenpro
-        np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
+        if stack_combined_priors:
+            # For now remove the identity concat to test eigenpro
+            np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
         return prior
 
     # This is the one for really skinny Matrices with sparse matrices.

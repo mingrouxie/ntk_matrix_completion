@@ -34,7 +34,7 @@ from ntk_matrix_completion.utils.path_constants import (
     OSDA_PRIOR_FILE,
     XGBOOST_OUTPUT_DIR,
     ZEOLITE_PRIOR_LOOKUP,
-    OSDA_PRIOR_LOOKUP
+    OSDA_PRIOR_LOOKUP,
 )
 from ntk_matrix_completion.utils.random_seeds import (
     HYPPARAM_SEED,
@@ -209,15 +209,13 @@ def main(kwargs):
         train=None,
         method=kwargs["prior_method"],
         normalization_factor=0,
-        prior_map=kwargs["prior_map"],
         all_data=ground_truth,
         stack_combined_priors=False,
         osda_prior_file=kwargs["osda_prior_file"],
         zeolite_prior_file=kwargs["zeolite_prior_file"],
         osda_prior_map=kwargs["osda_prior_map"],
-        zeolite_prior_map=kwargs["zeolite_prior_map"]
+        zeolite_prior_map=kwargs["zeolite_prior_map"],
     )
-    breakpoint()
     # TODO: THIS IF THREAD IS RATHER UNKEMPT. WHEN WE GENERALIZE TO ZEOLITES....
     if kwargs["prior_method"] == "CustomOSDAVector":
         X = prior
@@ -234,9 +232,10 @@ def main(kwargs):
             X_osda_getaway_prior.shape,
             X_zeolite_prior.shape,
         )
-        
+
         ### what to do with the retrieved priors
         if kwargs["stack_combined_priors"] == "all":
+            breakpoint()
             X = np.concatenate(
                 [X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior],
                 axis=1,
@@ -255,7 +254,7 @@ def main(kwargs):
 
     X = pd.DataFrame(X, index=ground_truth.index)
     print("[XGB] Final prior X shape:", X.shape)
-    breakpoint()
+    
     # split data
     ground_truth = ground_truth.reset_index("Zeolite")
 
@@ -322,10 +321,10 @@ def main(kwargs):
     # https://datascience.stackexchange.com/questions/99505/xgboost-fit-wont-recognize-my-custom-eval-metric-why
 
     model.set_params(
-        eval_metric='rmse', # TODO: change to a custom eval_metric fn? Currently this means NB also included. Also change this to a parser argument if not custom
-        # disable_default_eval_metric= 
+        eval_metric="rmse",  # TODO: change to a custom eval_metric fn? Currently this means NB also included. Also change this to a parser argument if not custom
+        # disable_default_eval_metric=
         early_stopping_rounds=10,
-        )
+    )
     model.fit(
         X_train,
         ground_truth_train,
@@ -334,11 +333,10 @@ def main(kwargs):
         # feature_weights=
     )
     model.save_model(os.path.join(kwargs["output"], "xgboost.json"))
-    results = model.evals_result() # 
-    np.save(kwargs['output']+'/'+'train_loss.npy', results['validation_0']['rmse'])
-    np.save(kwargs['output']+'/'+'test_loss.npy', results['validation_1']['rmse'])
+    results = model.evals_result()  #
+    np.save(kwargs["output"] + "/" + "train_loss.npy", results["validation_0"]["rmse"])
+    np.save(kwargs["output"] + "/" + "test_loss.npy", results["validation_1"]["rmse"])
     # breakpoint()
-
 
     y_pred_train = model.predict(X_train)
     df = pd.DataFrame(
@@ -384,7 +382,10 @@ def main(kwargs):
 
     # feature importance
     print(
-        "[XGB] model.feature_importances", model.feature_importances_
+        "[XGB] model.feature_importances:",
+        model.feature_importances_.min(),
+        model.feature_importances_.mean(),
+        model.feature_importances_.max(),
     )  # handcrafted 16 + getaway 273 = 289 x 1
     np.save(
         os.path.join(kwargs["output"], "feature_importance"), model.feature_importances_
@@ -488,15 +489,15 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--osda_prior_map",
-        help='Path to json file containing weights for OSDA descriptors',
+        help="Path to json file containing weights for OSDA descriptors",
         type=str,
-        default=OSDA_PRIOR_LOOKUP
+        default=OSDA_PRIOR_LOOKUP,
     )
     parser.add_argument(
         "--zeolite_prior_map",
-        help='Path to json file containing weights for zeolite descriptors',
+        help="Path to json file containing weights for zeolite descriptors",
         type=str,
-        default=ZEOLITE_PRIOR_LOOKUP
+        default=ZEOLITE_PRIOR_LOOKUP,
     )
     parser.add_argument(
         "--split_seed", help="Data split seed", type=str, default=ISOMER_SEED

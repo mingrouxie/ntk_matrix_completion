@@ -6,7 +6,6 @@
     "betta": 1.0,
     "gamma": 1.0,
     "volume": 1.0,
-    "framework_density": 1.0,
     "included_sphere_diameter": 1.0,
     "diffused_sphere_diameter_a": 1.0,
     "diffused_sphere_diameter_b": 1.0,
