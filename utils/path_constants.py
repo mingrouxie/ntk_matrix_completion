@@ -25,6 +25,9 @@ HYPOTHETICAL_OSDA_BOXES = "ntk_matrix_completion/data/daniels_data/211221_boxes.
 # BINDING_NB_CSV = "ntk_matrix_completion/data/daniels_data/science_paper/binding_nb_rowmean_debug.csv"  # with row mean for non binding entries
 # MASK_CSV = "ntk_matrix_completion/data/daniels_data/science_paper/mask_debug.csv"
 
+ZEOLITE_PRIOR_LOOKUP="ntk_matrix_completion/configs/zeolite_weights.json"
+OSDA_PRIOR_LOOKUP="ntk_matrix_completion/configs/osda_weights.json"
+
 """
 GENERATED PRIORS
 """
