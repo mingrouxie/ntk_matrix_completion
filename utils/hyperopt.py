@@ -239,7 +239,7 @@ class HyperoptSearchCV:
         if debug:
             max_evals = 5
         else:
-            max_evals = 200
+            max_evals = 150 # 200
         print(f'[HyperOptSearchCV] max_evals={max_evals}')
         self.trials = Trials()
         self.best_params_ = fmin(

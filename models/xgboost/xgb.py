@@ -236,16 +236,29 @@ def main(kwargs):
         )
 
         ### what to do with the retrieved priors
-        if kwargs["stack_combined_priors"] == "all":
-            X = np.concatenate(
-                [X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior],
-                axis=1,
-            )
-        elif kwargs["stack_combined_priors"] == "osda":
+        if kwargs["prior_treatment"] == 1:
+            X = X_osda_handcrafted_prior
+        elif kwargs["prior_treatment"] == 2:
             X = np.concatenate([X_osda_handcrafted_prior, X_osda_getaway_prior], axis=1)
-        elif kwargs["stack_combined_priors"] == "zeolite":
+        elif kwargs["prior_treatment"] == 3:
+            X = np.concatenate([X_osda_handcrafted_prior, X_zeolite_prior], axis=1)
+        elif kwargs["prior_treatment"] == 4:
+            X = np.concatenate([X_osda_getaway_prior, X_zeolite_prior], axis=1)
+        elif kwargs["prior_treatment"] == 5:
+            X = np.concatenate([X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior], axis=1)
+        elif kwargs["prior_treatment"] == 6:
             X = X_zeolite_prior
         else:
+        # if kwargs["stack_combined_priors"] == "all":
+        #     X = np.concatenate(
+        #         [X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior],
+        #         axis=1,
+        #     )
+        # elif kwargs["stack_combined_priors"] == "osda":
+        #     X = np.concatenate([X_osda_handcrafted_prior, X_osda_getaway_prior], axis=1)
+        # elif kwargs["stack_combined_priors"] == "zeolite":
+        #     X = X_zeolite_prior
+        # else:
             print(f"[XGB] What do you want to do with the priors??")
             breakpoint()
 
@@ -255,7 +268,7 @@ def main(kwargs):
 
     X = pd.DataFrame(X, index=ground_truth.index)
     print("[XGB] Final prior X shape:", X.shape)
-    
+    # breakpoint()
     # split data
     ground_truth = ground_truth.reset_index("Zeolite")
 
@@ -283,7 +296,7 @@ def main(kwargs):
     X_test = X.loc[smiles_test]
 
     # scale inputs
-    scaler = preprocessing.StandardScaler().fit(X_train)
+    scaler = preprocessing.MinMaxScaler().fit(X_train)
     X_train_scaled = pd.DataFrame(scaler.transform(X_train), index=X_train.index, columns=X_train.columns)
     X_test_scaled = pd.DataFrame(scaler.transform(X_test), index=X_test.index, columns=X_test.columns)
 
@@ -294,6 +307,8 @@ def main(kwargs):
 
     # print("[XGB] DEBUG: Check X and mask have been created properly")
     # breakpoint()
+    X_train_scaled.to_pickle(os.path.join(kwargs["output"], "X_train_scaled.pkl"))
+    X_test_scaled.to_pickle(os.path.join(kwargs["output"], "X_test_scaled.pkl"))
 
     # hyperparameter tuning
     if kwargs["tune"]:
@@ -330,6 +345,7 @@ def main(kwargs):
         # Also change this to a parser argument if not custom
         # disable_default_eval_metric=
         early_stopping_rounds=10,
+        n_estimators=200 # TODO: bring this to the surface
     )
     model.fit(
         X_train_scaled, #X_train,
@@ -458,12 +474,18 @@ if __name__ == "__main__":
         type=str,
         default="binding",
     )
+    # parser.add_argument(
+    #     "--stack_combined_priors",
+    #     help="Treatment for stacking priors",
+    #     type=str,
+    #     required=True,
+    #     default="all",
+    # )
     parser.add_argument(
-        "--stack_combined_priors",
-        help="Treatment for stacking priors",
-        type=str,
-        required=True,
-        default="all",
+        "--prior_treatment",
+        help="Which priors to concatenate to form the final prior",
+        type=int,
+        required=True
     )
     parser.add_argument(
         "--search_type",
@@ -508,7 +530,7 @@ if __name__ == "__main__":
         "--split_seed", help="Data split seed", type=str, default=ISOMER_SEED
     )
     parser.add_argument(
-        "--nthread", help="Number of threads for XGBoost", type=int, default=5
+        "--nthread", help="Number of threads for XGBoost", type=int, default=6 # was 5 for runs 1 and 2
     )
     parser.add_argument(
         "--objective",

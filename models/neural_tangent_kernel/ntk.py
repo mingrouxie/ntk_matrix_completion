@@ -219,7 +219,7 @@ def run_ntk(
             test,
             method=prior,
             normalization_factor=norm_factor,
-            prior_map=prior_map,
+            prior_map=prior_map, # TODO: this has to be changed to osda_prior_map or zeolite_prior_map
             osda_prior_file=osda_prior_file,
         )
         all_data = pd.concat([train, test]).to_numpy()

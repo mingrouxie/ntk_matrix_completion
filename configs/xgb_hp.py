@@ -22,11 +22,19 @@ def get_hyperopt_xgb_space():
     return {
         "colsample_bytree": hp.uniform("colsample_bytree", 0.01, 1.0),
         "gamma": hp.uniform("gamma", 0.0, 0.5),
-        "learning_rate": hp.uniform("learning_rate", 0.03, 0.5),  # default 0.1
-        # "max_depth": hp.choice("max_depth", np.arange(2, 8, dtype=int)),  # default 3
+        "learning_rate": hp.uniform("learning_rate", 0.03, 1.0),  # default 0.1
+
+        ## Unable to restrict max_depth and n_estimators at the same time for the debug dataset
+
+        # Works normally by itself
+        "max_depth": hp.choice("max_depth", np.arange(2, 8, dtype=int)),  # default 3
+        
+        ## Unable to restrict n_estimators. The default is 100, but if below is uncommented it can go to 28
+        "n_estimators": 200,
         # "n_estimators": hp.choice(
-        #     "n_estimators", np.arange(100, 150, dtype=int)
+        #     "n_estimators", np.arange(100, 200, dtype=int)
         # ),  # default 100
+        
         "subsample": hp.uniform("subsample", 0.4, 0.6),
         "reg_alpha": hp.uniform("reg_alpha", 0.0, 1.0),
         "reg_lambda": hp.uniform("reg_lambda", 0.0, 1.0),
