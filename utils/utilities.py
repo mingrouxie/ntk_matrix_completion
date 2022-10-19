@@ -7,17 +7,16 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from ntk_matrix_completion.utils.random_seeds import (ISOMER_SEED,
-                                                      SUBSTRATE_SEED)
+import json
+from ntk_matrix_completion.utils.random_seeds import ISOMER_SEED, SUBSTRATE_SEED
 from rdkit import Chem
 from rdkit.Chem import AddHs, RemoveAllHs
 from sklearn import metrics
 from sklearn.model_selection import KFold, StratifiedKFold
-
+from sklearn.preprocessing import MinMaxScaler, StandardScaler, QuantileTransformer
 from utils.path_constants import OUTPUT_DIR
 
 # from rdkit.Chem import RemoveAllHs
-
 
 
 def plot_matrix(M, file_name, mask=None, vmin=16, vmax=23, to_save=True):
@@ -73,24 +72,24 @@ def plot_two_matrices(
 
 def chunks(lst, n, chunk_train=False, chunk_metrics=None):
     """
-    Yield successive n-sized chunks from lst. Note the absence of seeds here. 
-    This method is purely to yield chunks. 
-    
+    Yield successive n-sized chunks from lst. Note the absence of seeds here.
+    This method is purely to yield chunks.
+
     Inputs:
 
-    lst: a list of entries 
+    lst: a list of entries
     n: size of chunks
     chunk_train: True if train_chunk is returned (TODO: when is this False)
-    chunk_metrics: a list 
-    
+    chunk_metrics: a list
+
     Returns:
-    
+
     train_chunk, test_chunk, metrics_chunk
     """
     for i in range(0, len(lst) - n, n):
         leftside_index = i
         rightside_index = i + n
-        if len(lst) - 2 * n < i: # for the last chunk that might be < n
+        if len(lst) - 2 * n < i:  # for the last chunk that might be < n
             rightside_index = len(lst)
         train_chunk = (
             pd.concat([lst[:leftside_index], lst[rightside_index:]])
@@ -109,16 +108,16 @@ def chunks(lst, n, chunk_train=False, chunk_metrics=None):
 def get_isomer_chunks(all_data, metrics_mask, k_folds, random_seed=ISOMER_SEED):
     """
     Inputs:
-    
+
     all_data: Dataframe with an index of SMILES strings
-    metrics_mask: array of same shape as all_data? 
+    metrics_mask: array of same shape as all_data?
     k_folds: number of chunks to create
     random_seed: seed for shuffling isomer clusters
-    
+
     Returns:
-    
+
     An iterable of tuples (train, test and metrics (typically a mask))
-    
+
     """
     clustered_isomers = pd.Series(cluster_isomers(smiles=all_data.index).values())
     # Shuffle the isomer clusters
@@ -167,8 +166,6 @@ def get_splits_in_zeolite_type(
         ]
 
 
-
-
 class IsomerKFold:
     def __init__(self, n_splits=3):
         self.n_splits = n_splits
@@ -204,12 +201,12 @@ def cluster_isomers(smiles):
     return nonisomeric_smiles_lookup
 
 
-def report_best_scores(search, n_top=3, search_type='hyperopt'):
+def report_best_scores(search, n_top=3, search_type="hyperopt"):
     """
     Function for reporting hyperparameter optimization results from output of
     sklearn's RandomizedSearchCV
     """
-    if search_type == 'random':
+    if search_type == "random":
         results = search.cv_results_
         for i in range(1, n_top + 1):
             candidates = np.flatnonzero(results["rank_test_score"] == i)
@@ -223,6 +220,37 @@ def report_best_scores(search, n_top=3, search_type='hyperopt'):
                 )
                 print("Parameters: {0}".format(results["params"][candidate]))
                 print("")
-    elif search_type == 'hyperopt':
+    elif search_type == "hyperopt":
         print("Best parameters:", search.best_params_)
         print("")
+
+
+def get_scaler(scaler_type):
+    scalers = {
+        "standard": StandardScaler(),
+        "minmax": MinMaxScaler(),
+        "quantile_normal": QuantileTransformer(output_distribution="normal"),
+    }
+    return scalers[scaler_type]
+
+
+def scale_data(scaler_type: str, train: pd.DataFrame, test: pd.DataFrame, output_folder: str, data_type="truth"):
+    scaler = get_scaler(scaler_type)
+    train_scaled = pd.DataFrame(
+        scaler.fit_transform(train.values), index=train.index, columns=train.columns
+    )
+    test_scaled = pd.DataFrame(
+        scaler.transform(test.values), index=test.index, columns=test.columns
+    )
+    if output_folder:
+        if scaler_type == "standard":
+            gts_dict = {
+                "mean": scaler.mean_.tolist(),
+                "var": scaler.var_.tolist(),
+            }
+        elif scaler_type == "minmax":
+            gts_dict = {"scale": scaler.scale_, "min": scaler.min_}
+        filename = os.path.join(output_folder, data_type+"_scaling.json")
+        with open(filename, "w") as gts:
+            json.dump(gts_dict, gts)
+    return train_scaled, test_scaled

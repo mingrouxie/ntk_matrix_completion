@@ -48,6 +48,7 @@ from ntk_matrix_completion.utils.utilities import (
     IsomerKFold,
     cluster_isomers,
     get_isomer_chunks,
+    scale_data,
     report_best_scores,
 )
 from sklearn.linear_model import (
@@ -195,14 +196,14 @@ def main(kwargs):
     sieved_priors_index = pd.read_pickle(kwargs["sieved_file"]).index
     sieved_priors_index.name = "SMILES"
     if kwargs["energy_type"] == Energy_Type.BINDING:
-        # ground_truth = pd.read_csv(BINDING_CSV) # binding values only
-        ground_truth = pd.read_csv(kwargs["truth"])  # binding with non-binding values
+        # truth = pd.read_csv(BINDING_CSV) # binding values only
+        truth = pd.read_csv(kwargs["truth"])  # binding with non-binding values
     else:
         print("[XGB] Please work only with binding energies")
         breakpoint()
-    ground_truth = ground_truth[ground_truth["SMILES"].isin(sieved_priors_index)]
-    ground_truth = ground_truth.set_index(["SMILES", "Zeolite"])
-    ground_truth = ground_truth[["Binding (SiO2)"]]
+    truth = truth[truth["SMILES"].isin(sieved_priors_index)]
+    truth = truth.set_index(["SMILES", "Zeolite"])
+    truth = truth[["Binding (SiO2)"]]
     mask = pd.read_csv(kwargs["mask"])
 
     # get priors
@@ -212,7 +213,7 @@ def main(kwargs):
         train=None,
         method=kwargs["prior_method"],
         normalization_factor=0,
-        all_data=ground_truth,
+        all_data=truth,
         stack_combined_priors=False,
         osda_prior_file=kwargs["osda_prior_file"],
         zeolite_prior_file=kwargs["zeolite_prior_file"],
@@ -270,15 +271,15 @@ def main(kwargs):
         print(f"[XGB] prior_method {kwargs['prior_method']} not implemented")
         breakpoint()
 
-    X = pd.DataFrame(X, index=ground_truth.index)
+    X = pd.DataFrame(X, index=truth.index)
     print("[XGB] Final prior X shape:", X.shape)
 
     # split data
-    ground_truth = ground_truth.reset_index("Zeolite")
+    truth = truth.reset_index("Zeolite")
 
     if kwargs["split_type"] == SplitType.OSDA_ISOMER_SPLITS:
         # get train_test_split by isomers
-        clustered_isomers = pd.Series(cluster_isomers(ground_truth.index).values())
+        clustered_isomers = pd.Series(cluster_isomers(truth.index).values())
         clustered_isomers = clustered_isomers.sample(frac=1, random_state=ISOMER_SEED)
     else:
         print("[XGB] What data splits do you want?")
@@ -289,56 +290,38 @@ def main(kwargs):
     smiles_train = sorted(list(set().union(*clustered_isomers_train)))
     smiles_test = sorted(list(set().union(*clustered_isomers_test)))
 
-    ground_truth_train = (
-        ground_truth.loc[smiles_train].reset_index().set_index(["SMILES", "Zeolite"])
+    truth_train = (
+        truth.loc[smiles_train].reset_index().set_index(["SMILES", "Zeolite"])
     )
-    ground_truth_test = (
-        ground_truth.loc[smiles_test].reset_index().set_index(["SMILES", "Zeolite"])
+    truth_test = (
+        truth.loc[smiles_test].reset_index().set_index(["SMILES", "Zeolite"])
     )
-    breakpoint()
 
     # scale ground truth range between 0 and 1
-    ground_truth_scaler = preprocessing.MinMaxScaler()
-    ground_truth_train_scaled = pd.DataFrame(
-        ground_truth_scaler.fit_transform(ground_truth_train.values),
-        index=ground_truth_train.index,
-        columns=ground_truth_train.columns,
+    truth_train_scaled, truth_test_scaled = scale_data(
+        kwargs["truth_scaler"], truth_train, truth_test, kwargs["output"], "truth"
     )
-    ground_truth_test_scaled = pd.DataFrame(
-        ground_truth_scaler.transform(ground_truth_test.values),
-        index=ground_truth_test.index,
-        columns=ground_truth_test.columns,
+    truth_train_scaled.to_pickle(
+        os.path.join(kwargs["output"], "truth_train_scaled.pkl")
     )
-    with open(os.path.join(kwargs["output"], "ground_truth_scaling.json"), "w") as gts:
-        gts_dict = {"mean": scaler.mean_.tolist(), "var": scaler.var_.tolist()}
-        json.dump(gts_dict, gts)
-    ground_truth_train.to_pickle(
-        os.path.join(kwargs["output"], "ground_truth_train.pkl")
-    )
-    ground_truth_test.to_pickle(os.path.join(kwargs["output"], "ground_truth_test.pkl"))
+    truth_test_scaled.to_pickle(os.path.join(kwargs["output"], "truth_test_scaled.pkl"))
 
     # split inputs
     X_train = X.loc[smiles_train]
     X_test = X.loc[smiles_test]
 
-    # scale inputs. Chose to use minmaxscaler because magnitudes of features are very different
-    scaler = preprocessing.MinMaxScaler().fit(X_train)
-    X_train_scaled = pd.DataFrame(
-        scaler.transform(X_train), index=X_train.index, columns=X_train.columns
-    )
-    X_test_scaled = pd.DataFrame(
-        scaler.transform(X_test), index=X_test.index, columns=X_test.columns
-    )
-
-    mask_train = mask.set_index("SMILES").loc[smiles_train][["Zeolite", "exists"]]
-    mask_train.to_pickle(os.path.join(kwargs["output"], "mask_train.pkl"))
-    mask_test = mask.set_index("SMILES").loc[smiles_test][["Zeolite", "exists"]]
-    mask_test.to_pickle(os.path.join(kwargs["output"], "mask_test.pkl"))
-
+    # scale inputs
+    X_train_scaled, X_test_scaled = scale_data(kwargs["input_scaler"], X_train, X_test, kwargs["output"], "input")
     # print("[XGB] DEBUG: Check X and mask have been created properly")
     # breakpoint()
     X_train_scaled.to_pickle(os.path.join(kwargs["output"], "X_train_scaled.pkl"))
     X_test_scaled.to_pickle(os.path.join(kwargs["output"], "X_test_scaled.pkl"))
+
+    # split mask
+    mask_train = mask.set_index("SMILES").loc[smiles_train][["Zeolite", "exists"]]
+    mask_train.to_pickle(os.path.join(kwargs["output"], "mask_train.pkl"))
+    mask_test = mask.set_index("SMILES").loc[smiles_test][["Zeolite", "exists"]]
+    mask_test.to_pickle(os.path.join(kwargs["output"], "mask_test.pkl"))
 
     # hyperparameter tuning
     if kwargs["tune"]:
@@ -346,7 +329,7 @@ def main(kwargs):
         model, search = get_tuned_model(
             params=None,
             X=X_train_scaled,
-            y=ground_truth_train_scaled,
+            y=truth_train_scaled,
             k_folds=kwargs["k_folds"],
             search_type=kwargs["search_type"],
             mask=mask_train,
@@ -379,12 +362,12 @@ def main(kwargs):
     )
     model.fit(
         X_train_scaled,
-        ground_truth_train_scaled,
+        truth_train_scaled,
         eval_set=[
-            (X_train_scaled, ground_truth_train_scaled),
-            (X_test_scaled, ground_truth_test_scaled),
+            (X_train_scaled, truth_train_scaled),
+            (X_test_scaled, truth_test_scaled),
         ],
-        # [(X_train, ground_truth_train), (X_test, ground_truth_test)],
+        # [(X_train, truth_train), (X_test, truth_test)],
         verbose=True,
         # feature_weights=
     )
@@ -395,20 +378,20 @@ def main(kwargs):
 
     y_pred_train = model.predict(X_train_scaled)
     df = pd.DataFrame(
-        y_pred_train, columns=["Prediction"], index=ground_truth_train.index
+        y_pred_train, columns=["Prediction"], index=truth_train.index
     )
-    df["Binding (SiO2)"] = ground_truth_train["Binding (SiO2)"]
+    df["Binding (SiO2)"] = truth_train["Binding (SiO2)"]
     df.to_pickle(os.path.join(kwargs["output"], "train.pkl"))
 
     y_pred_test = model.predict(X_test_scaled)
     df = pd.DataFrame(
-        y_pred_test, columns=["Prediction"], index=ground_truth_test.index
+        y_pred_test, columns=["Prediction"], index=truth_test.index
     )
-    df["Binding (SiO2)"] = ground_truth_test["Binding (SiO2)"]
+    df["Binding (SiO2)"] = truth_test["Binding (SiO2)"]
     df.to_pickle(os.path.join(kwargs["output"], "test.pkl"))
 
     # y_pred_all = model.predict(X) # Should have been on the SCALED. Is kay, we can use the train and test above
-    # g = ground_truth.reset_index().set_index(["SMILES", "Zeolite"])
+    # g = truth.reset_index().set_index(["SMILES", "Zeolite"])
     # df = pd.DataFrame(y_pred_all, columns=["Prediction"], index=g.index)
     # df["Binding (SiO2)"] = g["Binding (SiO2)"]
     # df.to_pickle(os.path.join(kwargs["output"], "all.pkl"))
@@ -417,22 +400,22 @@ def main(kwargs):
     print(
         "[XGB] Train score:",
         masked_rmse(
-            ground_truth_train["Binding (SiO2)"].values, y_pred_train, mask_train.exists
+            truth_train["Binding (SiO2)"].values, y_pred_train, mask_train.exists
         ),
     )
     print(
         "[XGB] Test score:",
         masked_rmse(
-            ground_truth_test["Binding (SiO2)"].values, y_pred_test, mask_test.exists
+            truth_test["Binding (SiO2)"].values, y_pred_test, mask_test.exists
         ),
     )
     print(
         "[XBG] Unmasked train score:",
-        np.sqrt(mean_squared_error(ground_truth_train, y_pred_train)),
+        np.sqrt(mean_squared_error(truth_train, y_pred_train)),
     )
     print(
         "[XBG] Unmasked test score:",
-        np.sqrt(mean_squared_error(ground_truth_test, y_pred_test)),
+        np.sqrt(mean_squared_error(truth_test, y_pred_test)),
     )
 
     # feature importance
@@ -560,6 +543,15 @@ if __name__ == "__main__":
         default=ZEOLITE_PRIOR_LOOKUP,
     )
     parser.add_argument(
+        "--truth_scaler",
+        help="Scaling method for ground truth",
+        type=str,
+        default="standard",
+    )
+    parser.add_argument(
+        "--input_scaler", help="Scaling method for inputs", type=str, default="standard"
+    )
+    parser.add_argument(
         "--split_seed", help="Data split seed", type=str, default=ISOMER_SEED
     )
     parser.add_argument(
@@ -581,4 +573,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
     kwargs = preprocess(args)
     main(kwargs)
-
