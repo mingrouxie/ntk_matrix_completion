@@ -9,6 +9,7 @@ import pandas as pd
 import xgboost
 import argparse
 from sklearn import preprocessing
+import json
 
 
 matplotlib.use("Agg")
@@ -245,20 +246,23 @@ def main(kwargs):
         elif kwargs["prior_treatment"] == 4:
             X = np.concatenate([X_osda_getaway_prior, X_zeolite_prior], axis=1)
         elif kwargs["prior_treatment"] == 5:
-            X = np.concatenate([X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior], axis=1)
+            X = np.concatenate(
+                [X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior],
+                axis=1,
+            )
         elif kwargs["prior_treatment"] == 6:
             X = X_zeolite_prior
         else:
-        # if kwargs["stack_combined_priors"] == "all":
-        #     X = np.concatenate(
-        #         [X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior],
-        #         axis=1,
-        #     )
-        # elif kwargs["stack_combined_priors"] == "osda":
-        #     X = np.concatenate([X_osda_handcrafted_prior, X_osda_getaway_prior], axis=1)
-        # elif kwargs["stack_combined_priors"] == "zeolite":
-        #     X = X_zeolite_prior
-        # else:
+            # if kwargs["stack_combined_priors"] == "all":
+            #     X = np.concatenate(
+            #         [X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior],
+            #         axis=1,
+            #     )
+            # elif kwargs["stack_combined_priors"] == "osda":
+            #     X = np.concatenate([X_osda_handcrafted_prior, X_osda_getaway_prior], axis=1)
+            # elif kwargs["stack_combined_priors"] == "zeolite":
+            #     X = X_zeolite_prior
+            # else:
             print(f"[XGB] What do you want to do with the priors??")
             breakpoint()
 
@@ -268,7 +272,7 @@ def main(kwargs):
 
     X = pd.DataFrame(X, index=ground_truth.index)
     print("[XGB] Final prior X shape:", X.shape)
-    # breakpoint()
+
     # split data
     ground_truth = ground_truth.reset_index("Zeolite")
 
@@ -291,18 +295,44 @@ def main(kwargs):
     ground_truth_test = (
         ground_truth.loc[smiles_test].reset_index().set_index(["SMILES", "Zeolite"])
     )
+    breakpoint()
 
+    # scale ground truth range between 0 and 1
+    ground_truth_scaler = preprocessing.MinMaxScaler()
+    ground_truth_train_scaled = pd.DataFrame(
+        ground_truth_scaler.fit_transform(ground_truth_train.values),
+        index=ground_truth_train.index,
+        columns=ground_truth_train.columns,
+    )
+    ground_truth_test_scaled = pd.DataFrame(
+        ground_truth_scaler.transform(ground_truth_test.values),
+        index=ground_truth_test.index,
+        columns=ground_truth_test.columns,
+    )
+    with open(os.path.join(kwargs["output"], "ground_truth_scaling.json"), "w") as gts:
+        gts_dict = {"mean": scaler.mean_.tolist(), "var": scaler.var_.tolist()}
+        json.dump(gts_dict, gts)
+    ground_truth_train.to_pickle(
+        os.path.join(kwargs["output"], "ground_truth_train.pkl")
+    )
+    ground_truth_test.to_pickle(os.path.join(kwargs["output"], "ground_truth_test.pkl"))
+
+    # split inputs
     X_train = X.loc[smiles_train]
     X_test = X.loc[smiles_test]
 
-    # scale inputs
+    # scale inputs. Chose to use minmaxscaler because magnitudes of features are very different
     scaler = preprocessing.MinMaxScaler().fit(X_train)
-    X_train_scaled = pd.DataFrame(scaler.transform(X_train), index=X_train.index, columns=X_train.columns)
-    X_test_scaled = pd.DataFrame(scaler.transform(X_test), index=X_test.index, columns=X_test.columns)
+    X_train_scaled = pd.DataFrame(
+        scaler.transform(X_train), index=X_train.index, columns=X_train.columns
+    )
+    X_test_scaled = pd.DataFrame(
+        scaler.transform(X_test), index=X_test.index, columns=X_test.columns
+    )
 
-    mask_train = mask.set_index("SMILES").loc[smiles_train]
+    mask_train = mask.set_index("SMILES").loc[smiles_train][["Zeolite", "exists"]]
     mask_train.to_pickle(os.path.join(kwargs["output"], "mask_train.pkl"))
-    mask_test = mask.set_index("SMILES").loc[smiles_test]
+    mask_test = mask.set_index("SMILES").loc[smiles_test][["Zeolite", "exists"]]
     mask_test.to_pickle(os.path.join(kwargs["output"], "mask_test.pkl"))
 
     # print("[XGB] DEBUG: Check X and mask have been created properly")
@@ -315,8 +345,8 @@ def main(kwargs):
         print("[XGB] Tuning hyperparameters")
         model, search = get_tuned_model(
             params=None,
-            X=X_train_scaled, #X_train,
-            y=ground_truth_train,
+            X=X_train_scaled,
+            y=ground_truth_train_scaled,
             k_folds=kwargs["k_folds"],
             search_type=kwargs["search_type"],
             mask=mask_train,
@@ -339,18 +369,21 @@ def main(kwargs):
     # https://datascience.stackexchange.com/questions/99505/xgboost-fit-wont-recognize-my-custom-eval-metric-why
 
     model.set_params(
-        eval_metric="rmse",  
+        eval_metric="rmse",
         # TODO: AHHHHHHHHHHHhhhhhhhhhhhhhhhhhhhhhhhhhh
-        # TODO: change to a custom eval_metric fn? Currently this means NB also included. 
+        # TODO: change to a custom eval_metric fn? Currently this means NB also included.
         # Also change this to a parser argument if not custom
         # disable_default_eval_metric=
         early_stopping_rounds=10,
-        n_estimators=200 # TODO: bring this to the surface
+        n_estimators=200,  # TODO: bring this to the surface
     )
     model.fit(
-        X_train_scaled, #X_train,
-        ground_truth_train,
-        eval_set=[(X_train_scaled, ground_truth_train), (X_test_scaled, ground_truth_test)],
+        X_train_scaled,
+        ground_truth_train_scaled,
+        eval_set=[
+            (X_train_scaled, ground_truth_train_scaled),
+            (X_test_scaled, ground_truth_test_scaled),
+        ],
         # [(X_train, ground_truth_train), (X_test, ground_truth_test)],
         verbose=True,
         # feature_weights=
@@ -374,11 +407,11 @@ def main(kwargs):
     df["Binding (SiO2)"] = ground_truth_test["Binding (SiO2)"]
     df.to_pickle(os.path.join(kwargs["output"], "test.pkl"))
 
-    y_pred_all = model.predict(X)
-    g = ground_truth.reset_index().set_index(["SMILES", "Zeolite"])
-    df = pd.DataFrame(y_pred_all, columns=["Prediction"], index=g.index)
-    df["Binding (SiO2)"] = g["Binding (SiO2)"]
-    df.to_pickle(os.path.join(kwargs["output"], "all.pkl"))
+    # y_pred_all = model.predict(X) # Should have been on the SCALED. Is kay, we can use the train and test above
+    # g = ground_truth.reset_index().set_index(["SMILES", "Zeolite"])
+    # df = pd.DataFrame(y_pred_all, columns=["Prediction"], index=g.index)
+    # df["Binding (SiO2)"] = g["Binding (SiO2)"]
+    # df.to_pickle(os.path.join(kwargs["output"], "all.pkl"))
 
     # performance
     print(
@@ -485,7 +518,7 @@ if __name__ == "__main__":
         "--prior_treatment",
         help="Which priors to concatenate to form the final prior",
         type=int,
-        required=True
+        required=True,
     )
     parser.add_argument(
         "--search_type",
@@ -530,7 +563,10 @@ if __name__ == "__main__":
         "--split_seed", help="Data split seed", type=str, default=ISOMER_SEED
     )
     parser.add_argument(
-        "--nthread", help="Number of threads for XGBoost", type=int, default=6 # was 5 for runs 1 and 2
+        "--nthread",
+        help="Number of threads for XGBoost",
+        type=int,
+        default=6,  # was 5 for runs 1 and 2
     )
     parser.add_argument(
         "--objective",
@@ -546,30 +582,3 @@ if __name__ == "__main__":
     kwargs = preprocess(args)
     main(kwargs)
 
-    # main(
-    #     tune=True,
-    #     stack_combined_priors="osda",
-    #     search_type="hyperopt",
-    # )
-
-    # params = {
-    #     "colsample_bytree": 0.3181689154948444,
-    #     "gamma": 0.1829854912145143,
-    #     "learning_rate": 0.06989883691979182,
-    #     "max_depth": 4,
-    #     "min_child_weight": 2.6129103665660702,
-    #     "n_estimators": 116,
-    #     "reg_alpha": 0.8264051782292202,
-    #     "reg_lambda": 0.47355178063941394,
-    #     "subsample": 0.9532706328098646,
-    # }
-    # model = xgboost.XGBRegressor(
-    #     random_state=MODEL_SEED,
-    #     objective="reg:squarederror",
-    #     nthread=5,
-    #     **params
-    # )
-    # main(model=model, tune=False, stack_combined_priors="osda")
-
-# print("[XGB] Scores: {0}\nMean: {1:.3f}\nStd: {2:.3f}".format(scores, np.mean(scores), np.std(scores)))
-# 553 isomer groups from 1096 data points. very interesting
