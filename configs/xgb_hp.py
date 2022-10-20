@@ -19,14 +19,16 @@ def get_xgb_space():
 
 
 def get_hyperopt_xgb_space():
-    """Unable to vary n_estimators and max_depth at the same time"""
     return {
         "learning_rate": hp.uniform("learning_rate", 0.03, 1.0),  # default 0.1
         "max_depth": hp.choice("max_depth", np.arange(2, 8, dtype=int)),  # default 3
         "gamma": hp.uniform("gamma", 0.0, 1.0), # default 0. Min loss red to continue partitioning. increasing makes model more conservative
         "reg_alpha": hp.uniform("reg_alpha", 0.0, 5.0), # default 0. increasing makes model more conservative
         "reg_lambda": hp.uniform("reg_lambda", 0.0, 5.0), # default 1. increasing makes model more conservative
-        "n_estimators": hp.choice("n_estimators", np.arange(10, 200, dtype=int)), # default 100
+        "n_estimators": hp.choice("n_estimators", np.arange(10, 2000, dtype=int)), # default 100
+        "colsample_bytree": hp.uniform("colsample_bytree", 0.1, 1.0), # fraction of features to sample. prevent overfitting
+        "subsample": hp.uniform("subsample", 0.1, 1.0), # fraction of data to sample. prevent overfitting
+        "min_child_weight": hp.uniform("min_child_weight", 1.0, 100), # num of samples below which to stop partitioning
     }
 
 
