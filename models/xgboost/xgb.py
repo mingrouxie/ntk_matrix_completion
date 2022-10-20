@@ -352,27 +352,27 @@ def main(kwargs):
     # https://datascience.stackexchange.com/questions/99505/xgboost-fit-wont-recognize-my-custom-eval-metric-why
 
     model.set_params(
-        eval_metric="rmse",
-        # TODO: AHHHHHHHHHHHhhhhhhhhhhhhhhhhhhhhhhhhhh
-        # TODO: change to a custom eval_metric fn? Currently this means NB also included.
-        # Also change this to a parser argument if not custom
-        # disable_default_eval_metric=
         early_stopping_rounds=10,
-        n_estimators=200,  # TODO: bring this to the surface
+        eval_metric="rmse"
     )
+
+    # eval set for early stopping only computes for binding pairs
+    X_eval = X_test_scaled.reset_index().set_index('SMILES').reindex(mask_test[mask_test.exists==1].index).reset_index().set_index(['SMILES', 'Zeolite'])
+    truth_eval = truth_test_scaled.reset_index().set_index('SMILES').reindex(mask_test[mask_test.exists==1].index).reset_index().set_index(['SMILES', 'Zeolite'])
+
+    # If there’s more than one item in eval_set, the last entry will be used for early stopping.
     model.fit(
         X_train_scaled,
         truth_train_scaled,
         eval_set=[
-            (X_train_scaled, truth_train_scaled),
-            (X_test_scaled, truth_test_scaled),
+            (X_train_scaled, truth_train_scaled,),
+            (X_eval, truth_eval),
         ],
-        # [(X_train, truth_train), (X_test, truth_test)],
         verbose=True,
         # feature_weights=
     )
     model.save_model(os.path.join(kwargs["output"], "xgboost.json"))
-    results = model.evals_result()  #
+    results = model.evals_result()
     np.save(kwargs["output"] + "/" + "train_loss.npy", results["validation_0"]["rmse"])
     np.save(kwargs["output"] + "/" + "test_loss.npy", results["validation_1"]["rmse"])
 
