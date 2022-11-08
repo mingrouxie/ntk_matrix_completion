@@ -1,3 +1,9 @@
+"""
+You did not average across conformer priors, my friend. You just dropped any geoms with the same SMILES...
+Tbf the 3D descriptors do not vary so much
+But this is still very bad practice. Luckily it was recorded. 
+"""
+
 import multiprocessing
 from math import ceil
 from itertools import product

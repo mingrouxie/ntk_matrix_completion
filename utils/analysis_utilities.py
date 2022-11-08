@@ -102,6 +102,7 @@ def calculate_metrics(
     method="top_k_in_top_k",
     to_plot=True,
     top_20_accuracies=True,
+    top_20_accuracies_file=PERFORMANCE_METRICS,
 ):
     """
     All metrics as calculated by ROW. 
@@ -124,7 +125,7 @@ def calculate_metrics(
         top_3 = []
         top_5 = []
         top_20_accuracies = []
-        for n in range(1, 1195):
+        for n in range(1, 1195): # TODO: this number needs to be changed
             top_1.append(calculate_top_n_in_top_k_accuracy(true, pred, k=1, n=n))
             top_3.append(calculate_top_n_in_top_k_accuracy(true, pred, k=3, n=n))
             top_5.append(calculate_top_n_in_top_k_accuracy(true, pred, k=5, n=n))
@@ -204,7 +205,8 @@ def calculate_metrics(
 
     if top_20_accuracies:
         df = pd.DataFrame(top_20_accuracies).T
-        df.to_pickle(PERFORMANCE_METRICS)
+    if top_20_accuracies_file:
+        df.to_pickle(top_20_accuracies_file)
 
     return results
 

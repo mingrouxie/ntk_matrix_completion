@@ -63,7 +63,7 @@ def ntk_cv(     # was business_as_normal
         osda_prior_file=osda_prior_file,
     )
     print(
-        "[NTK_CV] Returned NTK predictions are of shape",
+        "[ntk_cv] Returned NTK predictions are of shape",
         pred.shape,
         true.shape,
         mask.shape,
@@ -83,7 +83,7 @@ def ntk_cv(     # was business_as_normal
         top_osdas = ((true - pred) ** 2).T.sum().sort_values()[:10]
         print(top_osdas.index)
     save_matrix(pred, TEN_FOLD_CROSS_VALIDATION_ENERGIES)
-    print("ntk_cv finished")
+    print("[ntk_cv] ntk_cv finished")
 
 
 def ntk_cv_transposed(
@@ -117,7 +117,7 @@ def ntk_cv_transposed(
     )
     pdb.set_trace()
 
-    print("ntk_cv_transpose finished")
+    print("[ntk_cv_transposed] ntk_cv_transpose finished")
 
 
 def ntk_cv_skinny():
@@ -129,6 +129,7 @@ def ntk_cv_skinny():
     # TODO: Notice that this just takes the first (100, 30) chunk of the energy matrix as a way to
     # downsample the matrix. This is almost certainly a bad idea for an accurate test.
     # skinny_ntk_sampled_not_sliced() in ntk.py addresses this but is messy be warned
+    print("[ntk_cv_skinny] Running")
     ground_truth, binary_data = get_ground_truth_energy_matrix(desired_shape=(100, 30))
     skinny_ground_truth = make_skinny(ground_truth)
     skinny_pred, _t, _m = run_ntk(

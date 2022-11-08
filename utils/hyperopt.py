@@ -208,6 +208,7 @@ class HyperoptSearchCV:
             mask_test = self.mask.reset_index().set_index(['SMILES', 'Zeolite']).loc[test].values
             # mask_test = mask_test.set_index([mask_test.index, "Zeolite"]).values
 
+            # TODO: early_stopping not implemented here because n_estimators is a parameter being tuned. Not sure why this is the recommended practice when one could put a high number and use early stopping in practice
             model.fit(X_train, y_train)
             pred_train = model.predict(X_train)
             pred_test = model.predict(X_test)
@@ -237,9 +238,9 @@ class HyperoptSearchCV:
 
     def fit(self, debug=False):
         if debug:
-            max_evals = 5
+            max_evals = 3
         else:
-            max_evals = 150 # 200
+            max_evals = 100 # 200 -> 150 -> 100
         print(f'[HyperOptSearchCV] max_evals={max_evals}')
         self.trials = Trials()
         self.best_params_ = fmin(
