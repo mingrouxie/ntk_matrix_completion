@@ -193,15 +193,18 @@ def main(kwargs):
     os.mkdir(kwargs["output"])
 
     # clean data
-    sieved_priors_index = pd.read_pickle(kwargs["sieved_file"]).index
-    sieved_priors_index.name = "SMILES"
     if kwargs["energy_type"] == Energy_Type.BINDING:
         # truth = pd.read_csv(BINDING_CSV) # binding values only
         truth = pd.read_csv(kwargs["truth"])  # binding with non-binding values
     else:
         print("[XGB] Please work only with binding energies")
         breakpoint()
-    truth = truth[truth["SMILES"].isin(sieved_priors_index)]
+    breakpoint()
+    if kwargs["sieved_file"]:
+        sieved_priors_index = pd.read_pickle(kwargs["sieved_file"]).index
+        sieved_priors_index.name = "SMILES"
+        truth = truth[truth["SMILES"].isin(sieved_priors_index)]
+    
     truth = truth.set_index(["SMILES", "Zeolite"])
     truth = truth[["Binding (SiO2)"]]
     mask = pd.read_csv(kwargs["mask"])
@@ -483,7 +486,6 @@ if __name__ == "__main__":
         type=str,
         default="CustomOSDAVector",
     )
-    parser.add_argument("--debug", action="store_true", dest="debug")
     parser.add_argument(
         "--energy_type",
         help="Binding or templating energy",
@@ -499,7 +501,7 @@ if __name__ == "__main__":
     # )
     parser.add_argument(
         "--prior_treatment",
-        help="Which priors to concatenate to form the final prior",
+        help="Which priors to concatenate to form the final prior. See main function for how it is used",
         type=int,
         required=True,
     )
@@ -516,7 +518,7 @@ if __name__ == "__main__":
         "--sieved_file",
         help="Dataframe whose index is used to sieve for desired data points",
         type=str,
-        default=OSDA_CONFORMER_PRIOR_FILE_CLIPPED,  # TODO: generalize to substrate
+        default=None,  # TODO: generalize to substrate
     )
     parser.add_argument(
         "--osda_prior_file",
@@ -570,6 +572,7 @@ if __name__ == "__main__":
         "--model_seed", help="Seed for model", type=int, default=MODEL_SEED
     )
     parser.add_argument("--model_file", help="file to load model from", type=str)
+    parser.add_argument("--debug", action="store_true", dest="debug")
     args = parser.parse_args()
     kwargs = preprocess(args)
     main(kwargs)
