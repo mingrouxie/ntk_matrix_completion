@@ -1,18 +1,13 @@
-from genericpath import isfile
-import multiprocessing
 from math import ceil, nan
-from itertools import product
 import pandas as pd
 import numpy as np
 import os
 import datetime
-from tqdm import tqdm
 from copy import deepcopy
-
-# from auto_tqdm import tqdm
 from sklearn.preprocessing import normalize, OneHotEncoder
 import time
 import argparse
+import sys
 
 from ntk_matrix_completion.utils.path_constants import (
     BINDING_GROUND_TRUTH,
@@ -20,16 +15,35 @@ from ntk_matrix_completion.utils.path_constants import (
     OSDA_HYPOTHETICAL_PRIOR_FILE,
     OSDA_CONFORMER_PRIOR_FILE,
 )
+from utils.non_binding import fill_non_bind, NonBinding
+
 
 from dbsettings import *
 
+sys.path.append("/home/mrx/general/")
+from zeolite.queries.scripts.exclusions import MOLSET_EXCLUSIONS
+
+GRP_NAME = 'zeolite'
 
 def get_osda_features(kwargs):
-    if kwargs["inchikeys"]:
-        specs = list(Species.objects.filter(inchikey__in=kwargs["inchikeys"]))
-    if kwargs["ms"]:
-        specs = list(Species.objects.filter(mol__sets__name__in=kwargs["ms"]))
+    if kwargs["truth_file"]:
+        # this is hardcoded to the kind of truth file that is created in utils/create_truth.py
+        truth = pd.read_csv(kwargs["truth_file"])
+        if "InchiKey" in truth.columns:
+            inchikeys = list(set(truth["InchiKey"]))
+            specs = Species.objects.filter(inchikey__in=inchikeys, group__name=GRP_NAME)
+        if "SMILES" in truth.columns:
+            smiles = list(set(truth["SMILES"]))
+            specs = Species.objects.filter(smiles__in=smiles, group__name=GRP_NAME)
+    elif kwargs["inchikeys"]:
+        specs = Species.objects.filter(inchikey__in=kwargs["inchikeys"], group__name=GRP_NAME)
+    elif kwargs["ms"]:
+        specs = Species.objects.filter(mol__sets__name__in=kwargs["ms"], group__name=GRP_NAME)
+    if kwargs["exc"]:
+        for e in kwargs["exc"]:
+            specs = specs.exclude(e)
 
+    specs = list(specs)
     print("[get_osda_features] Number of Species:", len(specs))
 
     def batched_specs(specs, batch_size):
@@ -58,14 +72,10 @@ def get_osda_features_single(kwargs):
         method__name="molecular_mechanics_mmff94",
         species__in=kwargs["species"],
     )
-    # if kwargs["inchikeys"]: # TODO: we need to batch this...
-    #     geoms = geoms.filter(species__inchikey__in=kwargs["inchikeys"]).distinct()
-    # elif kwargs["ms"]:
-    #     geoms = geoms.filter(species__mol__sets__name__in=kwargs["ms"]).distinct()
 
     columns = {
         "geom": "id",
-        "smiles": "species__smiles",
+        "ligand": "species__smiles",
         "inchikey": "species__inchikey",
         # 'fps': 'continuousfps',
         "fps_name": "continuousfps__method__name",
@@ -89,7 +99,7 @@ def get_osda_features_single(kwargs):
         data_sc,
         values="fps_val",
         columns="fps_name",
-        index="smiles",
+        index="ligand",
         aggfunc=np.mean,
         fill_value=nan,
     ).sort_index()
@@ -103,7 +113,7 @@ def get_osda_features_single(kwargs):
         data_ve,
         values="fps_val",
         columns="fps_name",
-        index="smiles",
+        index="ligand",
         aggfunc=vec_mean,
         fill_value=nan,
     ).sort_index()
@@ -111,9 +121,9 @@ def get_osda_features_single(kwargs):
 
     data = pd.concat([data_sc, data_ve], axis=1)
     data = data[[x for x in data.columns.tolist() if x in kwargs["features"]]]
-
     print("[single] Data size", data.shape)
-    data.to_hdf(kwargs["osda_file"], key="osda_priors")
+    data.to_pickle(kwargs["osda_file"])
+    # data.to_hdf(kwargs["osda_file"], key="osda_priors")
 
     return data
 
@@ -148,8 +158,8 @@ def main(kwargs):
     if not os.path.isdir(kwargs["op"]):
         os.mkdir(kwargs["op"])
 
-    kwargs["osda_file"] = os.path.join(kwargs["op"], "osda_priors.h5")
-    kwargs["fws_file"] = os.path.join(kwargs["op"], "zeolite_priors.h5")
+    kwargs["osda_file"] = os.path.join(kwargs["op"], "osda_priors.pkl")
+    kwargs["fws_file"] = os.path.join(kwargs["op"], "zeolite_priors.pkl")
     if os.path.isfile(kwargs["osda_file"]) | os.path.isfile(kwargs["fws_file"]):
         print("[main] Output files already exists, adding time to file name")
         now = "_%d%d%d_%d%d%d" % (
@@ -193,6 +203,8 @@ def preprocess(input):
     input = input.__dict__
     # do stuff if needed #
     kwargs.update(input)
+    if kwargs["exc"]:
+        kwargs["exc"] = MOLSET_EXCLUSIONS[kwargs["exc"]-1]
     return kwargs
 
 
@@ -228,6 +240,12 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
+        "--truth_file",
+        type=str,
+        help="Path to ground truth file, in order to grab the inchikeys",
+        default=None,
+    )
+    parser.add_argument(
         "--fws", type=str, nargs="+", help="Names of desired frameworks", default=None
     )
     parser.add_argument(
@@ -236,6 +254,12 @@ if __name__ == "__main__":
         nargs="+",
         help="MolSets the desired OSDAs belong to. Filters by all of them",
         default=None,
+    )
+    parser.add_argument(
+        "--exc",
+        type=int,
+        help="Exclusions. Uses custom code, see exclusions in Mingrou's general folder. 1) literature 2) quaternary 3) diquaternary.",
+        default=None
     )
     # parser.add_argument(
     #     "--cs",
