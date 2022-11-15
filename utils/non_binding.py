@@ -1,5 +1,6 @@
 from enum import Enum, IntEnum
 import numpy as np
+import pandas as pd
 
 class NonBinding(IntEnum):
     ROW_MEAN = 1
@@ -8,10 +9,16 @@ class NonBinding(IntEnum):
     MAX_PLUS = 4
     ZERO = 5
 
+def fill_non_bind(mat: pd.DataFrame, nb_type: NonBinding):
+    """
+    Note that np mean returns NaN if one of the entries is Nan. DataFrame would simply compute the mean without that entry (in both numerator and denominator). We use the latter here.
 
-def fill_non_bind(mat, nb_type):
+    Input: Numpy array or DataFrame
+    
+    Returns: np.array
+    """
     if nb_type == NonBinding.ROW_MEAN:
-        return mat.apply(lambda row: row.fillna(row.mean()), axis=1)
+        return pd.DataFrame(mat).apply(lambda row: row.fillna(row.mean()), axis=1).values
     elif nb_type == NonBinding.SMALL_POS:
         return np.nan_to_num(mat, nan=1e-5, posinf=1e-5, neginf=None)
     elif nb_type == NonBinding.LARGE_POS:
