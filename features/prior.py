@@ -195,7 +195,7 @@ def load_vector_priors(
 
     if replace_nan is not None:
         print(
-            f"[prior/load_vector_prior] WARNING: there are {exploded_prior.isna().sum().sum()} NaN entries in prior, filling with {replace_nan}"
+            f"[prior/load_vector_priors] WARNING: there are {exploded_prior.isna().sum().sum()} NaN entries in prior, filling with {replace_nan}"
         )
         exploded_prior = exploded_prior.fillna(replace_nan)
 
@@ -272,7 +272,6 @@ def load_prior(
             return prior_index_map[i] if i in prior_index_map else i
 
         precomputed_prior.index = precomputed_prior.index.map(x)
-
     precomputed_prior = precomputed_prior.reindex(target_index)  
     # keeps rows with index in target_index, assigns NaN to other indices in target_index
     with open(column_weights, "r") as f:
@@ -281,12 +280,14 @@ def load_prior(
     precomputed_prior = precomputed_prior.apply(pd.to_numeric)
 
     print(
-        f"[prior/load_prior] Precomputed prior has {precomputed_prior.isna().sum().sum()} NaN entries\n"
+        f"[prior/load_prior] Precomputed prior has {precomputed_prior.isna().sum().sum()} NaN entries"
     )
-    print("[prior/load_prior] WARNING: Will drop data points with NaN entries")
+    if precomputed_prior.isna().sum().sum() > 0:
+        print("[prior/load_prior] WARNING: DROPPING DATA POINTS WITH NAN ENTRIES. This will mess up your data, please go and check your prior source files. There should NOT be any NaN entries")
+        breakpoint()
     # results = precomputed_prior.fillna(0.0)
     results = precomputed_prior.dropna()
-    print(f"Prior of shape {precomputed_prior.shape} now of size {results.shape}")
+    print(f"[prior/load_prior] Prior of shape {precomputed_prior.shape} now of size {results.shape}")
 
     if normalize:
         # Normalize down each column to between 0 & 1
@@ -494,12 +495,14 @@ def osda_zeolite_combined_prior(
     zeolite_prior_file=HANDCRAFTED_ZEOLITE_PRIOR_FILE,  # ZEOLITE_PRIOR_FILE
     osda_prior_map=OSDA_PRIOR_LOOKUP,
     zeolite_prior_map=ZEOLITE_PRIOR_LOOKUP,
+    other_prior_to_concat=OSDA_HYPOTHETICAL_PRIOR_FILE,
 ):
     """
     Questions: TODO
 
     1. Why do we put identity_weight into each individual prior loading, and then again at the end of this method?
     2. Too sleepy to make sense of the normalization if stack=True. Please check again.
+    3. load_prior drops NaN rows like nobody's business, and then these 3 priors come back with different shapes - very bad. I don't think the NaN should be dropped or converted, but that makes weighting/ normalization impossible. 
 
     """
     osda_prior = load_prior(
@@ -508,6 +511,7 @@ def osda_zeolite_combined_prior(
         precomputed_file_name=osda_prior_file,
         identity_weight=identity_weight,
         normalize=normalize,
+        other_prior_to_concat=other_prior_to_concat
     ).to_numpy()
     osda_vector_prior = load_vector_priors(
         target_index=[i[0] for i in all_data_df.index],
@@ -579,6 +583,7 @@ def make_prior(
     stack_combined_priors=True,
     osda_prior_file=OSDA_PRIOR_FILE,
     zeolite_prior_file=HANDCRAFTED_ZEOLITE_PRIOR_FILE,
+    other_prior_to_concat=OSDA_HYPOTHETICAL_PRIOR_FILE,
 ):
     """
     train: training set
@@ -711,6 +716,7 @@ def make_prior(
             identity_weight=normalization_factor,
             osda_prior_map=osda_prior_map,
             zeolite_prior_map=zeolite_prior_map,
+            other_prior_to_concat=other_prior_to_concat,
         )
         if stack_combined_priors:
             # For now remove the identity concat to test eigenpro
@@ -727,7 +733,8 @@ def make_prior(
             zeolite_prior_file=zeolite_prior_file,
             identity_weight=normalization_factor,
             osda_prior_map=osda_prior_map,
-            zeolite_prior_map=zeolite_prior_map))
+            zeolite_prior_map=zeolite_prior_map,
+            other_prior_to_concat=other_prior_to_concat))
         return sp.sparse.hstack(
             [prior, normalization_factor * sp.sparse.identity(all_data.shape[0])]
         )
