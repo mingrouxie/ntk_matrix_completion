@@ -78,11 +78,18 @@ def main(kwargs):
     )
     truth.columns = ["SMILES", "Zeolite", "Binding (SiO2)", "InchiKey"]
 
-    # Change docked pairs with unfeasible energies to failed dockings
+    # Change docked pairs with unfeasible energies to failed dockings. 
+    # Using 0 because the duplicate removal in the next section does not work with NaNs
     truth.loc[truth["Binding (SiO2)"] > 0, "Binding (SiO2)"] = 0.0
     truth.loc[truth["Binding (SiO2)"] < -35, "Binding (SiO2)"] = 0.0
     truth.loc[truth["Binding (SiO2)"].isna(), "Binding (SiO2)"] = 0.0
     print("[main] truth size", truth.shape)
+
+    # remove duplicates keeping the most negative binding energy
+    truth = truth.drop_duplicates(
+        subset=["Zeolite", "InchiKey", "SMILES"], keep="first"
+    )
+    print("[main] deduplicated truth size", truth.shape)
 
     # Make mask where 1=binding, 0=non-binding
     mask = deepcopy(truth)
@@ -91,18 +98,21 @@ def main(kwargs):
     mask.reset_index()[["SMILES", "Zeolite", "exists", "InchiKey"]].to_csv(
         os.path.join(kwargs["op"], "mask.csv")
     )
-
-    # remove duplicates keeping the most negative binding energy
-    truth = truth.drop_duplicates(
-        subset=["Zeolite", "InchiKey", "SMILES"], keep="first"
-    )
-    print("[main] deduplicated truth size", truth.shape)
-
+    breakpoint()
     # non-binding treatment
     if kwargs["nb"]:
+        # fill all NaN entries, then select the relevant ones
         truth.loc[truth["Binding (SiO2)"] == 0.0, "Binding (SiO2)"] = nan
         truth_mat = truth.pivot(values="Binding (SiO2)", index="SMILES", columns="Zeolite")
-        truth_mat = pd.DataFrame(fill_non_bind(truth_mat, nb_type=kwargs["nb"]),index=truth_mat.index,columns=truth_mat.columns,)
+        truth_mat = pd.DataFrame(fill_non_bind(truth_mat, nb_type=kwargs["nb"]), index=truth_mat.index, columns=truth_mat.columns,)
+
+        if kwargs["nan_after_nb"] == "drop":
+            print("[main] Dropping rows with NaN post-NB treatment", truth_mat.shape, "-->", truth_mat.dropna().shape)
+            truth_mat = truth_mat.dropna()
+        if kwargs["nan_after_nb"] == "keep":
+            print("[main] Filling rows with NaN post-NB treatment with hardcoded one (arbitrary)")
+            truth_mat = truth_mat.fillna(1.0)
+
         truth_filled = truth_mat.stack().reset_index().rename(columns={0: "Binding (SiO2)"}).set_index(["Zeolite", "SMILES"])
         truth = truth_filled.loc[truth_filled.index.isin(truth.set_index(["Zeolite", "SMILES"]).index)]
 
@@ -111,7 +121,6 @@ def main(kwargs):
     #     breakpoint()
     truth.to_csv(os.path.join(kwargs["op"], "energies.csv"))
     print("[main] Output dir:", kwargs['op'])
-
 
 def preprocess(input):
     kwargs = {}
@@ -157,6 +166,12 @@ if __name__ == "__main__":
         type=int,
         help="Exclusions. Uses custom code, see exclusions in Mingrou's general folder. 1) literature 2) quaternary 3) diquaternary. Applies to both affinities and failed dockings",
         default=None,
+    )
+    parser.add_argument(
+        "--nan_after_nb",
+        type=str,
+        help="What to do with NaN entries of the truth matrix after non-binding treatment has been applied and NaN entries still exist",
+        default=None
     )
     args = parser.parse_args()
     kwargs = preprocess(args)
