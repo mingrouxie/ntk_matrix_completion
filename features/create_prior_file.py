@@ -23,7 +23,8 @@ from dbsettings import *
 sys.path.append("/home/mrx/general/")
 from zeolite.queries.scripts.exclusions import MOLSET_EXCLUSIONS
 
-GRP_NAME = 'zeolite'
+GRP_NAME = "zeolite"
+
 
 def get_osda_features(kwargs):
     if kwargs["truth_file"]:
@@ -36,9 +37,13 @@ def get_osda_features(kwargs):
             smiles = list(set(truth["SMILES"]))
             specs = Species.objects.filter(smiles__in=smiles, group__name=GRP_NAME)
     elif kwargs["inchikeys"]:
-        specs = Species.objects.filter(inchikey__in=kwargs["inchikeys"], group__name=GRP_NAME)
+        specs = Species.objects.filter(
+            inchikey__in=kwargs["inchikeys"], group__name=GRP_NAME
+        )
     elif kwargs["ms"]:
-        specs = Species.objects.filter(mol__sets__name__in=kwargs["ms"], group__name=GRP_NAME)
+        specs = Species.objects.filter(
+            mol__sets__name__in=kwargs["ms"], group__name=GRP_NAME
+        )
     if kwargs["exc"]:
         for e in kwargs["exc"]:
             specs = specs.exclude(e)
@@ -86,7 +91,7 @@ def get_osda_features_single(kwargs):
     )
     print("[get_osda_features] data size", data.size)
     # TODO: It does not really matter because I'm doing this for all the descriptors eventually,
-    # but maybe we should sieve for the features at this step zzz 
+    # but maybe we should sieve for the features at this step zzz
     # ThreeDContinuousFingerprint.objects.filter(fps__name__in=kwargs["features"], geom__in=geoms)
 
     # separate scalar and vector features
@@ -123,6 +128,7 @@ def get_osda_features_single(kwargs):
     data = data[[x for x in data.columns.tolist() if x in kwargs["features"]]]
     print("[single] Data size", data.shape)
     data.to_pickle(kwargs["osda_file"])
+    data.to_csv(kwargs["osda_file"].split(".")[0]+".csv")
     # data.to_hdf(kwargs["osda_file"], key="osda_priors")
 
     return data
@@ -130,24 +136,61 @@ def get_osda_features_single(kwargs):
 
 def get_fw_features(kwargs):
     """Returns a DataFrame with framework names as the index and columns as the desired features"""
-    return NotImplementedError
-    # fws = Framework.objects.filter(name__in=kwargs["fws"])
-
-    # columns = {
-    #     "fw": "name",
-    #     "details": "prototype__details",
-    #     "substrate_atoms": "prototype__xyz__len",
-    # }
-
-    # data = pd.DataFrame(fws.values_list(columns.values), columns=columns.keys)
-    # data = pd.concat(
-    #     [data.drop(["details"], axis=1), data.details.apply(pd.Series)], axis=1
-    # )
-    # data = data[[x for x in data.columns.tolist() if x in kwargs["features"]]]
-    #
-    # if kwargs["zeolite"]:
-    #     fws_data.to_hdf(kwargs["fws_file"], key="zeolite_priors")
-    # return data
+    if kwargs["fws"]:
+        fws = Framework.objects.filter(name__in=kwargs["fws"])
+    if kwargs["fws_config"]:
+        fws = Framework.objects.filter(
+            prototype__parentjob__config__name__in=kwargs["fws_config"]
+        )
+    crys = Crystal.objects.filter(id__in=fws.values_list("prototype"))
+    catlows = Job.objects.filter(
+        config__name="catlow_opt_gulp",
+        status="done",
+        parentid__in=crys.values_list("id"),
+    )
+    catlow_crys = Crystal.objects.filter(
+        id__in=catlows.values_list("childgeoms__crystal")
+    )
+    failed_catlows = fws.filter(
+        prototype__childjobs__config__name='catlow_opt_gulp', 
+        prototype__childjobs__status='error')
+    prototypes = Crystal.objects.filter(id__in=failed_catlows.values_list('prototype'))
+    print(f"[get_fw_features] {failed_catlows.count()} fws do not have catlow-opt structures. Defaulting to fws.prototypes instead")
+    all_crys = catlow_crys | prototypes
+    # print("[debug]", no_catlows.count(), catlow_crys.count(), all_crys.count())
+    columns = {
+        "crystal": "id",
+        "fw": "framework__name",
+        "details": "framework__prototype__details",
+        "num_atoms": "xyz__len",  # not framework_density
+    }
+    data = pd.DataFrame(
+        all_crys.values_list(*list(columns.values())), columns=list(columns.keys())
+    )
+    def get_more_params(crystal):
+        pmg = Crystal.objects.filter(id=crystal).first().as_pymatgen_structure()
+        return {
+            "a": pmg.lattice.a,
+            "b": pmg.lattice.b,
+            "c": pmg.lattice.c,
+            "alpha": pmg.lattice.alpha,
+            "beta": pmg.lattice.beta,
+            "gamma": pmg.lattice.gamma,
+            "volume": pmg.volume,
+        }
+    data["more"] = data.crystal.apply(get_more_params)
+    data = pd.concat([data.drop(["more"], axis=1), data.more.apply(pd.Series)], axis=1)
+    data = pd.concat(
+        [data.drop(["details"], axis=1), data.details.apply(pd.Series)], axis=1
+    )
+    data["num_atoms_per_vol"] = data.num_atoms.divide(data.volume)
+    data = data.set_index(["fw", "crystal"])
+    data = data[[x for x in data.columns.tolist() if x in kwargs["features"]]]
+    data = data.reset_index().set_index("fw")
+    # data.to_hdf(kwargs["fws_file"], key="zeolite_priors")
+    data.to_pickle(kwargs["fws_file"])
+    data.to_csv(kwargs["fws_file"].split(".")[0]+".csv")
+    return data
 
 
 def main(kwargs):
@@ -204,7 +247,7 @@ def preprocess(input):
     # do stuff if needed #
     kwargs.update(input)
     if kwargs["exc"]:
-        kwargs["exc"] = MOLSET_EXCLUSIONS[kwargs["exc"]-1]
+        kwargs["exc"] = MOLSET_EXCLUSIONS[kwargs["exc"] - 1]
     return kwargs
 
 
@@ -249,6 +292,13 @@ if __name__ == "__main__":
         "--fws", type=str, nargs="+", help="Names of desired frameworks", default=None
     )
     parser.add_argument(
+        "--fws_config",
+        type=str,
+        nargs="+",
+        help="parentjob config name of desired framework prototypes",
+        default=None,
+    )
+    parser.add_argument(
         "--ms",
         type=str,
         nargs="+",
@@ -259,7 +309,7 @@ if __name__ == "__main__":
         "--exc",
         type=int,
         help="Exclusions. Uses custom code, see exclusions in Mingrou's general folder. 1) literature 2) quaternary 3) diquaternary.",
-        default=None
+        default=None,
     )
     # parser.add_argument(
     #     "--cs",
