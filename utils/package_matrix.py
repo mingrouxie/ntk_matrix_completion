@@ -132,7 +132,7 @@ def get_ground_truth_energy_matrix(
     binary_data[binary_data != 0] = 1
 
     # treat non-binding entries
-    ground_truth = fill_non_bind(ground_truth, non_binding)
+    ground_truth = pd.DataFrame(fill_non_bind(ground_truth, non_binding), index=ground_truth.index, columns=ground_truth.columns)
 
     ground_truth = ground_truth.dropna(thresh=1)
     # Let's take out rows that have just no  energies at all...
