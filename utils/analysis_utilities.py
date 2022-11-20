@@ -31,7 +31,7 @@ sys.path.insert(
 
 
 def plot_top_k_curves(top_accuracies, method):
-    fig, axs = plt.subplots(figsize=(10,10))
+    fig, axs = plt.subplots(figsize=(10, 10))
     axs.plot(top_accuracies)
     axs.set_title(f"{method} Accuracy")
     axs.set_xlabel("K")
@@ -72,23 +72,29 @@ def calculate_row_metrics(true, pred, metrics_mask=None):
             j = j[m == 1.0]
             i = i[m == 1.0]
         min_row_len = min(min_row_len, len(i))
-        if len(i) <= 1:
-            raise ValueError(
-                "There exists complete rows in your dataset which are completely unbinding"
-                + " or only have one value (which is a no go for R^2 and Spearman..."
-            )
-        r2_scores.append(r2_score(i, j, multioutput="raw_values"))
-        spearman_scores.append([spearmanr(i, j).correlation])
         cosims.append(get_cosims(np.array([i]), np.array([j])))
         rmse_scores.append(
             [math.sqrt(mean_squared_error(i, j, multioutput="raw_values"))]
         )
+        if len(i) <= 1:
+            print(
+                "Whole row is unbinding or only has one value. R^2 and Spearman cannot be computed. Row value:",
+                true[row_id][0],
+            )
+            continue
+        r2_scores.append(r2_score(i, j, multioutput="raw_values"))
+        spearman_scores.append([spearmanr(i, j).correlation])
+
     if verbose:
         print(
             "Hey, just a heads up the min row_length is "
             + str(min_row_len)
             + ".\n Keep that in mind, how valid is r2_score & spearman_scores? ",
         )
+    print(len(cosims))
+    print(len(r2_scores))
+    print(len(rmse_scores))
+    print(len(spearman_scores))
     return cosims, r2_scores, rmse_scores, spearman_scores
 
 
@@ -105,27 +111,25 @@ def calculate_metrics(
     top_20_accuracies_file=PERFORMANCE_METRICS,
 ):
     """
-    All metrics as calculated by ROW. 
-    """ 
+    All metrics as calculated by ROW.
+    """
     print(
         "analysis_utilities/calculate_metrics: truth, pred and mask are of shape",
         true.shape,
         pred.shape,
         mask.shape,
     )
-    try:
-        cosims, r2_scores, rmse_scores, spearman_scores = calculate_row_metrics(
-            true, pred, mask
-        )
-    except:
-        breakpoint()
+
+    cosims, r2_scores, rmse_scores, spearman_scores = calculate_row_metrics(
+        true, pred, mask
+    )
 
     if method == "top_n_in_top_k":
         top_1 = []
         top_3 = []
         top_5 = []
         top_20_accuracies = []
-        for n in range(1, 1195): # TODO: this number needs to be changed
+        for n in range(1, 1195):  # TODO: this number needs to be changed
             top_1.append(calculate_top_n_in_top_k_accuracy(true, pred, k=1, n=n))
             top_3.append(calculate_top_n_in_top_k_accuracy(true, pred, k=3, n=n))
             top_5.append(calculate_top_n_in_top_k_accuracy(true, pred, k=5, n=n))
@@ -170,26 +174,26 @@ def calculate_metrics(
         "top_20_accuracy": np.array(top_20).round(4),
     }
     if top_20_accuracies:
-        results["top_20_accuracies"] = top_20_accuracies 
+        results["top_20_accuracies"] = top_20_accuracies
 
     if verbose:
         print(
             "\ncosim: ",
-            np.mean(np.mean(cosims).round(4)),
+            results["cosim"],
             "\nr2_scores: ",
-            np.mean(np.mean(r2_scores).round(4)),
+            results["r2_scores"],
             "\nrmse_scores: ",
-            np.mean(np.mean(rmse_scores).round(4)),
+            results["rmse_scores"],
             "\nspearman_scores: ",
-            np.mean(np.mean(spearman_scores).round(4)),
+            results["spearman_scores"],
             "\ntop_1_accuracy: ",
-            np.array(top_1).mean().round(4),
+            results["top_1_accuracy"],
             "\ntop_3_accuracy: ",
-            np.array(top_3).mean().round(4),
+            results["top_3_accuracy"],
             "\ntop_5_accuracy: ",
-            np.array(top_5).mean().round(4),
+            results["top_5_accuracy"],
             "\ntop_20_accuracy: ",
-            np.array(top_20).mean().round(4),
+            results["top_20_accuracy"],
         )
 
     if to_plot:
