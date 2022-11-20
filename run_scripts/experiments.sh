@@ -9,18 +9,17 @@ source /home/mrx/bin/miniconda3/bin/activate /home/mrx/bin/miniconda3/envs/ntk
 
 ROOT="/home/mrx/projects/matrix_completion/ntk_matrix_completion"
 OUTPUT="${ROOT}/output/2022_IZC/xgb_with_nb_hyperopt"
+OSDA_CONFORMER_PRIOR_FILE_CLIPPED="${ROOT}/data/priors/IZC_conformer_priors_clipped.pkl"
 
 ## NTK train
 # python $ROOT/run_scripts/train.py
 
 ## XGB
 # python $ROOT/models/xgboost/xgb.py
-OSDA_CONFORMER_PRIOR_FILE_CLIPPED='ntk_matrix_completion/data/priors/IZC_conformer_priors_clipped.pkl'
 
 # DEBUG PURPOSES
 # TRUTH='ntk_matrix_completion/data/daniels_data/science_paper/binding_nb_rowmean_debug.csv'
 # MASK='ntk_matrix_completion/data/daniels_data/science_paper/mask_debug.csv'
-
 # WITHOUT NON-BINDING
 # TRUTH='ntk_matrix_completion/data/daniels_data/science_paper/binding.csv'
 # MASK='ntk_matrix_completion/data/daniels_data/science_paper/mask_b_only.csv'
@@ -56,7 +55,7 @@ echo 'mask file' $MASK
 # ZEO_PRIOR_FILE='ntk_matrix_completion/data/priors/zeolite_ohe.pkl'
 # OSDA_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/osda_weights_structural.json'
 # ZEO_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/zeolite_weights_ohe.json'
-# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 5 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP
+# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 5 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP --sieved_file $OSDA_CONFORMER_PRIOR_FILE_CLIPPED
 # ## --stack_combined_priors 'all'
 
 # echo 'Run 2) structural osda and one hot encoding zeolite' $(date)
@@ -64,7 +63,7 @@ echo 'mask file' $MASK
 # ZEO_PRIOR_FILE='ntk_matrix_completion/data/priors/zeolite_ohe.pkl'
 # OSDA_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/osda_weights_structural.json'
 # ZEO_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/zeolite_weights_ohe.json'
-# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 3 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP
+# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 3 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP --sieved_file $OSDA_CONFORMER_PRIOR_FILE_CLIPPED
 # ### --stack_combined_priors 'all'
 
 # echo 'Run 3) structural osda and structural zeolite' $(date)
@@ -72,15 +71,15 @@ echo 'mask file' $MASK
 # ZEO_PRIOR_FILE='/home/mrx/projects/matrix_completion/ntk_matrix_completion/data/handcrafted/iza_zeolites.pkl'
 # OSDA_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/osda_weights_structural.json'
 # ZEO_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/zeolite_weights_structural_extendable.json'
-# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 3 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP
-# ### --stack_combined_priors 'all'
+# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 3 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP --sieved_file $OSDA_CONFORMER_PRIOR_FILE_CLIPPED
+# ### --stack_combined_priors 'all' 
 
 # echo 'Run 4) structural osda and gcnn zeolite' $(date)
 # OSDA_PRIOR_FILE='ntk_matrix_completion/data/priors/IZC_conformer_priors_clipped.pkl'
 # ZEO_PRIOR_FILE='ntk_matrix_completion/data/swagata_gcnn/gcnn_priors.pkl'
 # OSDA_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/osda_weights_structural.json'
 # ZEO_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/zeolite_weights_gcnn.json'
-# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 3 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP
+# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 3 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP --sieved_file $OSDA_CONFORMER_PRIOR_FILE_CLIPPED
 # ### --stack_combined_priors 'all'
 
 # echo 'Run 5) structural osda and PH zeolite' $(date)
@@ -88,7 +87,7 @@ echo 'mask file' $MASK
 # OSDA_PRIOR_FILE='ntk_matrix_completion/data/priors/IZC_conformer_priors_clipped.pkl'
 # ZEO_PRIOR_FILE='/home/mrx/projects/matrix_completion/ntk_matrix_completion/data/nick_persistent/from_gdrive/iza_zeolites_topological-features.pkl'
 # ZEO_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/zeolite_ph_v2.json'
-# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 3 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP
+# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 3 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP --sieved_file $OSDA_CONFORMER_PRIOR_FILE_CLIPPED
 # ### --stack_combined_priors 'all'
 
 # echo 'Run 6) getaway osda and one hot encoding zeolite' $(date)
@@ -96,7 +95,7 @@ echo 'mask file' $MASK
 # ZEO_PRIOR_FILE='ntk_matrix_completion/data/priors/zeolite_ohe.pkl'
 # OSDA_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/osda_weights_nostructural.json'
 # ZEO_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/zeolite_weights_ohe.json'
-# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 4 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP
+# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 4 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP --sieved_file $OSDA_CONFORMER_PRIOR_FILE_CLIPPED
 # ### --stack_combined_priors 'all'
 
 # echo 'Run 7) getaway osda and structural zeolite' $(date)
@@ -104,7 +103,7 @@ echo 'mask file' $MASK
 # ZEO_PRIOR_FILE='/home/mrx/projects/matrix_completion/ntk_matrix_completion/data/handcrafted/iza_zeolites.pkl'
 # OSDA_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/osda_weights_nostructural.json'
 # ZEO_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/zeolite_weights_structural_extendable.json'
-# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 4 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP
+# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 4 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP --sieved_file $OSDA_CONFORMER_PRIOR_FILE_CLIPPED
 # ### --stack_combined_priors 'all'
 
 # echo 'Run 8) getaway osda and gcnn zeolite' $(date)
@@ -112,7 +111,7 @@ echo 'mask file' $MASK
 # ZEO_PRIOR_FILE='ntk_matrix_completion/data/swagata_gcnn/gcnn_priors.pkl'
 # OSDA_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/osda_weights_nostructural.json'
 # ZEO_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/zeolite_weights_gcnn.json'
-# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 4 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP
+# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 4 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP --sieved_file $OSDA_CONFORMER_PRIOR_FILE_CLIPPED
 # ### --stack_combined_priors 'all'
 
 # echo 'Run 9) getaway osda and ph zeolite' $(date)
@@ -120,7 +119,7 @@ echo 'mask file' $MASK
 # ZEO_PRIOR_FILE='/home/mrx/projects/matrix_completion/ntk_matrix_completion/data/nick_persistent/from_gdrive/iza_zeolites_topological-features.pkl'
 # OSDA_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/osda_weights_nostructural.json'
 # ZEO_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/zeolite_ph_v2.json'
-# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 4 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP
+# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 4 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP --sieved_file $OSDA_CONFORMER_PRIOR_FILE_CLIPPED
 # ### --stack_combined_priors 'all'
 
 # echo 'Run 10) structural osda and structural zeolite, only binding entries' $(date)
@@ -128,7 +127,7 @@ echo 'mask file' $MASK
 # ZEO_PRIOR_FILE='/home/mrx/projects/matrix_completion/ntk_matrix_completion/data/handcrafted/iza_zeolites.pkl'
 # OSDA_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/osda_weights_structural.json'
 # ZEO_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/zeolite_weights_structural_extendable.json'
-# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 3 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP
+# python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 3 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP --sieved_file $OSDA_CONFORMER_PRIOR_FILE_CLIPPED
 # ### --stack_combined_priors 'all'
 
 echo 'Run 11) structural osda and structural zeolite' $(date)
@@ -139,7 +138,7 @@ OSDA_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/confi
 ZEO_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/zeolite_weights_structural_extendable.json'
 TRUTH_SCALER='standard' # previously nothing
 INPUT_SCALER='minmax' # previously minmax scaler
-python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 3 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP --truth_scaler $TRUTH_SCALER --input_scaler $INPUT_SCALER
+python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 3 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP --truth_scaler $TRUTH_SCALER --input_scaler $INPUT_SCALER --sieved_file $OSDA_CONFORMER_PRIOR_FILE_CLIPPED
 ### --stack_combined_priors 'all'
 
 echo 'Run 12) structural osda and structural zeolite' $(date)
@@ -150,7 +149,7 @@ OSDA_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/confi
 ZEO_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/zeolite_weights_structural_extendable.json'
 TRUTH_SCALER='standard' # previously nothing
 INPUT_SCALER='standard' # previously minmax scaler
-python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 3 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP --truth_scaler $TRUTH_SCALER --input_scaler $INPUT_SCALER
+python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 3 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP --truth_scaler $TRUTH_SCALER --input_scaler $INPUT_SCALER --sieved_file $OSDA_CONFORMER_PRIOR_FILE_CLIPPED
 ### --stack_combined_priors 'all'
 
 echo 'Run 13) structural osda and structural zeolite' $(date)
@@ -161,7 +160,7 @@ OSDA_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/confi
 ZEO_PRIOR_MAP='/home/mrx/projects/matrix_completion/ntk_matrix_completion/configs/zeolite_weights_structural_extendable.json'
 TRUTH_SCALER='minmax' # previously nothing
 INPUT_SCALER='standard' # previously minmax scaler
-python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 3 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP --truth_scaler $TRUTH_SCALER --input_scaler $INPUT_SCALER
+python -m cProfile -o $OUTPUT/program.prof $ROOT/models/xgboost/xgb.py --output $OUTPUT --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --prior_treatment 3 --prior_method 'CustomOSDAandZeoliteAsRows' --truth $TRUTH --mask $MASK --search_type 'hyperopt' --tune --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP --truth_scaler $TRUTH_SCALER --input_scaler $INPUT_SCALER --sieved_file $OSDA_CONFORMER_PRIOR_FILE_CLIPPED
 ### --stack_combined_priors 'all'
 
 
