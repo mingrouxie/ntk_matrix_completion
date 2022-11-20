@@ -297,10 +297,15 @@ def main(kwargs):
     truth_train = truth.loc[smiles_train].reset_index().set_index(["SMILES", "Zeolite"])
     truth_test = truth.loc[smiles_test].reset_index().set_index(["SMILES", "Zeolite"])
 
-    # scale ground truth range between 0 and 1
-    truth_train_scaled, truth_test_scaled = scale_data(
-        kwargs["truth_scaler"], truth_train, truth_test, kwargs["output"], "truth"
-    )
+    # scale ground truth if specified
+    if kwargs["truth_scaler"]:
+        truth_train_scaled, truth_test_scaled = scale_data(
+            kwargs["truth_scaler"], truth_train, truth_test, kwargs["output"], "truth"
+        )
+    else:
+        truth_train_scaled = truth_train
+        truth_test_scaled = truth_test
+
     truth_train_scaled.to_pickle(
         os.path.join(kwargs["output"], "truth_train_scaled.pkl")
     )
@@ -560,7 +565,7 @@ if __name__ == "__main__":
         "--truth_scaler",
         help="Scaling method for ground truth",
         type=str,
-        default="standard",
+        default=None,
     )
     parser.add_argument(
         "--input_scaler", help="Scaling method for inputs", type=str, default="standard"
