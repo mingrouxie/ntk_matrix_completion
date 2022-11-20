@@ -199,12 +199,12 @@ def main(kwargs):
     else:
         print("[XGB] Please work only with binding energies")
         breakpoint()
-    breakpoint()
+
     if kwargs["sieved_file"]:
         sieved_priors_index = pd.read_pickle(kwargs["sieved_file"]).index
         sieved_priors_index.name = "SMILES"
         truth = truth[truth["SMILES"].isin(sieved_priors_index)]
-    
+
     truth = truth.set_index(["SMILES", "Zeolite"])
     truth = truth[["Binding (SiO2)"]]
     mask = pd.read_csv(kwargs["mask"])
@@ -222,19 +222,20 @@ def main(kwargs):
         zeolite_prior_file=kwargs["zeolite_prior_file"],
         osda_prior_map=kwargs["osda_prior_map"],
         zeolite_prior_map=kwargs["zeolite_prior_map"],
+        other_prior_to_concat=kwargs["other_prior_to_concat"],
     )
+
     # TODO: THIS IF THREAD IS RATHER UNKEMPT. WHEN WE GENERALIZE TO ZEOLITES....
     if kwargs["prior_method"] == "CustomOSDAVector":
         X = prior
         print(f"[XGB] Prior of shape {prior.shape}")
-
     elif kwargs["prior_method"] == "CustomOSDAandZeoliteAsRows":
         X_osda_handcrafted_prior = prior[0]
         X_osda_getaway_prior = prior[1]
         X_zeolite_prior = prior[2]
 
         print(
-            f"Check prior shapes:",
+            f"[XGB] Check prior shapes:",
             X_osda_handcrafted_prior.shape,
             X_osda_getaway_prior.shape,
             X_zeolite_prior.shape,
@@ -293,12 +294,8 @@ def main(kwargs):
     smiles_train = sorted(list(set().union(*clustered_isomers_train)))
     smiles_test = sorted(list(set().union(*clustered_isomers_test)))
 
-    truth_train = (
-        truth.loc[smiles_train].reset_index().set_index(["SMILES", "Zeolite"])
-    )
-    truth_test = (
-        truth.loc[smiles_test].reset_index().set_index(["SMILES", "Zeolite"])
-    )
+    truth_train = truth.loc[smiles_train].reset_index().set_index(["SMILES", "Zeolite"])
+    truth_test = truth.loc[smiles_test].reset_index().set_index(["SMILES", "Zeolite"])
 
     # scale ground truth range between 0 and 1
     truth_train_scaled, truth_test_scaled = scale_data(
@@ -314,7 +311,9 @@ def main(kwargs):
     X_test = X.loc[smiles_test]
 
     # scale inputs
-    X_train_scaled, X_test_scaled = scale_data(kwargs["input_scaler"], X_train, X_test, kwargs["output"], "input")
+    X_train_scaled, X_test_scaled = scale_data(
+        kwargs["input_scaler"], X_train, X_test, kwargs["output"], "input"
+    )
     # print("[XGB] DEBUG: Check X and mask have been created properly")
     # breakpoint()
     X_train_scaled.to_pickle(os.path.join(kwargs["output"], "X_train_scaled.pkl"))
@@ -344,9 +343,10 @@ def main(kwargs):
     else:
         model = xgboost.XGBRegressor()
         model.load_model(kwargs["model_file"])
-
+    # breakpoint()
     # fit and predict tuned model
     print("[XGB] Using tuned model")
+    print(model)
     # model.set_params(eval_metric=) # TODO: figure this out
     # disable_default_eval_metric - do we need this?
 
@@ -354,42 +354,50 @@ def main(kwargs):
     # eval_metric does not seem to allow custom eval_metrics from the most recent documentation, but
     # https://datascience.stackexchange.com/questions/99505/xgboost-fit-wont-recognize-my-custom-eval-metric-why
 
-    model.set_params(
-        early_stopping_rounds=10,
-        eval_metric="rmse"
-    )
+    model.set_params(early_stopping_rounds=10, eval_metric="rmse")
 
     # eval set for early stopping only computes for binding pairs
-    X_eval = X_test_scaled.reset_index().set_index('SMILES').reindex(mask_test[mask_test.exists==1].index).reset_index().set_index(['SMILES', 'Zeolite'])
-    truth_eval = truth_test_scaled.reset_index().set_index('SMILES').reindex(mask_test[mask_test.exists==1].index).reset_index().set_index(['SMILES', 'Zeolite'])
+    X_eval = (
+        X_test_scaled.reset_index()
+        .set_index("SMILES")
+        .loc[mask_test[mask_test.exists == 1].index]
+        .reset_index()
+        .set_index(["SMILES", "Zeolite"])
+    )
+    truth_eval = (
+        truth_test_scaled.reset_index()
+        .set_index("SMILES")
+        .loc[mask_test[mask_test.exists == 1].index]
+        .reset_index()
+        .set_index(["SMILES", "Zeolite"])
+    )
 
     # If there’s more than one item in eval_set, the last entry will be used for early stopping.
     model.fit(
         X_train_scaled,
         truth_train_scaled,
         eval_set=[
-            (X_train_scaled, truth_train_scaled,),
+            (
+                X_train_scaled,
+                truth_train_scaled,
+            ),
             (X_eval, truth_eval),
         ],
         verbose=True,
-        # feature_weights=
     )
+    # feature_weights=)
     model.save_model(os.path.join(kwargs["output"], "xgboost.json"))
     results = model.evals_result()
     np.save(kwargs["output"] + "/" + "train_loss.npy", results["validation_0"]["rmse"])
     np.save(kwargs["output"] + "/" + "test_loss.npy", results["validation_1"]["rmse"])
 
     y_pred_train = model.predict(X_train_scaled)
-    df = pd.DataFrame(
-        y_pred_train, columns=["Prediction"], index=truth_train.index
-    )
+    df = pd.DataFrame(y_pred_train, columns=["Prediction"], index=truth_train.index)
     df["Binding (SiO2)"] = truth_train["Binding (SiO2)"]
     df.to_pickle(os.path.join(kwargs["output"], "train.pkl"))
 
     y_pred_test = model.predict(X_test_scaled)
-    df = pd.DataFrame(
-        y_pred_test, columns=["Prediction"], index=truth_test.index
-    )
+    df = pd.DataFrame(y_pred_test, columns=["Prediction"], index=truth_test.index)
     df["Binding (SiO2)"] = truth_test["Binding (SiO2)"]
     df.to_pickle(os.path.join(kwargs["output"], "test.pkl"))
 
@@ -408,9 +416,7 @@ def main(kwargs):
     )
     print(
         "[XGB] Test score:",
-        masked_rmse(
-            truth_test["Binding (SiO2)"].values, y_pred_test, mask_test.exists
-        ),
+        masked_rmse(truth_test["Binding (SiO2)"].values, y_pred_test, mask_test.exists),
     )
     print(
         "[XBG] Unmasked train score:",
@@ -509,7 +515,7 @@ if __name__ == "__main__":
         "--search_type",
         help="Hyperparameter tuning method",
         type=str,
-        required=True,
+        # required=True,
         default="hyperopt",
     )
     parser.add_argument("--truth", help="Ground truth file", type=str, required=True)
@@ -525,6 +531,12 @@ if __name__ == "__main__":
         help="OSDA prior file, only read if prior_method is CustomOSDAVector or CustomOSDAandZeoliteAsRows",
         type=str,
         default=OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
+    )
+    parser.add_argument(
+        "--other_prior_to_concat",
+        help="2nd OSDA prior file to concat; this is a relic and bad practice. Currently not using it",
+        type=str,
+        default=None,
     )
     parser.add_argument(
         "--zeolite_prior_file",
