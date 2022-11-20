@@ -354,7 +354,7 @@ def main(kwargs):
     # eval_metric does not seem to allow custom eval_metrics from the most recent documentation, but
     # https://datascience.stackexchange.com/questions/99505/xgboost-fit-wont-recognize-my-custom-eval-metric-why
 
-    model.set_params(early_stopping_rounds=10, eval_metric="rmse")
+    model.set_params(early_stopping_rounds=10, eval_metric="rmse", n_estimators=1000)
 
     # eval set for early stopping only computes for binding pairs
     X_eval = (
