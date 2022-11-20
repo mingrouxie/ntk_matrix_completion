@@ -249,7 +249,7 @@ def scale_data(scaler_type: str, train: pd.DataFrame, test: pd.DataFrame, output
                 "var": scaler.var_.tolist(),
             }
         elif scaler_type == "minmax":
-            gts_dict = {"scale": scaler.scale_, "min": scaler.min_}
+            gts_dict = {"scale": scaler.scale_.tolist(), "min": scaler.min_.tolist()}
         filename = os.path.join(output_folder, data_type+"_scaling.json")
         with open(filename, "w") as gts:
             json.dump(gts_dict, gts)
