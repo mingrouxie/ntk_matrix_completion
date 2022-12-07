@@ -18,18 +18,36 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "rest.settings")
 os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
 django.setup()
 from dbsettings import *
+import datetime
 
 sys.path.append("/home/mrx/general/")
 from zeolite.queries.scripts.exclusions import *
 from zeolite.queries.scripts.database import get_affinities, get_failed_dockings
 from utils.non_binding import fill_non_bind, NonBinding
 
+SCIENCE = "/home/mrx/projects/matrix_completion/ntk_matrix_completion/data/daniels_data/science_paper/binding.csv"
 
 def main(kwargs):
     if not os.path.isdir(kwargs["op"]):
         os.mkdir(kwargs["op"])
-    affs = get_affinities(
-        substrate=None,
+
+    now = "%d%d%d_%d%d%d" % (
+        datetime.datetime.now().year,
+        datetime.datetime.now().month,
+        datetime.datetime.now().day,
+        datetime.datetime.now().hour,
+        datetime.datetime.now().minute,
+        datetime.datetime.now().second,
+    )
+
+    if kwargs["science"]:
+        science = pd.read_csv(SCIENCE)
+        kwargs["substrate_ls"] = list(set(science['Zeolite']))
+        # kwargs["ligand_ls"] = list(set(science["SMILES"]))
+        kwargs["ik_ls"] = list(set(science["InchiKey"]))
+
+    affs, affs_failed = get_affinities(
+        substrate=kwargs["substrate"],
         ligand=None,
         exclusion=kwargs["affs_exc"],
         included_sphere_gte=4.0,
@@ -41,86 +59,137 @@ def main(kwargs):
         output_file=None,
         get_best_per_complex=False,
         performance_metric="bindingatoms",
-        substrate_ls=None,
+        substrate_ls=kwargs["substrate_ls"],
         ligand_ls=None,
         num_ligands=1,
         loading=None,
         to_count=True,
         count_only=False,
+        ik_ls=kwargs["ik_ls"]
     )
-    affs.to_csv(os.path.join(kwargs["op"], "affs.csv"))
+    affs.to_csv(os.path.join(kwargs["op"], now + "_affs.csv"))
+    affs_failed.to_csv(os.path.join(kwargs["op"], now + "_affs_failed.csv"))
+    # breakpoint() # check affs and affs_failed
 
-    failed = get_failed_dockings(
-        substrate=None,
-        ligand=None,
-        exclusion=kwargs["failed_exc"],
-        included_sphere_gte=4.0,
-        to_write=False,
-        complex_sets=kwargs["cs"],  # ['iza'],
-        mol_sets=kwargs[
-            "ms"
-        ],  # ['210720_omar_quaternary', '210720_omar_diquaternary'],
-        output_file=None,
-        qs_to_df=True,
-        to_count=True,
-        count_only=False,
-    )
-    failed.to_csv(os.path.join(kwargs["op"], "failed.csv"))
+    if not kwargs["science"]:
+        failed = get_failed_dockings(
+            substrate=kwargs["substrate"],
+            ligand=None,
+            exclusion=kwargs["failed_exc"],
+            included_sphere_gte=4.0,
+            to_write=False,
+            complex_sets=kwargs["cs"],  # ['iza'],
+            mol_sets=kwargs["ms"],  
+            # ['210720_omar_quaternary', '210720_omar_diquaternary'],
+            output_file=None,
+            qs_to_df=True,
+            to_count=True,
+            count_only=False,
+            substrate_ls=kwargs["substrate_ls"],
+            ik_ls=kwargs["ik_ls"]
+        )
+        failed.to_csv(os.path.join(kwargs["op"], now + "_failed.csv"))
 
-    ## TODO: add in failed dreiding 
-
+    ## TODO: add in failed dreiding
+    # breakpoint() # check failed. is it a problem with database.py
     # combine
-    truth = pd.concat(
-        [
-            affs[["ligand", "substrate", "bindingatoms", "ligand_inchikey"]],
-            failed[["ligand", "substrate", "ligand_inchikey"]],
-        ]
-    )
-    truth.columns = ["SMILES", "Zeolite", "Binding (SiO2)", "InchiKey"]
+    if not kwargs["science"]:
+        truth = pd.concat([affs, affs_failed, failed])
+    else:
+        truth = affs.reset_index().set_index(['substrate', 'ligand_inchikey'])
+        from itertools import product
+        science_idx = pd.MultiIndex.from_tuples(list(product(set(affs.substrate), set(affs.ligand_inchikey))))
+        ligand_info = dict(zip(affs.ligand_inchikey, affs.ligand))
+        truth = truth.reindex(science_idx).reset_index().rename(columns={'level_0':'substrate', 'level_1':'ligand_inchikey'}).set_index('crystal_id')
+        truth['ligand'] = truth.ligand_inchikey.apply(lambda ik: ligand_info[ik])
 
-    # Change docked pairs with unfeasible energies to failed dockings. 
-    # Using 0 because the duplicate removal in the next section does not work with NaNs
-    truth.loc[truth["Binding (SiO2)"] > 0, "Binding (SiO2)"] = 0.0
-    truth.loc[truth["Binding (SiO2)"] < -35, "Binding (SiO2)"] = 0.0
-    truth.loc[truth["Binding (SiO2)"].isna(), "Binding (SiO2)"] = 0.0
-    print("[main] truth size", truth.shape)
+    truth.loc[(truth["bindingatoms"]> 0), "bindingatoms"] = 10
+    truth.loc[(truth["bindingatoms"] < -35),"bindingatoms"] = 10
+    truth.loc[(truth["bindingatoms"].isna()),"bindingatoms"] = 10  # again, arbitrary
 
+    print("[main] truth size before deduplication", truth.shape)
+
+    # breakpoint() # is the deduplication logic wrong?
     # remove duplicates keeping the most negative binding energy
+    truth = truth.sort_values(["substrate", "ligand_inchikey", "bindingatoms"])
     truth = truth.drop_duplicates(
-        subset=["Zeolite", "InchiKey", "SMILES"], keep="first"
+        subset=["substrate", "ligand_inchikey", "ligand"], keep="first"
     )
     print("[main] deduplicated truth size", truth.shape)
+
+    # Rename columns because bad code
+    truth = truth.rename(
+        columns={"substrate": "Zeolite","ligand": "SMILES","ligand_inchikey": "InchiKey","ligand_formula": "Ligand formula","loading": "Loading","bindingatoms": "Binding (SiO2)","bindingosda": "Binding (OSDA)","directivity": "Directivity (SiO2)","competition": "Competition (SiO2)","solvation": "Competition (OSDA)","logp": "Templating",})
+    truth.to_csv(os.path.join(kwargs["op"], now + "_energies.csv"))
 
     # Make mask where 1=binding, 0=non-binding
     mask = deepcopy(truth)
     mask["exists"] = 1
-    mask.loc[mask["Binding (SiO2)"] == 0.0, "exists"] = 0
-    mask.reset_index()[["SMILES", "Zeolite", "exists", "InchiKey"]].to_csv(
-        os.path.join(kwargs["op"], "mask.csv")
-    )
-    breakpoint()
+    mask.loc[mask["Binding (SiO2)"].gt(0), "exists"] = 0
+    mask = mask.reset_index()[["SMILES", "Zeolite", "exists", "InchiKey"]]
+    # breakpoint() # is it a problem w the non binding
     # non-binding treatment
     if kwargs["nb"]:
         # fill all NaN entries, then select the relevant ones
-        truth.loc[truth["Binding (SiO2)"] == 0.0, "Binding (SiO2)"] = nan
-        truth_mat = truth.pivot(values="Binding (SiO2)", index="SMILES", columns="Zeolite")
-        truth_mat = pd.DataFrame(fill_non_bind(truth_mat, nb_type=kwargs["nb"]), index=truth_mat.index, columns=truth_mat.columns,)
+        breakpoint()
+        truth.loc[truth["Binding (SiO2)"].gt(0), "Binding (SiO2)"] = nan
+        be = fill_nb_parallel(
+            truth, "Binding (SiO2)", kwargs["index"], kwargs["columns"], kwargs
+        )
+        truth = truth.reset_index().set_index([kwargs["columns"], kwargs["index"]]).drop(columns='Binding (SiO2)')
+        truth = pd.concat([truth, be], axis=1)
+        mask = mask.set_index([kwargs["columns"], kwargs["index"]]).reindex(truth.index).reset_index()
+        truth = truth.reset_index().set_index('crystal_id')
 
-        if kwargs["nan_after_nb"] == "drop":
-            print("[main] Dropping rows with NaN post-NB treatment", truth_mat.shape, "-->", truth_mat.dropna().shape)
-            truth_mat = truth_mat.dropna()
-        if kwargs["nan_after_nb"] == "keep":
-            print("[main] Filling rows with NaN post-NB treatment with hardcoded one (arbitrary)")
-            truth_mat = truth_mat.fillna(1.0)
+    mask.to_csv(os.path.join(kwargs["op"], now + "_mask.csv"))
+    truth.to_csv(os.path.join(kwargs["op"], now + "_energies.csv"))
+    print("[main] Output dir:", kwargs["op"] + now)
+    breakpoint()
 
-        truth_filled = truth_mat.stack().reset_index().rename(columns={0: "Binding (SiO2)"}).set_index(["Zeolite", "SMILES"])
-        truth = truth_filled.loc[truth_filled.index.isin(truth.set_index(["Zeolite", "SMILES"]).index)]
 
-    # if os.path.isfile(os.path.join(kwargs["op"], "energies.csv")):
-    #     print("file already exists please double check")
-    #     breakpoint()
-    truth.to_csv(os.path.join(kwargs["op"], "energies.csv"))
-    print("[main] Output dir:", kwargs['op'])
+def fill_nb_single(df, values, index, columns, kwargs):
+    mat = df.pivot(values=values, index=index, columns=columns)
+    mat = pd.DataFrame(
+        fill_non_bind(mat.values, nb_type=kwargs["nb"]), index=mat.index, columns=mat.columns
+    )
+    if kwargs["nan_after_nb"] == "drop":
+        print(
+            "[fill_nb_single] Dropping rows with NaN post-NB treatment",
+            mat.shape,
+            "-->",
+            mat.dropna().shape,
+        )
+        mat = mat.dropna()
+    if kwargs["nan_after_nb"] == "keep":
+        print(
+            "[fill_nb_single] Filling rows with NaN post-NB treatment with hardcoded one (arbitrary)"
+        )
+        mat = mat.fillna(1.0)
+
+    df_filled = (
+        mat.stack()
+        .reset_index()
+        .rename(columns={0: "Binding (SiO2)"})
+        .set_index([columns, index])
+    )
+    df_filled = df_filled.loc[
+        df_filled.index.isin(df.set_index([columns, index]).index)
+    ]
+    print("[fill_nb_single] Returning df of shape", df_filled.shape)
+    return df_filled
+
+
+def fill_nb_parallel(df, values, index, columns, kwargs, chunk_size=1000):
+    """chunk_size: number of distinct rows in the resultant binding matrix"""
+    rows = sorted(list(set(df[index])))
+    rows_chunked = [rows[i : i + chunk_size] for i in range(0, len(rows), chunk_size)]
+    dfs_filled = [
+        fill_nb_single(df[df[index].isin(chunk)], values, index, columns, kwargs)
+        for chunk in rows_chunked
+    ]
+    dfs_filled = pd.concat(dfs_filled)
+    return dfs_filled
+
 
 def preprocess(input):
     kwargs = {}
@@ -132,6 +201,7 @@ def preprocess(input):
     if kwargs["exc"]:
         kwargs["affs_exc"] = AFFINITY_EXCLUSIONS[kwargs["exc"] - 1]
         kwargs["failed_exc"] = COMPLEX_EXCLUSIONS[kwargs["exc"] - 1]
+        print("[preprocess] excs:", kwargs["affs_exc"], kwargs["failed_exc"])
     return kwargs
 
 
@@ -141,6 +211,13 @@ if __name__ == "__main__":
     # parser.add_argument(
     #     "--batch_size", help="Size of each prior file", type=int, required=True
     # )
+    parser.add_argument(
+        "--substrate",
+        type=str,
+        nargs="+",
+        help="Parentjob.config.name of complex.substrate",
+        default=None,
+    )
     parser.add_argument(
         "--ms",
         type=str,
@@ -171,7 +248,38 @@ if __name__ == "__main__":
         "--nan_after_nb",
         type=str,
         help="What to do with NaN entries of the truth matrix after non-binding treatment has been applied and NaN entries still exist",
-        default=None
+        default=None,
+    )
+    parser.add_argument(
+        "--index",
+        type=str,
+        help="InchiKey or Zeolite in the index for binding matrix?",
+        default="InchiKey",
+    )
+    parser.add_argument(
+        "--columns",
+        type=str,
+        help="InchiKey or Zeolite in the columns for binding matrix?",
+        default="Zeolite",
+    )
+    parser.add_argument(
+        "--science",
+        help="If specified, only retrieves for ligands and substrates found in Science paper CSV file AND assumes non-binding if no affinities are found",
+        action='store_true'
+    )
+    parser.add_argument(
+        "--substrate_ls",
+        type=str,
+        nargs="+",
+        help="list of substrate names to sieve by",
+        default=None,   
+    )
+    parser.add_argument(
+        "--ik_ls",
+        type=str,
+        nargs="+",
+        help="list of InchiKeys to sieve by",
+        default=None,   
     )
     args = parser.parse_args()
     kwargs = preprocess(args)
