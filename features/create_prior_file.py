@@ -142,21 +142,25 @@ def get_fw_features(kwargs):
         fws = Framework.objects.filter(
             prototype__parentjob__config__name__in=kwargs["fws_config"]
         )
-    crys = Crystal.objects.filter(id__in=fws.values_list("prototype"))
-    catlows = Job.objects.filter(
-        config__name="catlow_opt_gulp",
-        status="done",
-        parentid__in=crys.values_list("id"),
-    )
-    catlow_crys = Crystal.objects.filter(
-        id__in=catlows.values_list("childgeoms__crystal")
-    )
-    failed_catlows = fws.filter(
-        prototype__childjobs__config__name='catlow_opt_gulp', 
-        prototype__childjobs__status='error')
-    prototypes = Crystal.objects.filter(id__in=failed_catlows.values_list('prototype'))
-    print(f"[get_fw_features] {failed_catlows.count()} fws do not have catlow-opt structures. Defaulting to fws.prototypes instead")
-    all_crys = catlow_crys | prototypes
+    if 'ase_db_parse' in kwargs["fws_config"]:
+        all_crys = Crystal.objects.filter(id__in=fws.values_list("prototype"))
+    else:
+        crys = Crystal.objects.filter(id__in=fws.values_list("prototype"))
+        catlows = Job.objects.filter(
+            config__name="catlow_opt_gulp",
+            status="done",
+            parentid__in=crys.values_list("id"),
+        )
+        catlow_crys = Crystal.objects.filter(
+            id__in=catlows.values_list("childgeoms__crystal")
+        )
+        failed_catlows = fws.filter(
+            prototype__childjobs__config__name='catlow_opt_gulp', 
+            prototype__childjobs__status='error')
+        prototypes = Crystal.objects.filter(id__in=failed_catlows.values_list('prototype'))
+        print(f"[get_fw_features] {failed_catlows.count()} fws do not have catlow-opt structures. Defaulting to fws.prototypes instead")
+        all_crys = catlow_crys | prototypes
+
     # print("[debug]", no_catlows.count(), catlow_crys.count(), all_crys.count())
     columns = {
         "crystal": "id",
@@ -183,7 +187,8 @@ def get_fw_features(kwargs):
     data = pd.concat(
         [data.drop(["details"], axis=1), data.details.apply(pd.Series)], axis=1
     )
-    data["num_atoms_per_vol"] = data.num_atoms.divide(data.volume)
+    if 'volume' in data.columns:
+        data["num_atoms_per_vol"] = data.num_atoms.divide(data.volume)
     data = data.set_index(["fw", "crystal"])
     data = data[[x for x in data.columns.tolist() if x in kwargs["features"]]]
     data = data.reset_index().set_index("fw")
