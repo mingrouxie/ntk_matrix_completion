@@ -107,8 +107,8 @@ def calculate_metrics(
     meta=None,
     method="top_k_in_top_k",
     to_plot=True,
-    top_20_accuracies=True,
-    top_20_accuracies_file=PERFORMANCE_METRICS,
+    top_x_accuracy=20,
+    top_x_accuracies_file=PERFORMANCE_METRICS,
 ):
     """
     All metrics as calculated by ROW.
@@ -128,17 +128,17 @@ def calculate_metrics(
         top_1 = []
         top_3 = []
         top_5 = []
-        top_20_accuracies = []
+        top_x_accuracies = []
         for n in range(1, 1195):  # TODO: this number needs to be changed
             top_1.append(calculate_top_n_in_top_k_accuracy(true, pred, k=1, n=n))
             top_3.append(calculate_top_n_in_top_k_accuracy(true, pred, k=3, n=n))
             top_5.append(calculate_top_n_in_top_k_accuracy(true, pred, k=5, n=n))
             top_20.append(calculate_top_n_in_top_k_accuracy(true, pred, k=20, n=n))
-            if top_20_accuracies:
-                top_20_accuracies.append(
+            if top_x_accuracy:
+                top_x_accuracies.append(
                     [
                         calculate_top_n_in_top_k_accuracy(true, pred, k=k, n=n)
-                        for k in range(1, 21)  # cannot do 0 because of division by k
+                        for k in range(1, top_x_accuracy)  # cannot do 0 because of division by k
                     ]
                 )
 
@@ -147,10 +147,10 @@ def calculate_metrics(
         top_3 = calculate_top_n_in_top_k_accuracy(true, pred, k=3)
         top_5 = calculate_top_n_in_top_k_accuracy(true, pred, k=5)
         top_20 = calculate_top_n_in_top_k_accuracy(true, pred, k=20)
-        if top_20_accuracies:
-            top_20_accuracies = [
+        if top_x_accuracy:
+            top_x_accuracies = [
                 calculate_top_n_in_top_k_accuracy(true, pred, k=k)
-                for k in range(1, 209)
+                for k in range(1, top_x_accuracy)
             ]
 
     elif method == "top_k":
@@ -158,9 +158,9 @@ def calculate_metrics(
         top_3 = calculate_top_k_accuracy(true, pred, 3)
         top_5 = calculate_top_k_accuracy(true, pred, 5)
         top_20 = calculate_top_k_accuracy(true, pred, 20)
-        if top_20_accuracies:
-            top_20_accuracies = [
-                calculate_top_k_accuracy(true, pred, k) for k in range(0, 21)
+        if top_x_accuracy:
+            top_x_accuracies = [
+                calculate_top_k_accuracy(true, pred, k) for k in range(0, top_x_accuracy)
             ]
 
     results = {
@@ -173,8 +173,8 @@ def calculate_metrics(
         "top_5_accuracy": np.array(top_5).round(4),
         "top_20_accuracy": np.array(top_20).round(4),
     }
-    if top_20_accuracies:
-        results["top_20_accuracies"] = top_20_accuracies
+    if top_x_accuracy:
+        results["top_x_accuracies"] = top_x_accuracies
 
     if verbose:
         print(
@@ -197,7 +197,7 @@ def calculate_metrics(
         )
 
     if to_plot:
-        plot_top_k_curves(top_20_accuracies, method)
+        plot_top_k_curves(top_x_accuracies, method)
         if energy_type == Energy_Type.BINDING:
             vmin = -30
             vmax = 5
@@ -207,10 +207,10 @@ def calculate_metrics(
         plot_matrix(true, "regression_truth", vmin=vmin, vmax=vmax)
         plot_matrix(pred, "regression_prediction", vmin=vmin, vmax=vmax)
 
-    if top_20_accuracies:
-        df = pd.DataFrame(top_20_accuracies).T
-    if top_20_accuracies_file:
-        df.to_pickle(top_20_accuracies_file)
+    if top_x_accuracy:
+        df = pd.DataFrame(top_x_accuracies).T
+    if top_x_accuracies_file:
+        df.to_pickle(top_x_accuracies_file)
 
     return results
 
