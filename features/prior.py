@@ -276,14 +276,15 @@ def load_prior(
     # keeps rows with index in target_index, assigns NaN to other indices in target_index
     with open(column_weights, "r") as f:
         column_weights = json.load(f)
-    precomputed_prior = precomputed_prior.filter(items=list(column_weights.keys()))
+    precomputed_prior = precomputed_prior[list(column_weights.keys())]
+    # precomputed_prior = precomputed_prior.filter(items=list(column_weights.keys()))
     precomputed_prior = precomputed_prior.apply(pd.to_numeric)
 
     print(
         f"[prior/load_prior] Precomputed prior has {precomputed_prior.isna().sum().sum()} NaN entries"
     )
     if precomputed_prior.isna().sum().sum() > 0:
-        print("[prior/load_prior] WARNING: DROPPING DATA POINTS WITH NAN ENTRIES. This will mess up your data, please go and check your prior source files. There should NOT be any NaN entries")
+        print("[prior/load_prior] WARNING: DATA POINTS WITH NAN ENTRIES. This will mess up your data, please go and check your prior source files. There should NOT be any NaN entries. Breakpoint now")
         breakpoint()
     # results = precomputed_prior.fillna(0.0)
     results = precomputed_prior.dropna()
@@ -512,7 +513,7 @@ def osda_zeolite_combined_prior(
         identity_weight=identity_weight,
         normalize=normalize,
         other_prior_to_concat=other_prior_to_concat
-    ).to_numpy()
+    )
     osda_vector_prior = load_vector_priors(
         target_index=[i[0] for i in all_data_df.index],
         vector_feature="getaway",
@@ -520,7 +521,7 @@ def osda_zeolite_combined_prior(
         identity_weight=identity_weight,
         normalize=normalize,
         other_prior_to_concat=None,
-    ).to_numpy()
+    )
     zeolite_prior = load_prior(
         target_index=tuple([i[1] for i in all_data_df.index]),
         column_weights=zeolite_prior_map,
@@ -529,7 +530,16 @@ def osda_zeolite_combined_prior(
         normalize=normalize,
         prior_index_map=ZEOLITE_PRIOR_MAP,
         other_prior_to_concat=None,
-    ).to_numpy()
+    )
+
+    print("[prior/osda_zeolite_combined_prior] columns are")
+    print(osda_prior.columns)
+    print(osda_vector_prior.columns)
+    print(zeolite_prior.columns)
+
+    osda_prior = osda_prior.to_numpy()
+    osda_vector_prior = osda_vector_prior.to_numpy()
+    zeolite_prior = zeolite_prior.to_numpy()
 
     if not stack:
         return (osda_prior, osda_vector_prior, zeolite_prior)
