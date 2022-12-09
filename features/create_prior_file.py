@@ -125,7 +125,13 @@ def get_osda_features_single(kwargs):
     data_ve = data_ve.reindex(sorted(data_ve.columns), axis=1)
 
     data = pd.concat([data_sc, data_ve], axis=1)
-    data = data[[x for x in data.columns.tolist() if x in kwargs["features"]]]
+    # data = data[[x for x in data.columns.tolist() if x in kwargs["features"]]]
+    # stricter
+    data = data[kwargs["features"]]
+
+    # renaming some columns to prevent clashes with the substrate
+    data = data.rename(columns={"volume": "mol_volume", "num_atoms": "mol_num_atoms"})
+
     print("[single] Data size", data.shape)
     data.to_pickle(kwargs["osda_file"])
     data.to_csv(kwargs["osda_file"].split(".")[0]+".csv")
