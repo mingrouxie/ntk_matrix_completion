@@ -5,6 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from itertools import product
 from tqdm import tqdm
+import datetime
 
 sys.path.append("/home/mrx/projects/matrix_completion/")
 # from ntk_matrix_completion.utils.loss import masked_rmse
@@ -25,21 +26,28 @@ from xgboost.plotting import plot_importance
 
 
 def get_lig_data(kwargs):
-    breakpoint()
+    print("[get_lig_data] getting ligand priors")
     if kwargs["new_lig_dir"]:
         lig_files = sorted(glob.glob(kwargs["new_lig_dir"] + "/*"))
-        lig_priors = [pd.read_pickle(file) for file in lig_files]
+        lig_priors = []
+        for file in lig_files:
+            print(file)
+            lig_priors.append(pd.read_pickle(file))
         lig_priors = pd.concat(lig_priors)
     if kwargs["new_lig_file"]:
         lig_priors = pd.read_pickle(kwargs["new_lig_file"])
     if kwargs["new_lig"]:
         lig_priors = lig_priors[lig_priors.index.isin(kwargs["new_lig"])]
     lig_priors = lig_priors[~lig_priors.index.duplicated(keep='first')]
+
+    # rename columns common to both ligand and substrate
+    # TODO: please do this in the prior generation file as well because we need that for model training
+    lig_priors = lig_priors.rename(columns={'volume': 'mol_volume' , 'weight': 'mol_weight', 'num_atoms': 'mol_num_atoms'})
     return lig_priors
 
 
 def get_sub_data(kwargs):
-    breakpoint()
+    print("[get_sub_data] getting substrate priors")
     if kwargs["new_sub_dir"]:
         sub_files = sorted(glob.glob(kwargs["new_sub_dir"]+ "/*"))
         sub_priors = [pd.read_pickle(file) for file in sub_files]
@@ -49,21 +57,17 @@ def get_sub_data(kwargs):
     if kwargs["new_sub"]:
         sub_priors = sub_priors[sub_priors.index.isin(kwargs["new_sub"])]
     sub_priors = sub_priors[~sub_priors.index.duplicated(keep='first')]
+    
     return sub_priors
 
 
 def get_energies(priors, model, idx, kwargs):
     """Predict energies and concat column to scaled features"""
-    test = kwargs["lig_map"].keys()
-    test_ls = list(test)
-    breakpoint()
-    print(priors[test_ls])
-    lig_priors = priors.filter(items=kwargs["lig_map"].keys())
-    sub_priors = priors.filter(items=kwargs["sub_map"].keys())
+
+    lig_priors = priors[kwargs["lig_map"].keys()]
+    sub_priors = priors[kwargs["sub_map"].keys()]
     priors_to_use = pd.concat([lig_priors, sub_priors], axis=1)
-    priors_scaled = priors_to_use.mul(np.array(kwargs["ip_scale"]["scale"])).add(
-        kwargs["ip_scale"]["min"]
-    )
+    priors_scaled = priors_to_use.mul(np.array(kwargs["ip_scale"]["scale"])).add(kwargs["ip_scale"]["min"])
 
     # predict energies
     energies = model.predict(priors_scaled)
@@ -77,8 +81,8 @@ def get_energies(priors, model, idx, kwargs):
     )
 
     # save data
-    data.to_pickle(os.path.join(kwargs["output"]), "pred_"+str(idx)+".pkl")
-    data_scaled.to_pickle(os.path.join(kwargs["output"]), "pred_scaled_"+str(idx)+".pkl")
+    data.to_pickle(os.path.join(kwargs["output"], "pred_"+str(idx)+".pkl"))
+    data_scaled.to_pickle(os.path.join(kwargs["output"], "pred_scaled_"+str(idx)+".pkl"))
     return data, data_scaled
 
 
@@ -86,8 +90,19 @@ def main(kwargs):
     """
     Main method for predicting energies for new ligands and/ or substrates using a pre-trained model. Outputs are saved to kwargs["output"]
     """
-    if not os.path.isdir(kwargs["output"]):
-        os.mkdir(kwargs["output"])
+    if os.path.isdir(kwargs["output"]):
+        now = "_%d%d%d_%d%d%d" % (
+            datetime.datetime.now().year,
+            datetime.datetime.now().month,
+            datetime.datetime.now().day,
+            datetime.datetime.now().hour,
+            datetime.datetime.now().minute,
+            datetime.datetime.now().second,
+        )
+        kwargs["output"] = kwargs["output"] + now
+    
+    print("[main] Output folder", kwargs["output"])
+    os.mkdir(kwargs["output"])
 
     # load model
     model = xgb.XGBRegressor()
@@ -102,20 +117,18 @@ def main(kwargs):
         kwargs["lig_map"] = json.load(f)
     with open(os.path.join(kwargs["sub_weights"]), "r") as f:
         kwargs["sub_map"] = json.load(f)
-    
+
     # get input scaling of priors
     with open(os.path.join(kwargs["model_dir"], "input_scaling.json"), "r") as scalef:
         kwargs["ip_scale"] = json.load(scalef)
-        print("scale for priors has keys", kwargs["ip_scale"].keys())
-
+        print("[main] scaling for priors has keys", kwargs["ip_scale"].keys())
     # get entire prior dataframe - TODO: might need to chunk here
+    print("[main] chunking priors and predicting")
     pairs = np.array(list(product(lig_priors.index, sub_priors.index)))
-    breakpoint()
     chunk_size = 10000
     chunk_num = pairs.shape[0] // chunk_size
-    chunked_pairs = np.array_split(pairs, chunk_num)
+    chunked_pairs = np.array_split(pairs, max(chunk_num, 1))
     for idx, chunk in enumerate(tqdm(chunked_pairs)):
-        breakpoint()
         l_priors = lig_priors.loc[chunk[:, 0]]
         s_priors = sub_priors.loc[chunk[:, 1]]
         priors = pd.concat([l_priors.reset_index(), s_priors.reset_index()], axis=1)
@@ -123,6 +136,11 @@ def main(kwargs):
         priors = priors.set_index(["SMILES", "Zeolite"])
         # predict
         get_energies(priors, model, idx, kwargs)
+
+    # dump kwargs
+    json.dump(kwargs, open(os.path.join(kwargs["output"], "kwargs.json"), "w"), indent=2)
+
+    print("[main] finished predictions\n[main] Output folder is", kwargs["output"])
     return
 
 
