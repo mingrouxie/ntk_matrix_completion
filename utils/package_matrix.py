@@ -36,6 +36,7 @@ sys.path.insert(
 class Energy_Type(Enum):
     TEMPLATING = 1
     BINDING = 2
+    BINDING_OSDA = 3
 
 
 def format_ground_truth_pkl():
