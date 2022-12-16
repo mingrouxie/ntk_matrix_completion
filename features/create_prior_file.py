@@ -130,7 +130,7 @@ def get_osda_features_single(kwargs):
     data = data[kwargs["features"]]
 
     # renaming some columns to prevent clashes with the substrate
-    data = data.rename(columns={"volume": "mol_volume", "num_atoms": "mol_num_atoms"})
+    data = data.rename(columns={"volume": "mol_volume", "weight": "mol_weight", "num_atoms": "mol_num_atoms"})
 
     print("[single] Data size", data.shape)
     data.to_pickle(kwargs["osda_file"])
