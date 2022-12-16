@@ -46,6 +46,8 @@ def main(kwargs):
         # kwargs["ligand_ls"] = list(set(science["SMILES"]))
         kwargs["ik_ls"] = list(set(science["InchiKey"]))
 
+    print("[main] kwargs are", kwargs)
+
     affs, affs_failed = get_affinities(
         substrate=kwargs["substrate"],
         ligand=None,
@@ -92,6 +94,8 @@ def main(kwargs):
 
     ## TODO: add in failed dreiding
     # breakpoint() # check failed. is it a problem with database.py
+
+    # breakpoint() # check if affs.ligand_inchikey and affs.ligand have non one to one mappings
     # combine
     if not kwargs["science"]:
         truth = pd.concat([affs, affs_failed, failed])
@@ -103,9 +107,15 @@ def main(kwargs):
         truth = truth.reindex(science_idx).reset_index().rename(columns={'level_0':'substrate', 'level_1':'ligand_inchikey'}).set_index('crystal_id')
         truth['ligand'] = truth.ligand_inchikey.apply(lambda ik: ligand_info[ik])
 
-    truth.loc[(truth["bindingatoms"]> 0), "bindingatoms"] = 10
+    # safety, should be covered in get_affinities
+    truth.loc[(truth["bindingatoms"] > 0), "bindingatoms"] = 10
     truth.loc[(truth["bindingatoms"] < -35),"bindingatoms"] = 10
+
+    # treatment for failed
     truth.loc[(truth["bindingatoms"].isna()),"bindingatoms"] = 10  # again, arbitrary
+
+    # treatment for all
+    truth.loc[truth["bindingatoms"]==10][["bindingatoms", "bindingosda", "bindingosdaatoms"]] = 10
 
     print("[main] truth size before deduplication", truth.shape)
 
@@ -120,7 +130,7 @@ def main(kwargs):
     # Rename columns because bad code
     truth = truth.rename(
         columns={"substrate": "Zeolite","ligand": "SMILES","ligand_inchikey": "InchiKey","ligand_formula": "Ligand formula","loading": "Loading","bindingatoms": "Binding (SiO2)","bindingosda": "Binding (OSDA)","directivity": "Directivity (SiO2)","competition": "Competition (SiO2)","solvation": "Competition (OSDA)","logp": "Templating",})
-    truth.to_csv(os.path.join(kwargs["op"], now + "_energies.csv"))
+    truth.to_csv(os.path.join(kwargs["op"], now + "_truth_before_nb.csv"))
 
     # Make mask where 1=binding, 0=non-binding
     mask = deepcopy(truth)
@@ -142,8 +152,8 @@ def main(kwargs):
         truth = truth.reset_index().set_index('crystal_id')
 
     mask.to_csv(os.path.join(kwargs["op"], now + "_mask.csv"))
-    truth.to_csv(os.path.join(kwargs["op"], now + "_energies.csv"))
-    print("[main] Output dir:", kwargs["op"] + now)
+    truth.to_csv(os.path.join(kwargs["op"], now + "_truth.csv"))
+    print("[main] Output dir:", kwargs["op"] + "/" + now)
     breakpoint()
 
 
@@ -201,7 +211,11 @@ def preprocess(input):
     if kwargs["exc"]:
         kwargs["affs_exc"] = AFFINITY_EXCLUSIONS[kwargs["exc"] - 1]
         kwargs["failed_exc"] = COMPLEX_EXCLUSIONS[kwargs["exc"] - 1]
-        print("[preprocess] excs:", kwargs["affs_exc"], kwargs["failed_exc"])
+    else:
+        kwargs["affs_exc"] = None
+        kwargs["failed_exc"] = None
+    print("[preprocess] excs:", kwargs["affs_exc"], kwargs["failed_exc"])
+    
     return kwargs
 
 
