@@ -8,7 +8,7 @@ import yaml
 from pathlib import Path
 from datetime import datetime
 
-from utils.logging import setup_logger
+from utils.logger import setup_logger
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
