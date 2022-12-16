@@ -17,7 +17,7 @@ export USER=$(whoami)
 # TRUTH_FILE=$TRUTH_DIR/binding_nb_rowmean.csv
 # PRIOR_DIR=/home/mrx/projects/matrix_completion/ntk_matrix_completion/data/daniels_data/science_paper
 
-# FP_NAMES=(box volume axes whim getaway num_bonds num_rot_bonds asphericity eccentricity inertial_shape_factor spherocity_index gyration_radius pmi1 pmi2 pmi3 npr1 npr2 free_sasa bertz_ct)
+# FP_NAMES=(box volume axes whim getaway num_bonds num_rot_bonds asphericity eccentricity inertial_shape_factor spherocity_index gyration_radius pmi1 pmi2 pmi3 npr1 npr2 free_sasa bertz_ct num_bonds num_rot_bonds num_atoms c_charge_ratio)
 # python ntk_matrix_completion/features/create_prior_file.py --op $PRIOR_DIR --features "${FP_NAMES[@]}" --osda --batch_size 10000 --truth_file $TRUTH_FILE --exc 1
 
 # ################################################
@@ -78,7 +78,7 @@ python /home/mrx/projects/matrix_completion/ntk_matrix_completion/features/creat
 # python /home/mrx/projects/matrix_completion/ntk_matrix_completion/utils/create_truth.py --op $TRUTH_DIR --ms literature 210720_omar_quaternary 210720_omar_diquaternary --substrate iza_parse --exc 1
 
 # echo 'Creating OSDA prior file for all based on truth file' 
-# FP_NAMES=(box volume axes whim getaway num_bonds num_rot_bonds asphericity eccentricity inertial_shape_factor spherocity_index gyration_radius pmi1 pmi2 pmi3 npr1 npr2 free_sasa bertz_ct)
+# FP_NAMES=(box volume axes whim getaway num_bonds num_rot_bonds asphericity eccentricity inertial_shape_factor spherocity_index gyration_radius pmi1 pmi2 pmi3 npr1 npr2 free_sasa bertz_ct num_bonds num_rot_bonds num_atoms c_charge_ratio)
 # python ntk_matrix_completion/features/create_prior_file.py --op $PRIOR_DIR --features "${FP_NAMES[@]}" --osda --batch_size 10000 --truth_file $TRUTH_FILE --exc 1
 
 # # # ################################################
@@ -91,7 +91,7 @@ python /home/mrx/projects/matrix_completion/ntk_matrix_completion/features/creat
 # python /home/mrx/projects/matrix_completion/ntk_matrix_completion/utils/create_truth.py --op $TRUTH_DIR --ms literature --substrate iza_parse --exc 1 --nb 1 --nan_after_nb drop
 
 # echo 'Creating OSDA prior file for lit based on truth file' 
-# FP_NAMES=(box volume axes whim getaway num_bonds num_rot_bonds asphericity eccentricity inertial_shape_factor spherocity_index gyration_radius pmi1 pmi2 pmi3 npr1 npr2 free_sasa bertz_ct)
+# FP_NAMES=(box volume axes whim getaway num_bonds num_rot_bonds asphericity eccentricity inertial_shape_factor spherocity_index gyration_radius pmi1 pmi2 pmi3 npr1 npr2 free_sasa bertz_ct num_bonds num_rot_bonds num_atoms c_charge_ratio)
 # python ntk_matrix_completion/features/create_prior_file.py --op $PRIOR_DIR --features "${FP_NAMES[@]}" --osda --batch_size 10000 --truth_file $TRUTH_FILE --exc 1
 
 # # ################################################
@@ -104,6 +104,6 @@ python /home/mrx/projects/matrix_completion/ntk_matrix_completion/features/creat
 # python /home/mrx/projects/matrix_completion/ntk_matrix_completion/utils/create_truth.py --op $TRUTH_DIR --ms 210720_omar_quaternary 210720_omar_diquaternary --substrate iza_parse --exc 1 --nb 1 --nan_after_nb drop
 
 # echo 'Creating OSDA prior file for hyp based on truth file' 
-# FP_NAMES=(box volume axes whim getaway num_bonds num_rot_bonds asphericity eccentricity inertial_shape_factor spherocity_index gyration_radius pmi1 pmi2 pmi3 npr1 npr2 free_sasa bertz_ct)
+# FP_NAMES=(box volume axes whim getaway num_bonds num_rot_bonds asphericity eccentricity inertial_shape_factor spherocity_index gyration_radius pmi1 pmi2 pmi3 npr1 npr2 free_sasa bertz_ct num_bonds num_rot_bonds num_atoms c_charge_ratio)
 # python ntk_matrix_completion/features/create_prior_file.py --op $PRIOR_DIR --features "${FP_NAMES[@]}" --osda --batch_size 10000 --truth_file $TRUTH_FILE --exc 1
 
