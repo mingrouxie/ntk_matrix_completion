@@ -27,7 +27,7 @@ def fill_non_bind(mat: pd.DataFrame, nb_type: NonBinding):
         # return mat.apply(lambda row: row.fillna(10), axis=1)
         # return ground_tmatruth.apply(lambda row: row.fillna(30), axis=1)
     elif nb_type == NonBinding.MAX_PLUS:
-        return mat.apply(lambda row: row.fillna(row.max() * 1.01), axis=1)
+        return pd.DataFrame(mat).apply(lambda row: row.fillna(row.max() * 1.01), axis=1).values
     elif nb_type == NonBinding.ZERO:
         return np.nan_to_num(mat, nan=0.0, posinf=0.0, neginf=None)
     else:
