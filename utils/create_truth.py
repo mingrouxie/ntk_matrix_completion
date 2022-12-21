@@ -46,7 +46,7 @@ def main(kwargs):
         # kwargs["ligand_ls"] = list(set(science["SMILES"]))
         kwargs["ik_ls"] = list(set(science["InchiKey"]))
 
-    print("[main] kwargs are", kwargs)
+    print("[main] kwargs are\n", kwargs)
 
     affs, affs_failed = get_affinities(
         substrate=kwargs["substrate"],
@@ -140,8 +140,8 @@ def main(kwargs):
     # breakpoint() # is it a problem w the non binding
     # non-binding treatment
     if kwargs["nb"]:
+        # TODO: drops empty ones so cannot use in hypothetical space
         # fill all NaN entries, then select the relevant ones
-        breakpoint()
         truth.loc[truth["Binding (SiO2)"].gt(0), "Binding (SiO2)"] = nan
         be = fill_nb_parallel(
             truth, "Binding (SiO2)", kwargs["index"], kwargs["columns"], kwargs
@@ -154,7 +154,7 @@ def main(kwargs):
     mask.to_csv(os.path.join(kwargs["op"], now + "_mask.csv"))
     truth.to_csv(os.path.join(kwargs["op"], now + "_truth.csv"))
     print("[main] Output dir:", kwargs["op"] + "/" + now)
-    breakpoint()
+    return
 
 
 def fill_nb_single(df, values, index, columns, kwargs):
@@ -220,6 +220,9 @@ def preprocess(input):
 
 
 if __name__ == "__main__":
+    print("\n==============================================\n")
+    print("[create_truth] start")
+    start = time.time()
     parser = argparse.ArgumentParser(description="Truth file creation")
     parser.add_argument("--op", help="Output directory", type=str, required=True)
     # parser.add_argument(
@@ -299,6 +302,8 @@ if __name__ == "__main__":
     kwargs = preprocess(args)
     print("TODO: bindingatoms are still hardcoded")
     main(kwargs)
+    print(f"[create_truth] Finished after {(time.time()-start/60)} min \n")
+    print("================================================")
 
 
 # NOTES
