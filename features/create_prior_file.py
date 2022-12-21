@@ -22,6 +22,7 @@ from dbsettings import *
 
 sys.path.append("/home/mrx/general/")
 from zeolite.queries.scripts.exclusions import MOLSET_EXCLUSIONS
+from zeolite.queries.scripts.database import get_num_atoms
 
 GRP_NAME = "zeolite"
 
@@ -82,16 +83,22 @@ def get_osda_features_single(kwargs):
         "geom": "id",
         "ligand": "species__smiles",
         "inchikey": "species__inchikey",
-        # 'fps': 'continuousfps',
         "fps_name": "continuousfps__method__name",
         "fps_val": "continuousfps__fingerprint",
+        # de facto will retrieve
+        "mol_weight": "stoichiometry__mass",
+        "mol_formula": "stoichiometry__formula",
+        "formal_charge": "stoichiometry__charge"
     }
     data = pd.DataFrame(
         geoms.values_list(*list(columns.values())), columns=list(columns.keys())
     )
     print("[get_osda_features] data size", data.size)
-    # TODO: It does not really matter because I'm doing this for all the descriptors eventually,
-    # but maybe we should sieve for the features at this step zzz
+
+    data['mol_num_atoms'] = data['mol_formula'].apply(get_num_atoms)
+    data_non_fp = data.drop_duplicates(["ligand", "inchikey"])
+    data_non_fp = data_non_fp.set_index(["ligand", "inchikey"])[["mol_weight", "mol_formula", "formal_charge", "mol_num_atoms"]]
+
     # ThreeDContinuousFingerprint.objects.filter(fps__name__in=kwargs["features"], geom__in=geoms)
 
     # separate scalar and vector features
@@ -104,7 +111,7 @@ def get_osda_features_single(kwargs):
         data_sc,
         values="fps_val",
         columns="fps_name",
-        index="ligand",
+        index=["ligand", "inchikey"],
         aggfunc=np.mean,
         fill_value=nan,
     ).sort_index()
@@ -118,25 +125,25 @@ def get_osda_features_single(kwargs):
         data_ve,
         values="fps_val",
         columns="fps_name",
-        index="ligand",
+        index=["ligand", "inchikey"],
         aggfunc=vec_mean,
         fill_value=nan,
     ).sort_index()
     data_ve = data_ve.reindex(sorted(data_ve.columns), axis=1)
+    data = pd.concat([data_non_fp, data_sc, data_ve], axis=1)
+    
+    # renaming some columns to prevent clashes with the substrate
+    data = data.rename(columns={"volume": "mol_volume", "weight": "mol_weight", "num_atoms": "mol_num_atoms"})
 
-    data = pd.concat([data_sc, data_ve], axis=1)
     # data = data[[x for x in data.columns.tolist() if x in kwargs["features"]]]
     # stricter
     data = data[kwargs["features"]]
-
-    # renaming some columns to prevent clashes with the substrate
-    data = data.rename(columns={"volume": "mol_volume", "weight": "mol_weight", "num_atoms": "mol_num_atoms"})
+    data = data.reset_index().set_index(["ligand"])
 
     print("[single] Data size", data.shape)
     data.to_pickle(kwargs["osda_file"])
     data.to_csv(kwargs["osda_file"].split(".")[0]+".csv")
     # data.to_hdf(kwargs["osda_file"], key="osda_priors")
-
     return data
 
 

@@ -9,14 +9,55 @@ CLUSTER_STORAGE=/home/mrx/mnt/storage
 export USER=$(whoami)
 
 # OUTPUT_FILE=/home/mrx/projects/matrix_completion/ntk_matrix_completion/data/truths/testing
+
 ################################################
 
-PRIOR_DIR=/home/mrx/projects/matrix_completion/ntk_matrix_completion/data/priors/hyp_osdas_others/
+# 21 Dec 22
+
+PRIOR_DIR=/home/mrx/projects/matrix_completion/ntk_matrix_completion/data/priors/221221_hyp_osdas_omar/
 
 echo 'Creating prior file' 
-FP_NAMES=(box volume axes whim getaway num_bonds num_rot_bonds asphericity eccentricity inertial_shape_factor spherocity_index gyration_radius pmi1 pmi2 pmi3 npr1 npr2 free_sasa bertz_ct num_bonds num_rot_bonds num_atoms c_charge_ratio)
+FP_NAMES=(box axes whim getaway mol_weight mol_volume asphericity eccentricity inertial_shape_factor spherocity_index gyration_radius pmi1 pmi2 pmi3 npr1 npr2 free_sasa bertz_ct num_rot_bonds num_bonds formal_charge)
 
-python ntk_matrix_completion/features/create_prior_file.py --op $PRIOR_DIR --features "${FP_NAMES[@]}" --osda --batch_size 10000 --exc 1 --ms 180613_sda_organic 200525_spiro 200528_indolinium 200528_isoquinolinium 200529_imidazolium 200529_phenylammonium 200608_diels_alder 200612_test_stereo 200614_industry 200617_stereochemistry 200628_zach_neutral 200706_neutral_osda_vendors 200717_zach_organic 200721_zach_leftovers 200914_adamantane_sas 200914_double_quinuclidine_dabco 200914_doublespiro 200916_discovery_itq 201029_zach_sfw 210211_intergrowth_osda 210216_acetane_ig_osdas 210216_pyrrolidine_ig_osdas 210303_benzylbutyl_sfs 210324_spiro_patent 210331_deem_pnas 210331_okubo 210428_denox 210511_itq_bicyclic 211022_osdas_intergrowth 211113_itq 220127_new_osdas 220510_itq_heart 221107_low_sodium_cha adamantane add_DB basf dabco denox diels_alder discovery doublespiro expt_active_learning generative_model imidazolium indolinium industry intergrowth isoquinolinium itq lactones literature missing_smiles neutral_osda olivetti phenylammonium quinuclidine rdkit_osdas sdaitq smiles spiro stereochemistry vendors_osda zach_osda 210614_omar_amines 210730_omar_piperidine_quaternary 210730_omar_piperidine_diquaternary 210614_omar_alkylation
+python ntk_matrix_completion/features/create_prior_file.py --op $PRIOR_DIR --features "${FP_NAMES[@]}" --osda --batch_size 10000 --exc 1 --ms 210720_omar_diquaternary 210720_omar_quaternary
+
+echo 'DONE'
+echo ''
+
+#######
+
+PRIOR_DIR=/home/mrx/projects/matrix_completion/ntk_matrix_completion/data/priors/221221_hyp_osdas_others/
+
+echo 'Creating prior file' 
+FP_NAMES=(box axes whim getaway mol_weight mol_volume asphericity eccentricity inertial_shape_factor spherocity_index gyration_radius pmi1 pmi2 pmi3 npr1 npr2 free_sasa bertz_ct num_rot_bonds num_bonds formal_charge)
+
+python ntk_matrix_completion/features/create_prior_file.py --op $PRIOR_DIR --features "${FP_NAMES[@]}" --osda --batch_size 10000 --exc 1 --ms 180613_sda_organic 200525_spiro 200528_indolinium 200528_isoquinolinium 200529_imidazolium 200529_phenylammonium 200608_diels_alder 200612_test_stereo 200614_industry 200617_stereochemistry 200628_zach_neutral 200706_neutral_osda_vendors 200717_zach_organic 200721_zach_leftovers 200914_adamantane_sas 200914_double_quinuclidine_dabco 200914_doublespiro 200916_discovery_itq 201029_zach_sfw 210211_intergrowth_osda 210216_acetane_ig_osdas 210216_pyrrolidine_ig_osdas 210303_benzylbutyl_sfs 210324_spiro_patent 210331_deem_pnas 210331_okubo 210428_denox 210511_itq_bicyclic 211022_osdas_intergrowth 211113_itq 220127_new_osdas 220510_itq_heart 221107_low_sodium_cha adamantane add_DB basf dabco denox diels_alder discovery doublespiro expt_active_learning generative_model imidazolium indolinium industry intergrowth isoquinolinium itq lactones literature missing_smiles neutral_osda olivetti phenylammonium quinuclidine rdkit_osdas sdaitq smiles spiro stereochemistry vendors_osda zach_osda 210614_omar_amines 210730_omar_piperidine_quaternary 210730_omar_piperidine_diquaternary 210614_omar_alkylation 210720_omar_diquaternary 210720_omar_quaternary
+
+echo 'DONE'
+echo ''
+
+#######
+
+PRIOR_DIR=/home/mrx/projects/matrix_completion/ntk_matrix_completion/data/priors/2021_apriori_dskoda/
+
+echo 'Creating prior file' 
+FP_NAMES=(box axes whim getaway mol_weight mol_volume asphericity eccentricity inertial_shape_factor spherocity_index gyration_radius pmi1 pmi2 pmi3 npr1 npr2 free_sasa bertz_ct num_rot_bonds num_bonds formal_charge)
+
+python ntk_matrix_completion/features/create_prior_file.py --op $PRIOR_DIR --features "${FP_NAMES[@]}" --osda --batch_size 10000 --exc 1 --ms 2021_apriori_dskoda
+
+echo 'DONE'
+echo ''
+
+################################################
+
+# 19 Nov 22
+
+# PRIOR_DIR=/home/mrx/projects/matrix_completion/ntk_matrix_completion/data/priors/hyp_osdas_others/
+
+# echo 'Creating prior file' 
+# FP_NAMES=(box volume axes whim getaway num_bonds num_rot_bonds asphericity eccentricity inertial_shape_factor spherocity_index gyration_radius pmi1 pmi2 pmi3 npr1 npr2 free_sasa bertz_ct num_bonds num_rot_bonds num_atoms c_charge_ratio)
+
+# python ntk_matrix_completion/features/create_prior_file.py --op $PRIOR_DIR --features "${FP_NAMES[@]}" --osda --batch_size 10000 --exc 1 --ms 180613_sda_organic 200525_spiro 200528_indolinium 200528_isoquinolinium 200529_imidazolium 200529_phenylammonium 200608_diels_alder 200612_test_stereo 200614_industry 200617_stereochemistry 200628_zach_neutral 200706_neutral_osda_vendors 200717_zach_organic 200721_zach_leftovers 200914_adamantane_sas 200914_double_quinuclidine_dabco 200914_doublespiro 200916_discovery_itq 201029_zach_sfw 210211_intergrowth_osda 210216_acetane_ig_osdas 210216_pyrrolidine_ig_osdas 210303_benzylbutyl_sfs 210324_spiro_patent 210331_deem_pnas 210331_okubo 210428_denox 210511_itq_bicyclic 211022_osdas_intergrowth 211113_itq 220127_new_osdas 220510_itq_heart 221107_low_sodium_cha adamantane add_DB basf dabco denox diels_alder discovery doublespiro expt_active_learning generative_model imidazolium indolinium industry intergrowth isoquinolinium itq lactones literature missing_smiles neutral_osda olivetti phenylammonium quinuclidine rdkit_osdas sdaitq smiles spiro stereochemistry vendors_osda zach_osda 210614_omar_amines 210730_omar_piperidine_quaternary 210730_omar_piperidine_diquaternary 210614_omar_alkylation
 
 ### TODO: sda would be the ideal molset to grab everything, just saying
 
