@@ -8,6 +8,7 @@ from sklearn.preprocessing import normalize, OneHotEncoder
 import time
 import argparse
 import sys
+from rdkit import Chem
 
 from ntk_matrix_completion.utils.path_constants import (
     BINDING_GROUND_TRUTH,
@@ -70,6 +71,16 @@ def get_osda_features(kwargs):
         get_osda_features_single(batch_kwargs)
     return
 
+def get_num_c(smiles):
+    mol = Chem.MolFromSmiles(smiles)
+    c = [1 for atom in mol.GetAtoms() if atom.GetAtomicNum()==6]
+    return sum(c)
+
+def get_solubility(row):
+    if row.formal_charge > 0:
+        return get_num_c(row['SMILES']) / row.formal_charge
+    else:
+        return -1 * get_num_c(row['SMILES'])
 
 def get_osda_features_single(kwargs):
     """Returns a DataFrame with SMILES as the index and columns the desired features"""
@@ -96,8 +107,9 @@ def get_osda_features_single(kwargs):
     print("[get_osda_features] data size", data.size)
 
     data['mol_num_atoms'] = data['mol_formula'].apply(get_num_atoms)
+    data['c_charge_ratio'] = data.apply(get_solubility)
     data_non_fp = data.drop_duplicates(["ligand", "inchikey"])
-    data_non_fp = data_non_fp.set_index(["ligand", "inchikey"])[["mol_weight", "mol_formula", "formal_charge", "mol_num_atoms"]]
+    data_non_fp = data_non_fp.set_index(["ligand", "inchikey"])[["mol_weight", "mol_formula", "formal_charge", "mol_num_atoms", "c_charge_ratio"]]
 
     # ThreeDContinuousFingerprint.objects.filter(fps__name__in=kwargs["features"], geom__in=geoms)
 
