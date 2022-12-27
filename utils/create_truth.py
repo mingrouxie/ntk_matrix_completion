@@ -73,7 +73,7 @@ def main(kwargs):
     affs_failed.to_csv(os.path.join(kwargs["op"], now + "_affs_failed.csv"))
     # breakpoint() # check affs and affs_failed
 
-    if not kwargs["science"]:
+    if not kwargs["assume_nb"]:
         failed = get_failed_dockings(
             substrate=kwargs["substrate"],
             ligand=None,
@@ -95,9 +95,8 @@ def main(kwargs):
     ## TODO: add in failed dreiding
     # breakpoint() # check failed. is it a problem with database.py
 
-    # breakpoint() # check if affs.ligand_inchikey and affs.ligand have non one to one mappings
     # combine
-    if not kwargs["science"]:
+    if not kwargs["assume_nb"]:
         truth = pd.concat([affs, affs_failed, failed])
     else:
         truth = affs.reset_index().set_index(['substrate', 'ligand_inchikey'])
@@ -141,7 +140,7 @@ def main(kwargs):
     # non-binding treatment
     if kwargs["nb"]:
         # TODO: drops empty ones so cannot use in hypothetical space
-        # fill all NaN entries, then select the relevant ones
+        # fill all NaN entries, then select the non-binding ones
         truth.loc[truth["Binding (SiO2)"].gt(0), "Binding (SiO2)"] = nan
         be = fill_nb_parallel(
             truth, "Binding (SiO2)", kwargs["index"], kwargs["columns"], kwargs
@@ -191,7 +190,20 @@ def fill_nb_single(df, values, index, columns, kwargs):
 
 
 def fill_nb_parallel(df, values, index, columns, kwargs, chunk_size=1000):
-    """chunk_size: number of distinct rows in the resultant binding matrix"""
+    """
+    Fills non-binding entries in a DataFrame with specified treatment.
+
+    Inputs:
+    - df: full DataFrame containing columns of interest: values, index, columns
+    - values: column name to use as values in df.pivot
+    - index: column name to use as index in df.pivot, is also used for chunking
+    - columns: column name to use as columns in df.pivot
+    - kwargs: dictionary containing "nb" and "nan_after_nb" keys
+    - chunk_size: number of distinct rows in the resultant binding matrix
+    
+    Returns:
+    - DataFrame with the same ordering as df
+    """
     rows = sorted(list(set(df[index])))
     rows_chunked = [rows[i : i + chunk_size] for i in range(0, len(rows), chunk_size)]
     dfs_filled = [
@@ -282,8 +294,14 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--science",
-        help="If specified, only retrieves for ligands and substrates found in Science paper CSV file AND assumes non-binding if no affinities are found",
+        help="If specified, only retrieves for ligands and substrates found in Science paper CSV file ",
         action='store_true'
+    )
+    parser.add_argument(
+        "--assume_nb",
+        help="If true, assumes for given set of complexes that they are non-binding if no affinities within range are found",
+        action="store_true",
+        default=False
     )
     parser.add_argument(
         "--substrate_ls",
