@@ -146,7 +146,8 @@ def main(kwargs):
         be = fill_nb_parallel(
             truth, "Binding (SiO2)", kwargs["index"], kwargs["columns"], kwargs
         )
-        truth = truth.reset_index().set_index([kwargs["columns"], kwargs["index"]]).drop(columns='Binding (SiO2)')
+        truth = truth.reset_index().rename(columns={'index': 'crystal_id'})
+        truth = truth.set_index([kwargs["columns"], kwargs["index"]]).drop(columns='Binding (SiO2)')
         truth = pd.concat([truth, be], axis=1)
         mask = mask.set_index([kwargs["columns"], kwargs["index"]]).reindex(truth.index).reset_index()
         truth = truth.reset_index().set_index('crystal_id')
