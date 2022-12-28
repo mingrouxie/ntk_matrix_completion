@@ -219,6 +219,10 @@ def get_fw_features(kwargs):
     data = data[[x for x in data.columns.tolist() if x in kwargs["features"]]]
     data = data.reset_index().set_index("fw")
     # data.to_hdf(kwargs["fws_file"], key="zeolite_priors")
+
+    # rename some stuff
+    data = data.rename(columns={'density': 'framework_density'})
+    
     data.to_pickle(kwargs["fws_file"])
     data.to_csv(kwargs["fws_file"].split(".")[0]+".csv")
     return data

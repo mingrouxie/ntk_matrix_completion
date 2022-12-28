@@ -22,44 +22,6 @@ export USER=$(whoami)
 
 # ################################################
 
-# echo "Creating zeolite file for iza zeolites" DONE
-
-# PRIOR_DIR=/home/mrx/projects/matrix_completion/ntk_matrix_completion/data/priors/
-
-# FEATURES=(a b c alpha beta gamma num_atoms_per_vol num_atoms volume td cbu iza rdls td_10 ring_size_0 ring_size_1 ring_size_2 ring_size_3 ring_size_4 ring_size_5 ring_size_6 isdisordered isinterrupted framework_density largest_free_sphere accessible_volume_izc largest_free_sphere_a largest_free_sphere_b largest_free_sphere_c largest_free_sphere_izc largest_included_sphere largest_free_sphere_a_izc largest_free_sphere_b_izc largest_free_sphere_c_izc largest_included_sphere_a largest_included_sphere_b largest_included_sphere_c largest_included_sphere_fsp largest_included_sphere_izc)
-
-# FWS_CONFIG=(iza_parse)
-# # FWS=(MOR JZO)
-# python /home/mrx/projects/matrix_completion/ntk_matrix_completion/features/create_prior_file.py --op $PRIOR_DIR --zeolite --features "${FEATURES[@]}" --batch_size 10000 --fws_config "${FWS_CONFIG[@]}"
-# # --fws "${FWS[@]}"
-
-# ################################################
-
-echo "Creating zeolite file for deem zeolites" DONE
-
-PRIOR_DIR=/home/mrx/projects/matrix_completion/ntk_matrix_completion/data/priors/deem_zeolites
-
-FEATURES=(a b c alpha beta gamma num_atoms largest_free_sphere largest_free_sphere_a largest_free_sphere_b largest_free_sphere_c largest_included_sphere largest_included_sphere_a largest_included_sphere_b largest_included_sphere_c largest_included_sphere_fsp n_tsites density relative_energy energy_per_tsite)
-
-FWS_CONFIG=(ase_db_parse)
-# FWS=(MOR JZO)
-python /home/mrx/projects/matrix_completion/ntk_matrix_completion/features/create_prior_file.py --op $PRIOR_DIR --zeolite --features "${FEATURES[@]}" --batch_size 10000 --fws_config "${FWS_CONFIG[@]}"
-# --fws "${FWS[@]}"
-
-# ################################################
-
-# echo "Creating zeolite file for stack zeolites" DONE
-
-# PRIOR_DIR=/home/mrx/projects/matrix_completion/ntk_matrix_completion/data/priors/stack_zeolites
-
-# FEATURES=(a b c alpha beta gamma num_atoms cage_1 cage_2 cage_3 cage_4 cage_5 cage_6 cage_7 cage_8 cage_9 cage_10 density space_group relative_energy stacking_layers stacking_sequence largest_free_sphere stacking_compactness largest_free_sphere_a largest_free_sphere_b largest_free_sphere_c largest_channel_opening largest_included_sphere largest_included_sphere_a largest_included_sphere_b largest_included_sphere_c largest_included_sphere_fsp)
-
-# FWS_CONFIG=(stacking_parse)
-# # FWS=(MOR JZO)
-# python /home/mrx/projects/matrix_completion/ntk_matrix_completion/features/create_prior_file.py --op $PRIOR_DIR --zeolite --features "${FEATURES[@]}" --batch_size 10000 --fws_config "${FWS_CONFIG[@]}"
-# # --fws "${FWS[@]}"
-
-# # # ################################################
 
 # TRUTH_DIR=/home/mrx/projects/matrix_completion/ntk_matrix_completion/data/truths/science_paper/
 # TRUTH_FILE=$TRUTH_DIR/energies.csv
