@@ -53,6 +53,7 @@ def train_model(kwargs):
     mask = pd.read_csv(kwargs["mask"])
 
     # get features
+    print("[multitask] prior_method used is", kwargs["prior_method"])
     prior = make_prior(
         test=None,
         train=None,
