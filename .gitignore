@@ -144,7 +144,7 @@ dmypy.json
 # data/truths/README.md
 data/*
 runs/
-tests/
+# tests/
 output/
 models/neural_tangent_kernel/.DS_Store
 utils/materials-practical-k-means
@@ -152,3 +152,4 @@ utils/create_hyp_osda_priors_log
 utils/create_hyp_osda_priors_log_2
 program.prof
 run_scripts/create_files_3_log
+tests/__init__.py
