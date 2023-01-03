@@ -2,6 +2,12 @@
 
 Run `pip install -r requirements.txt`.
 
+# Major updates
+
+### 2 Jan 22
+- Migration over to parent directory /home/mrx/projects/binding_energies from /home/mrx/projects/matrix_completion due to sshfs problems between Engaging and deepware (might be because of Github repos and permission sharing). Hence, a lot of the file paths might change in a future commit - hopefully they will be rewired to be independent of the parent directories! 
+- This directory is kept here on deepware for record keeping, but nothing will happen here after 2 Jan 22. The repos are still tied to the remote repos, but maybe they should not be. 
+
 # Usage
 
 Run `bash ntk_matrix_completion/run_scripts/experiments.sh` after specifying the required parameters in `experiments.sh`. This codebase is still undergoing changes so this section will be updated accordingly. Currently, `experiments.sh` contains code to run XGBoost tuning and fitting. 
