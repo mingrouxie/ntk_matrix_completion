@@ -36,7 +36,6 @@ echo "osda map          " $OSDA_PRIOR_MAP
 echo "zeolite prior     " $ZEO_PRIOR_FILE
 echo "zeolite map       " $ZEO_PRIOR_MAP
 
-python $ROOT/models/xgboost/xgb.py --output $OUTPUT --prior_method "CustomOSDAandZeoliteAsRows" --osda_prior_file $OSDA_PRIOR_FILE --zeolite_prior_file $ZEO_PRIOR_FILE --sieved_file $OSDA_PRIOR_FILE --prior_treatment 3 --truth $TRUTH --mask $MASK  --osda_prior_map $OSDA_PRIOR_MAP --zeolite_prior_map $ZEO_PRIOR_MAP --input_scaler minmax --tune
 
 echo "==============================================================================================="
 echo ""
