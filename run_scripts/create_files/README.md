@@ -1,0 +1,22 @@
+# create_files
+
+- create_files.sh
+    - mix-match of prior and truth file creation
+    - daniels_data/science_paper
+    - priors/science_paper
+    - priors/iza_all_no_nb/ and iza_lit and iza_hyp based on truths/XX where XX is the same folder name
+- create_files_2.sh
+    - creates 221216/science truth files
+- create_files_3.sh
+    - creates 221216/iza_all truth files
+    - actually just the before non-binding, since the matrix is not full 
+- create_files_4.sh
+    - create prior files from 221216/iza_all/mean/truth_before_nb truth file
+- create_files_5_zach.sh
+    - create prior files from science + zach subset truth files (which is in total a full matrix)
+- create_hyp_osda_priors.sh
+    - create the prior files in data/priors/221221_hyp_osdas_omar/ and data/priors/221221_hyp_osdas_others/ and data/priors/2021_apriori_dskoda (last one is not there??)
+- create_zeolite_files.sh
+    - all 3 groups
+- zeo_1.py
+    - random script containing data for zeo-1
