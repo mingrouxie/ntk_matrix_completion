@@ -140,9 +140,15 @@ dmypy.json
 *.npx
 
 # others 
-# data/priors/README.md
-# data/truths/README.md
-data/*
+data/daniels_data
+data/fws_ls
+data/handcrafted
+data/logs
+data/nick_persistent
+data/priors
+data/swagata_gcnn
+data/truths
+data/__init__.py
 runs/
 # tests/
 output/
@@ -153,3 +159,6 @@ utils/create_hyp_osda_priors_log_2
 program.prof
 run_scripts/create_files_3_log
 tests/__init__.py
+
+!data/README.md
+!data/priors/README.md
