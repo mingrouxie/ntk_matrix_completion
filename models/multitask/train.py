@@ -18,7 +18,24 @@ from ntk_matrix_completion.models.neural_tangent_kernel.ntk import (
 )  # TODO: this should be in utils.package_matrix
 from ntk_matrix_completion.models.multitask.multitask_model import MLP
 from ntk_matrix_completion.features.prior import make_prior
-from ntk_matrix_completion.utils.loss import masked_rmse
+from ntk_matrix_completion.utils.package_matrix import (
+    Energy_Type,
+    get_ground_truth_energy_matrix,
+)
+from ntk_matrix_completion.utils.random_seeds import (
+    HYPPARAM_SEED,
+    ISOMER_SEED,
+    MODEL_SEED,
+)
+from ntk_matrix_completion.utils.utilities import (
+    IsomerKFold,
+    cluster_isomers,
+    get_isomer_chunks,
+    scale_data,
+    report_best_scores,
+)
+
+from sklearn.model_selection import train_test_split
 
 def train_simple(kwargs):  # simple
 
@@ -39,6 +56,8 @@ def train(kwargs):
     # TODO: working notes
     # see sam's code for structure reference
     # see xgb on how to retrieve the data zzz
+
+#### TODO: dedup because code is the same as in xgb.py START
 
     # get labels
     if kwargs["energy_type"] == Energy_Type.BINDING:
@@ -126,13 +145,61 @@ def train(kwargs):
     X = pd.DataFrame(X, index=truth.index)
     print("[MT] Final prior X shape:", X.shape)
 
-    # build dataloader
+    # split data
+    truth = truth.reset_index("Zeolite")
 
-    # featurize data in data loaders (?)
+    if kwargs["split_type"] == SplitType.OSDA_ISOMER_SPLITS:
+        # get train_test_split by isomers
+        clustered_isomers = pd.Series(cluster_isomers(truth.index).values())
+        clustered_isomers = clustered_isomers.sample(frac=1, random_state=ISOMER_SEED)
+    else:
+        print("[XGB] What data splits do you want?")
+        breakpoint()
+    clustered_isomers_train, clustered_isomers_test = train_test_split(
+        clustered_isomers, test_size=0.1, shuffle=False, random_state=ISOMER_SEED
+    )
+    smiles_train = sorted(list(set().union(*clustered_isomers_train)))
+    smiles_test = sorted(list(set().union(*clustered_isomers_test)))
 
-    # scale data
+    truth_train = truth.loc[smiles_train].reset_index().set_index(["SMILES", "Zeolite"])
+    truth_test = truth.loc[smiles_test].reset_index().set_index(["SMILES", "Zeolite"])
 
-    # scale targets
+    # scale ground truth if specified
+    if kwargs["truth_scaler"]:
+        truth_train_scaled, truth_test_scaled = scale_data(
+            kwargs["truth_scaler"], truth_train, truth_test, kwargs["output"], "truth"
+        )
+    else:
+        truth_train_scaled = truth_train
+        truth_test_scaled = truth_test
+
+    truth_train_scaled.to_pickle(
+        os.path.join(kwargs["output"], "truth_train_scaled.pkl")
+    )
+    truth_test_scaled.to_pickle(os.path.join(kwargs["output"], "truth_test_scaled.pkl"))
+
+    # split inputs
+    X_train = X.loc[smiles_train]
+    X_test = X.loc[smiles_test]
+
+    # scale inputs
+    X_train_scaled, X_test_scaled = scale_data(
+        kwargs["input_scaler"], X_train, X_test, kwargs["output"], "input"
+    )
+    # print("[XGB] DEBUG: Check X and mask have been created properly")
+    # breakpoint()
+    X_train_scaled.to_pickle(os.path.join(kwargs["output"], "X_train_scaled.pkl"))
+    X_test_scaled.to_pickle(os.path.join(kwargs["output"], "X_test_scaled.pkl"))
+
+    # split mask
+    mask_train = mask.set_index("SMILES").loc[smiles_train][["Zeolite", "exists"]]
+    mask_train.to_pickle(os.path.join(kwargs["output"], "mask_train.pkl"))
+    mask_test = mask.set_index("SMILES").loc[smiles_test][["Zeolite", "exists"]]
+    mask_test.to_pickle(os.path.join(kwargs["output"], "mask_test.pkl"))
+
+#### TODO: dedup because code is the same as in xgb.py END
+
+    
 
     # hyperparam
     # run sigopt

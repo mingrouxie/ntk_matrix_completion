@@ -21,7 +21,6 @@ from ntk_matrix_completion.configs.xgb_hp import get_xgb_space
 from ntk_matrix_completion.features.prior import make_prior
 from ntk_matrix_completion.models.neural_tangent_kernel.ntk import (
     SplitType,
-    create_iterator,
 )
 from ntk_matrix_completion.utils.hyperopt import HyperoptSearchCV
 from ntk_matrix_completion.utils.loss import masked_rmse
