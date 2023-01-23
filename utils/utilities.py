@@ -14,7 +14,7 @@ from rdkit.Chem import AddHs, RemoveAllHs
 from sklearn import metrics
 from sklearn.model_selection import KFold, StratifiedKFold
 from sklearn.preprocessing import MinMaxScaler, StandardScaler, QuantileTransformer
-from utils.path_constants import OUTPUT_DIR
+from ntk_matrix_completion.utils.path_constants import OUTPUT_DIR
 
 # from rdkit.Chem import RemoveAllHs
 

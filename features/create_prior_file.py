@@ -16,7 +16,7 @@ from ntk_matrix_completion.utils.path_constants import (
     OSDA_HYPOTHETICAL_PRIOR_FILE,
     OSDA_CONFORMER_PRIOR_FILE,
 )
-from utils.non_binding import fill_non_bind, NonBinding
+from ntk_matrix_completion.utils.non_binding import fill_non_bind, NonBinding
 
 
 from dbsettings import *
@@ -46,6 +46,9 @@ def get_osda_features(kwargs):
         specs = Species.objects.filter(
             mol__sets__name__in=kwargs["ms"], group__name=GRP_NAME
         )
+    else:
+        raise ValueError("Specify OSDAs to filter Species by")
+
     if kwargs["exc"]:
         for e in kwargs["exc"]:
             specs = specs.exclude(e)
@@ -79,9 +82,9 @@ def get_num_c(smiles):
 
 def get_solubility(row):
     if row.formal_charge > 0:
-        return get_num_c(row['SMILES']) / row.formal_charge
+        return get_num_c(row.ligand) / row.formal_charge
     else:
-        return -1 * get_num_c(row['SMILES'])
+        return -1 * get_num_c(row.ligand)
 
 def get_osda_features_single(kwargs):
     """Returns a DataFrame with SMILES as the index and columns the desired features"""
