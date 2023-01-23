@@ -307,7 +307,7 @@ def osda_prior(
     all_data_df,
     identity_weight=0.01,
     osda_prior=OSDA_PRIOR_FILE,
-    prior_map=None,
+    prior_map=OSDA_PRIOR_LOOKUP,
     normalize=True,
     other_prior_to_concat=OSDA_HYPOTHETICAL_PRIOR_FILE,
 ):
@@ -355,6 +355,7 @@ def osda_vector_prior(
     other_prior_to_concat=None,
     osda_prior_file=OSDA_PRIOR_FILE,
     second_vector_feature=None,
+    osda_prior_map=OSDA_PRIOR_LOOKUP,
 ):
     """
     Inputs:
@@ -371,6 +372,11 @@ def osda_vector_prior(
 
         second_vector_feature: hacky argument to incorporate a second vector fingerprint if desired
 
+        osda_prior_map: (str) Path of json file that gets read into a dictionary where the keys are the OSDA
+        features and the values their weights. For CustomZeolite, CustomOSDA, and CustomOSDAVector: how do you want
+        to weight the individual descriptors? Default is to weight all descriptors equally (check out
+        ZEOLITE_PRIOR_LOOKUP & OSDA_PRIOR_LOOKUP). This might be a good thing to tweak for calibrated ensemble
+        uncertainty.
 
     Returns:
 
@@ -387,6 +393,7 @@ def osda_vector_prior(
         osda_prior=osda_prior_file,
         normalize=False,
         other_prior_to_concat=other_prior_to_concat,
+        prior_map=osda_prior_map,
     )
 
     prior = prior.to_numpy()
@@ -586,8 +593,8 @@ def make_prior(
     test,
     method="identity",
     normalization_factor=0.001,
-    osda_prior_map=None,
-    zeolite_prior_map=None,
+    osda_prior_map=OSDA_PRIOR_LOOKUP,
+    zeolite_prior_map=ZEOLITE_PRIOR_LOOKUP,
     all_data=None,
     test_train_axis=0,
     stack_combined_priors=True,
@@ -671,6 +678,7 @@ def make_prior(
             identity_weight=normalization_factor,
             osda_prior_file=osda_prior_file,
             other_prior_to_concat=other_prior_to_concat,  # None is default
+            osda_prior_map=osda_prior_map,
         )
         if normalization_factor:
             return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
