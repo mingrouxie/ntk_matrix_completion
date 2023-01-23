@@ -669,8 +669,8 @@ def make_prior(
             all_data_df=all_data_df,
             vector_feature="getaway",
             identity_weight=normalization_factor,
-            osda_prior_file=osda_prior_file[0],
-            other_prior_to_concat=osda_prior_file[1],  # None is default
+            osda_prior_file=osda_prior_file,
+            other_prior_to_concat=other_prior_to_concat,  # None is default
         )
         if normalization_factor:
             return np.hstack([prior, normalization_factor * np.eye(all_data.shape[0])])
