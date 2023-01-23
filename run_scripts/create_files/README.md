@@ -14,6 +14,8 @@
     - create prior files from 221216/iza_all/mean/truth_before_nb truth file
 - create_files_5_zach.sh
     - create prior files from science + zach subset truth files (which is in total a full matrix)
+- create_files_6.sh
+    - create prior files from truths/testing_3, for code debugging purposes
 - create_hyp_osda_priors.sh
     - create the prior files in data/priors/221221_hyp_osdas_omar/ and data/priors/221221_hyp_osdas_others/ and data/priors/2021_apriori_dskoda (last one is not there??)
 - create_zeolite_files.sh
