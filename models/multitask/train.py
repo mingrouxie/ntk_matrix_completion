@@ -8,19 +8,19 @@ import yaml
 from pathlib import Path
 from datetime import datetime
 
-from utils.logger import setup_logger
-import pytorch_lightning as pl
-from torch.utils.data import DataLoader
+# from ntk_matrix_completion.utils.logger import setup_logger
+# import pytorch_lightning as pl
+# from torch.utils.data import DataLoader
 
-from utils.package_matrix import Energy_Type
-from models.neural_tangent_kernel.ntk import (
+from ntk_matrix_completion.utils.package_matrix import Energy_Type
+from ntk_matrix_completion.models.neural_tangent_kernel.ntk import (
     SplitType,
 )  # TODO: this should be in utils.package_matrix
-from models.multitask.multitask_model import MLP
+from ntk_matrix_completion.models.multitask.multitask_model import MLP
 from ntk_matrix_completion.features.prior import make_prior
 from ntk_matrix_completion.utils.loss import masked_rmse
 
-def train_model_simple(kwargs):  # simple
+def train_simple(kwargs):  # simple
 
     # extract data
 
@@ -35,14 +35,19 @@ def train_model_simple(kwargs):  # simple
     return
 
 
-def train_model(kwargs):
-
+def train(kwargs):
     # TODO: working notes
     # see sam's code for structure reference
     # see xgb on how to retrieve the data zzz
 
     # get labels
-    truth = pd.read_csv(kwargs["truth"])
+    if kwargs["energy_type"] == Energy_Type.BINDING:
+        # truth = pd.read_csv(BINDING_CSV) # binding values only
+        truth = pd.read_csv(kwargs["truth"])  # binding with non-binding values
+    else:
+        print("[XGB] Please work only with binding energies")
+        breakpoint()
+
     if kwargs["sieved_file"]:
         sieved_priors_index = pd.read_pickle(kwargs["sieved_file"]).index
         sieved_priors_index.name = "SMILES"
@@ -53,7 +58,7 @@ def train_model(kwargs):
     mask = pd.read_csv(kwargs["mask"])
 
     # get features
-    print("[multitask] prior_method used is", kwargs["prior_method"])
+    print("[MT] prior_method used is", kwargs["prior_method"])
     prior = make_prior(
         test=None,
         train=None,
@@ -67,7 +72,60 @@ def train_model(kwargs):
         zeolite_prior_map=kwargs["zeolite_prior_map"],
         other_prior_to_concat=kwargs["other_prior_to_concat"],
     )
-    breakpoint()
+
+    # TODO: THIS IF THREAD IS RATHER UNKEMPT. WHEN WE GENERALIZE TO ZEOLITES....
+    if kwargs["prior_method"] == "CustomOSDAVector":
+        X = prior
+        print(f"[XGB] Prior of shape {prior.shape}")
+    elif kwargs["prior_method"] == "CustomOSDAandZeoliteAsRows":
+        X_osda_handcrafted_prior = prior[0]
+        X_osda_getaway_prior = prior[1]
+        X_zeolite_prior = prior[2]
+
+        print(
+            f"[XGB] Check prior shapes:",
+            X_osda_handcrafted_prior.shape,
+            X_osda_getaway_prior.shape,
+            X_zeolite_prior.shape,
+        )
+
+        ### what to do with the retrieved priors
+        if kwargs["prior_treatment"] == 1:
+            X = X_osda_handcrafted_prior
+        elif kwargs["prior_treatment"] == 2:
+            X = np.concatenate([X_osda_handcrafted_prior, X_osda_getaway_prior], axis=1)
+        elif kwargs["prior_treatment"] == 3:
+            X = np.concatenate([X_osda_handcrafted_prior, X_zeolite_prior], axis=1)
+        elif kwargs["prior_treatment"] == 4:
+            X = np.concatenate([X_osda_getaway_prior, X_zeolite_prior], axis=1)
+        elif kwargs["prior_treatment"] == 5:
+            X = np.concatenate(
+                [X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior],
+                axis=1,
+            )
+        elif kwargs["prior_treatment"] == 6:
+            X = X_zeolite_prior
+        else:
+            # if kwargs["stack_combined_priors"] == "all":
+            #     X = np.concatenate(
+            #         [X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior],
+            #         axis=1,
+            #     )
+            # elif kwargs["stack_combined_priors"] == "osda":
+            #     X = np.concatenate([X_osda_handcrafted_prior, X_osda_getaway_prior], axis=1)
+            # elif kwargs["stack_combined_priors"] == "zeolite":
+            #     X = X_zeolite_prior
+            # else:
+            print(f"[MT] What do you want to do with the priors??")
+            breakpoint()
+
+    else:
+        print(f"[MT] prior_method {kwargs['prior_method']} not implemented")
+        breakpoint()
+
+    X = pd.DataFrame(X, index=truth.index)
+    print("[MT] Final prior X shape:", X.shape)
+
     # build dataloader
 
     # featurize data in data loaders (?)
@@ -78,8 +136,11 @@ def train_model(kwargs):
 
     # hyperparam
     # run sigopt
+    if kwargs["tune"]:
+        # tune(#truth, #prior, kwargs)
+        pass
 
-    # feature selection based on train
+    # feature selection based on train? 
 
     # build model
 
@@ -100,6 +161,10 @@ def train_model(kwargs):
 
 def preprocess(args):
     kwargs = args.__dict__
+
+    with open(kwargs['config'], "rb") as file:
+        kwargs = yaml.load(file, Loader=yaml.Loader)
+
     if os.path.isdir(kwargs["output"]):
         now = "_%d%d%d_%d%d%d" % (
             datetime.now().year,
@@ -110,59 +175,38 @@ def preprocess(args):
             datetime.now().second,
         )
         kwargs["output"] = kwargs["output"] + now
-    setup_logger(kwargs["output"], log_name="ffn_train.log", debug=kwargs["debug"])
-    pl.utilities.seed.seed_everything(kwargs.get("seed"))
+    print("[MT] Output folder is", kwargs["output"])
+    os.mkdir(kwargs["output"], exist_ok=True)
+    # setup_logger(kwargs["output"], log_name="multitask_train.log", debug=kwargs["debug"])
+    # pl.utilities.seed.seed_everything(kwargs.get("seed"))
 
     # transform some inputs
     kwargs["energy_type"] = Energy_Type(kwargs["energy_type"])
     kwargs["split_type"] = SplitType(kwargs["split_type"])
+
+    if kwargs.get("split_type", None) == "naive":
+        kwargs["split_type"] = SplitType.NAIVE_SPLITS
+    elif kwargs.get("split_type", None) == "zeolite":
+        kwargs["split_type"] = SplitType.ZEOLITE_SPLITS
+    elif kwargs.get("split_type", None) == "osda":
+        kwargs["split_type"] = SplitType.OSDA_ISOMER_SPLITS
 
     # dump args
     yaml_args = yaml.dump(kwargs, indent=2, default_flow_style=False)
     with open(Path(kwargs["output"]) / "args.yaml", "w") as fp:
         fp.write(yaml_args)
 
-    logging.info("Output folder:\n")
-    logging.info(kwargs["output"])
-    logging.info(f"Args:\n{yaml_args}")
+    print("Output folder:", kwargs["output"], "\n")
+    print(f"Args:\n{yaml_args}\n")
+    return kwargs
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="multitask")
-    parser.add_argument("--output", help="Output dir", required=True)
     parser.add_argument("--config", help="Config file", required=True)
-    parser.add_argument(
-        "--tune", help="Hyperparameter tuning", default="False", action="store_true"
-    )
-    parser.add_argument("--debug", default=False, action="store_true")
-    parser.add_argument("--gpu", default=False, action="store_true")
-    parser.add_argument("--split_type", default=3, help="data split type")
-    parser.add_argument("--energy_type", default=2, help="energy type")
-    parser.add_argument(
-        "--scale_ip", default=True, action="store_true", help="If true, scale features"
-    )
-    parser.add_argument(
-        "--scale_energy",
-        default=True,
-        action="store_true",
-        help="If true, scale energies",
-    )
-    parser.add_argument(
-        "--scale_load",
-        default=True,
-        action="store_true",
-        help="If true, scale loadings",
-    )
-    parser.add_argument(
-        "--model", type=str, help="model type to choose", default=None
-    )  # TODO: do not use now but use it later to generalize between XGB, maybe NTK, and variants of multi task models
-    parser.add_argument(
-        "--ignore-train",
-        help="If true, ignore evaluation on the training set",
-        action="store_true",
-        default=False,
-    )
+
+
 
     args = parser.parse_args()
     kwargs = preprocess(args)
-    train_model(kwargs)
+    train(kwargs)

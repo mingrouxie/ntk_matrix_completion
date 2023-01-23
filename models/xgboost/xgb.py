@@ -2,6 +2,8 @@ import os
 import sys
 import time
 from datetime import datetime
+import yaml
+from pathlib import Path
 
 import matplotlib
 import numpy as np
@@ -177,22 +179,8 @@ def main(kwargs):
     sieved_file: Pickle file that is read into a DataFrame,
         where the index contains the entries of interest
     """
-    # make output directory
-    if os.path.isdir(kwargs["output"]):
-        print("[XGB] Output directory already exists, adding time to directory name")
-        now = "_%d%d%d_%d%d%d" % (
-            datetime.now().year,
-            datetime.now().month,
-            datetime.now().day,
-            datetime.now().hour,
-            datetime.now().minute,
-            datetime.now().second,
-        )
-        kwargs["output"] = kwargs["output"] + now
-    print("[XGB] Output file is", kwargs["output"])
-    os.mkdir(kwargs["output"])
 
-    # clean data
+    # get labels
     if kwargs["energy_type"] == Energy_Type.BINDING:
         # truth = pd.read_csv(BINDING_CSV) # binding values only
         truth = pd.read_csv(kwargs["truth"])  # binding with non-binding values
@@ -209,7 +197,7 @@ def main(kwargs):
     truth = truth[["Binding (SiO2)"]]
     mask = pd.read_csv(kwargs["mask"])
 
-    # get priors
+    # get features
     print("[XGB] prior_method used is", kwargs["prior_method"])
     prior = make_prior(
         test=None,
@@ -454,7 +442,7 @@ def preprocess(input):
     """
     Preprocess argparsed arguments into readable format
     """
-    args = {
+    kwargs = {
         "energy_type": Energy_Type.BINDING,
         "split_type": SplitType.OSDA_ISOMER_SPLITS,
         "k_folds": 5,
@@ -463,6 +451,21 @@ def preprocess(input):
 
     input = input.__dict__
 
+    # make output directory
+    if os.path.isdir(input["output"]):
+        now = "_%d%d%d_%d%d%d" % (
+            datetime.now().year,
+            datetime.now().month,
+            datetime.now().day,
+            datetime.now().hour,
+            datetime.now().minute,
+            datetime.now().second,
+        )
+        input["output"] = input["output"] + now
+    print("[XGB] Output folder is", input["output"])
+    os.mkdir(input["output"], exist_ok=True)
+    
+    # transform some inputs
     input["energy_type"] = (
         Energy_Type.BINDING
         if input.get("energy_type", None) == "binding"
@@ -477,7 +480,16 @@ def preprocess(input):
         input["split_type"] = SplitType.OSDA_ISOMER_SPLITS
 
     args.update(input)
-    return args
+
+    # dump args
+    yaml_args = yaml.dump(kwargs, indent=2, default_flow_style=False)
+    with open(Path(kwargs["output"]) / "args.yaml", "w") as fp:
+        fp.write(yaml_args)
+
+    print("Output folder:", kwargs["output"], "\n")
+    print(f"Args:\n{yaml_args}\n")
+
+    return kwargs
 
 
 if __name__ == "__main__":
