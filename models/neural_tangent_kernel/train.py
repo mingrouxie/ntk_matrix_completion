@@ -10,7 +10,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from ntk_matrix_completion.utils.analysis_utilities import calculate_metrics, plot_top_k_curves
-from ntk_matrix_completion.models.neural_tangent_kernel.ntk import SplitType, run_ntk, skinny_ntk_sampled_not_sliced
+from ntk_matrix_completion.models.neural_tangent_kernel.ntk import run_ntk, skinny_ntk_sampled_not_sliced
 from ntk_matrix_completion.utils.package_matrix import (Energy_Type, get_ground_truth_energy_matrix,
                             make_skinny, unmake_skinny)
 from ntk_matrix_completion.utils.path_constants import (BINDING_GROUND_TRUTH, OSDA_CONFORMER_PRIOR_FILE,
@@ -19,7 +19,7 @@ from ntk_matrix_completion.utils.path_constants import (BINDING_GROUND_TRUTH, OS
                             OUTPUT_DIR, TEN_FOLD_CROSS_VALIDATION_ENERGIES,
                             ZEOLITE_PRIOR_SELECTION_FILE)
 from ntk_matrix_completion.features.precompute_osda_priors import smile_to_property
-from ntk_matrix_completion.utils.utilities import plot_matrix, save_matrix
+from ntk_matrix_completion.utils.utilities import plot_matrix, save_matrix, SplitType
 from ntk_matrix_completion.configs.weights import OSDA_PRIOR_LOOKUP, ZEOLITE_PRIOR_LOOKUP
 
 sys.path.insert(1, str(pathlib.Path(__file__).parent.absolute().parent))

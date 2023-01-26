@@ -28,6 +28,8 @@ from ntk_matrix_completion.utils.utilities import (
     save_matrix,
     chunks,
     get_isomer_chunks,
+    create_iterator,
+    SplitType
 )
 from ntk_matrix_completion.utils.analysis_utilities import (
     calculate_metrics,
@@ -52,12 +54,6 @@ sys.path.insert(
 
 NORM_FACTOR = 0.001
 PI = np.pi
-
-
-class SplitType(IntEnum):
-    NAIVE_SPLITS = 1
-    ZEOLITE_SPLITS = 2
-    OSDA_ISOMER_SPLITS = 3
 
 
 def kappa(x):
@@ -138,8 +134,7 @@ def create_iterator(split_type, all_data, metrics_mask, k_folds, seed):
         # we chunk by folds to be sure we don't spill zeolites/OSDA rows
         # between training & test sets
         assert len(all_data) % k_folds == 0, (
-            "[create_iterator] A bit silly, but we do require skinny_matrices to be perfectly modulo"
-            + " by k_folds in order to avoid leaking training/testing data"
+            "[create_iterator] skinny_matrices need to be perfectly modulo by k_folds in order to avoid leaking training/testing data"
         )
         iterator = tqdm(
             chunks(
@@ -165,7 +160,7 @@ def create_iterator(split_type, all_data, metrics_mask, k_folds, seed):
             )
         )
     else:
-        raise Exception("[create_iterator] Need to provide a SplitType for run_ntk()")
+        raise Exception("[create_iterator] Need to provide a SplitType for run_ntk(), xgb hyperopt,")
     return iterator
 
 

@@ -14,7 +14,6 @@ from ntk_matrix_completion.configs.weights import (
 from ntk_matrix_completion.models.neural_tangent_kernel.ntk import (
     run_ntk,
     skinny_ntk_sampled_not_sliced,
-    SplitType,
 )
 from features.precompute_osda_priors import smile_to_property
 from utils.random_seeds import SUBSTRATE_PRIOR_SELECTION_SEED
@@ -31,6 +30,7 @@ from ntk_matrix_completion.utils.path_constants import (
 from ntk_matrix_completion.utils.analysis_utilities import calculate_metrics
 from ntk_matrix_completion.utils.utilities import (
     save_matrix,
+    SplitType
 )
 from ntk_matrix_completion.utils.package_matrix import (
     Energy_Type,

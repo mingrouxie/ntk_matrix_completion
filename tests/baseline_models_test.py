@@ -1,7 +1,7 @@
 import numpy as np
 import xgboost
 
-from utils.utilities import get_isomer_chunks, report_best_scores, cluster_isomers
+from utils.utilities import report_best_scores
 from sklearn.linear_model import (
     LogisticRegressionCV,
     LinearRegression,
