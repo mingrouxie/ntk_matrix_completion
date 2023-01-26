@@ -1,8 +1,9 @@
 import os
 import pdb
 import random
+from tqdm import tqdm
 from math import ceil, floor
-
+from enum import Enum, IntEnum
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,6 +19,10 @@ from ntk_matrix_completion.utils.path_constants import OUTPUT_DIR
 
 # from rdkit.Chem import RemoveAllHs
 
+class SplitType(IntEnum):
+    NAIVE_SPLITS = 1
+    ZEOLITE_SPLITS = 2
+    OSDA_ISOMER_SPLITS = 3
 
 def plot_matrix(M, file_name, mask=None, vmin=16, vmax=23, to_save=True):
     fig, ax = plt.subplots()
@@ -117,12 +122,14 @@ def get_isomer_chunks(all_data, metrics_mask, k_folds, random_seed=ISOMER_SEED):
     Returns:
 
     An iterable of tuples (train, test and metrics (typically a mask))
+    TODO: Bad documentation due to variable output. Please check return statementS
 
     """
     clustered_isomers = pd.Series(cluster_isomers(smiles=all_data.index).values())
     # Shuffle the isomer clusters
     clustered_isomers = clustered_isomers.sample(frac=1, random_state=random_seed)
-    # Chunk by the isomer sets (train / test sets will not be balanced perfectly)
+    # Chunk by the isomer sets
+    print("[utils/get_isomer_chunks] Note that train/test split is not perfect due to differing size of each isomer group")
     nested_iterator = chunks(
         lst=clustered_isomers,
         n=floor(len(clustered_isomers) / k_folds),
@@ -132,16 +139,18 @@ def get_isomer_chunks(all_data, metrics_mask, k_folds, random_seed=ISOMER_SEED):
     for train, test, _ in nested_iterator:
         train_osdas = list(set().union(*train))
         test_osdas = list(set().union(*test))
+        print("[utils/get_isomer_chunks] train/test length:", len(train_osdas), len(test_osdas))
         if np.any(metrics_mask):
-            yield all_data.loc[train_osdas], all_data.loc[test_osdas], metrics_mask.loc[
-                test_osdas
-            ]
+            # returns boolean array i.e. preserves order
+            # yield all_data.index.isin(train_osdas), all_data.index.isin(train_osdas), metrics_mask.index.isin(train_osdas)
+
+            # the one I was using with xgb. It changes the order to the train_osdas order but it doesn't matter because in HyperoptSearchCV._create_iterator we use index.isin lollll 
+            yield all_data.loc[train_osdas], all_data.loc[train_osdas], metrics_mask.loc[train_osdas]
         else:
             # no masking of non-binding involved, used in baseline_models for predicting binding energies
-            # print("Isomer train-test split:", len(train_osdas), len(test_osdas))
-            # yield train_osdas, test_osdas
+            # returns boolean array
+            # original from YT
             yield all_data.index.isin(train_osdas), all_data.index.isin(test_osdas)
-            # yield all_data.loc[train_osdas], all_data.loc[test_osdas]
 
 
 def save_matrix(matrix, file_name, overwrite=True):
@@ -165,19 +174,6 @@ def get_splits_in_zeolite_type(
             test_idx
         ]
 
-
-class IsomerKFold:
-    def __init__(self, n_splits=3):
-        self.n_splits = n_splits
-
-    def split(self, X, y, groups=None):
-        X = X.reset_index("Zeolite")
-        breakpoint()
-        iterator = get_isomer_chunks(X, metrics_mask=None, k_folds=self.n_splits)
-        return iterator
-
-    def get_n_splits(self, X, y, groups=None):
-        return self.n_splits
 
 
 def cluster_isomers(smiles):
@@ -245,12 +241,78 @@ def scale_data(scaler_type: str, train: pd.DataFrame, test: pd.DataFrame, output
     if output_folder:
         if scaler_type == "standard":
             gts_dict = {
+                "scaler_type": "standard",
                 "mean": scaler.mean_.tolist(),
                 "var": scaler.var_.tolist(),
             }
         elif scaler_type == "minmax":
-            gts_dict = {"scale": scaler.scale_.tolist(), "min": scaler.min_.tolist()}
+            gts_dict = {
+                "scaler_type": "minmax", 
+                "scale": scaler.scale_.tolist(), 
+                "min": scaler.min_.tolist()}
+        else:
+            print("[utilities/scale_data] Scaler type not known")
         filename = os.path.join(output_folder, data_type+"_scaling.json")
         with open(filename, "w") as gts:
             json.dump(gts_dict, gts)
-    return train_scaled, test_scaled
+    return train_scaled, test_scaled, gts_dict
+
+
+def create_iterator(split_type, all_data, metrics_mask, k_folds, seed): 
+    """
+    Inputs:
+
+        split_type: method of constructing data splits
+        all_data: Dataframe where the index is used to create the iterator based on the split_type
+        E.g. for NTK this is a DataFrame of binding energies. For XGB this is a DataFrame of priors.
+        For both examples the index of the DataFrame is SMILES
+        metrics_mask: array with 1 for binding and 0 for non-binding entries
+        k_folds: number of folds to create
+        seed: seed for splits in zeolite_types
+
+    Returns:
+        
+        An iterator that returns the following in each iteration:
+        - train: portion of all_data for training
+        - test: portion of all_data for testing
+        - test_mask_chunk: binding/non-binding mask for test
+    """
+    if split_type == SplitType.NAIVE_SPLITS:
+        # The iterator shuffles the data which is why we need to pass in metrics_mask together.
+        iterator = tqdm(
+            get_splits_in_zeolite_type(all_data, metrics_mask, k=k_folds, seed=seed),
+            total=k_folds,
+        )
+    elif split_type == SplitType.ZEOLITE_SPLITS:
+        # This branch is only for skinny matrix which require that
+        # we chunk by folds to be sure we don't spill zeolites/OSDA rows
+        # between training & test sets
+        assert len(all_data) % k_folds == 0, (
+            "[create_iterator] skinny_matrices need to be perfectly modulo by k_folds in order to avoid leaking training/testing data"
+        )
+        iterator = tqdm(
+            chunks(
+                lst=all_data,
+                n=int(len(all_data) / k_folds),
+                chunk_train=True,
+                chunk_metrics=metrics_mask,
+            ),
+            total=k_folds,
+        )
+    elif split_type == SplitType.OSDA_ISOMER_SPLITS:
+        # split OSDAs by isomers. The number of OSDAs in each split might not be equal 
+        # due to different number of OSDAs in each isomer cluster
+        assert (
+            all_data.index.name == "SMILES"
+        ), "[create_iterator] The OSDA isomer split is currently only implemented for OSDAs as rows"
+        iterator = tqdm(
+            get_isomer_chunks(
+                all_data,
+                metrics_mask,
+                k_folds,
+                random_seed=seed
+            )
+        )
+    else:
+        raise Exception("[create_iterator] Need to provide a SplitType for run_ntk(), xgb hyperopt,")
+    return iterator
