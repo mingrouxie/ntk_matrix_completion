@@ -11,7 +11,6 @@ from copy import deepcopy
 from hyperopt.pyll import scope
 from xgboost import cv
 from sklearn.model_selection import train_test_split
-from models.neural_tangent_kernel.ntk import SplitType
 
 from ntk_matrix_completion.utils.random_seeds import (
     HYPPARAM_SEED,
@@ -19,11 +18,9 @@ from ntk_matrix_completion.utils.random_seeds import (
     HYPEROPT_SEED,
 )
 from ntk_matrix_completion.configs.xgb_hp import get_hyperopt_xgb_space
-from ntk_matrix_completion.models.neural_tangent_kernel.ntk import (
-    create_iterator,
-)
-from utils.loss import masked_rmse
-from utils.path_constants import XGBOOST_OUTPUT_DIR
+from ntk_matrix_completion.utils.utilities import create_iterator, SplitType
+from ntk_matrix_completion.utils.loss import masked_rmse
+from ntk_matrix_completion.utils.path_constants import XGBOOST_OUTPUT_DIR
 
 # Input data files are available in the "../input/" directory.
 # For example, running this (by clicking run or pressing Shift+Enter) will list all files under the input directory
@@ -100,15 +97,18 @@ class HyperoptSearchCV:
         split_type=SplitType.OSDA_ISOMER_SPLITS,
     ) -> None:
         """
-        Inputs:
-
-        X: model input
-        y: model labels
-        mask: same shape as y, 1 for binding and 0 for non-binding. To not use this, simply set all entries=1
-        params: search space for hyperparameters
-        cv: generator or integer (default: 5)
-        fixed_params: hyperparameters that are fixed. Overrides params.
-        output: Output directory
+        Args:
+            X: Model input
+            y: Model labels
+            mask: Same shape as y, 1 for binding and 0 for non-binding. To not use this, simply set all entries=1
+            seed: Used to create CV iterator
+            params: (dict) Search space for hyperparameters
+            fixed_params: (dict) Hyperparameters that are fixed. Overrides params
+            output: Output directory
+            split_type: Column name to split data by
+        
+        Returns:
+            Output directory
         """
         if not params:
             self.space = get_hyperopt_xgb_space()
@@ -136,11 +136,11 @@ class HyperoptSearchCV:
         '''
         Returns:
         
-        A list of tuples. Each tuple contains
-        
-        - DataFrame where the index identifies the training data
-        - DataFrame where the index identifies the test data
-        - DataFrame that is a subset of self.mask, otherwise None
+            A list of tuples. Each tuple contains
+            
+            - DataFrame where the index identifies the training data
+            - DataFrame where the index identifies the test data
+            - DataFrame that is a subset of self.mask, otherwise None
         '''
         index = pd.DataFrame(
             index=self.X.reset_index().set_index(self.split_name).index
@@ -158,8 +158,10 @@ class HyperoptSearchCV:
     def _create_iterator(self):
         for split in self.index_splits:
             all_y = self.y.reset_index()
-            train = all_y[all_y[self.split_name].isin(split[0].index)].set_index(['SMILES', "Zeolite"]).index.to_list()
-            test = all_y[all_y[self.split_name].isin(split[1].index)].set_index(['SMILES', "Zeolite"]).index.to_list()
+            train = all_y[all_y[self.split_name].isin(split[0].index)]
+            train = train.set_index(['SMILES', "Zeolite"]).index.to_list()
+            test = all_y[all_y[self.split_name].isin(split[1].index)]
+            test = test.set_index(['SMILES', "Zeolite"]).index.to_list()
             if self.mask is None:
                 yield train, test
             else:

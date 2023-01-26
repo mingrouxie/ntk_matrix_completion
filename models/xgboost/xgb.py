@@ -19,9 +19,6 @@ import matplotlib.pyplot as plt
 
 from ntk_matrix_completion.configs.xgb_hp import get_xgb_space
 from ntk_matrix_completion.features.prior import make_prior
-from ntk_matrix_completion.models.neural_tangent_kernel.ntk import (
-    SplitType,
-)
 from ntk_matrix_completion.utils.hyperopt import HyperoptSearchCV
 from ntk_matrix_completion.utils.loss import masked_rmse
 from ntk_matrix_completion.utils.package_matrix import (
@@ -46,11 +43,11 @@ from ntk_matrix_completion.utils.random_seeds import (
     MODEL_SEED,
 )
 from ntk_matrix_completion.utils.utilities import (
-    IsomerKFold,
     cluster_isomers,
     get_isomer_chunks,
     scale_data,
     report_best_scores,
+    SplitType
 )
 from sklearn.linear_model import (
     LassoCV,
@@ -84,29 +81,46 @@ def get_tuned_model(
     debug=False,
     # test_cross_val=False, # change here
 ):
-    """Hyperparameter search for XGBRegressor"""
+    """
+    Hyperparameter search for XGBRegressor
+    
+    Args:
+        params: NOT USED.
+        X: (pd.DataFrame) features. Requires SMILES and Zeolite columns
+        y: (pd.DataFrame) truth labels. Requires SMILES and Zeolite columns
+        k_folds: Only used in cv_generator construction. See split_type
+        split_type: used to construct a cv_generator for random search CV or grid search CV. Is NOT used in Hyperopt
+        model_seed: Used to construct initial model and best model
+        objective: loss function
+        nthread: Used to construct initial model and best model
+        search_type: 'random', 'grid' or 'hyperopt'
+        mask: Extra metric, ONLY used in Hyperopt
+        debug: ONLY used in Hyperopt, sets a low max_eval 
+
+    Returns:
+        Tuned model object, search CV object
+    """
     print(f"[XGB] Doing hyperparameter optimization")
     start = time.time()
 
     # mask=None for IZC 2022 results. It is also not possible to implement for random and grid searches
-    if not search_type == "hyperopt":
+    # TODO: bad, hardcoded
+    if search_type == 'random' or search_type == 'grid': 
+    # if not search_type == "hyperopt":
         mask = None
-
-    # get iterator for train-evaluation splits
-    if split_type == SplitType.OSDA_ISOMER_SPLITS:
-        # cv_generator = IsomerKFold(n_splits=cv)
-        cv_generator = get_isomer_chunks(
-            X.reset_index("Zeolite"),
-            metrics_mask=mask,
-            k_folds=k_folds,
-        )
-    else:
-        print("[XGB] Other splits are not yet implemented")
-        breakpoint()
+        if split_type == SplitType.OSDA_ISOMER_SPLITS:
+            cv_generator = get_isomer_chunks(
+                X.reset_index("Zeolite"),
+                metrics_mask=None,
+                k_folds=k_folds,
+            )
+        else:
+            print("[XGB] Other splits are not yet implemented")
+            breakpoint()
 
     # tuning
     if search_type == "random":
-        # IZC 2022 results were from this (no non-binding entries, no mask)
+        # TODO: IZC 2022 results were from this (no non-binding entries, no mask)
         model = xgboost.XGBRegressor(
             objective=objective, random_state=model_seed, nthread=nthread
         )
@@ -152,7 +166,6 @@ def get_tuned_model(
         search = HyperoptSearchCV(
             X,
             y,
-            # cv=cv_generator,
             fixed_params=fixed_params,
             mask=mask,
             output=kwargs["output"],
@@ -286,7 +299,7 @@ def main(kwargs):
 
     # scale ground truth if specified
     if kwargs["truth_scaler"]:
-        truth_train_scaled, truth_test_scaled = scale_data(
+        truth_train_scaled, truth_test_scaled, scaler_info = scale_data(
             kwargs["truth_scaler"], truth_train, truth_test, kwargs["output"], "truth"
         )
     else:
