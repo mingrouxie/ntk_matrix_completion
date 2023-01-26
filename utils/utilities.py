@@ -114,16 +114,14 @@ def get_isomer_chunks(all_data, metrics_mask, k_folds, random_seed=ISOMER_SEED):
     """
     Inputs:
 
-    all_data: Dataframe with an index of SMILES strings
-    metrics_mask: array of same shape as all_data?
-    k_folds: number of chunks to create
-    random_seed: seed for shuffling isomer clusters
+        all_data: Dataframe with an index of SMILES strings
+        metrics_mask: array of same shape as all_data?
+        k_folds: number of chunks to create
+        random_seed: seed for shuffling isomer clusters
 
     Returns:
 
-    An iterable of tuples (train, test and metrics (typically a mask))
-    TODO: Bad documentation due to variable output. Please check return statementS
-
+        If metrics_mask is provided, returns an iterable of tuples (train, test and metrics_mask), where each item in the tuple is a DataFrame with the same index of SMILES strings. If metrics_mask is not provided, an iterable of tuples (train, test) is returned
     """
     clustered_isomers = pd.Series(cluster_isomers(smiles=all_data.index).values())
     # Shuffle the isomer clusters
@@ -141,15 +139,9 @@ def get_isomer_chunks(all_data, metrics_mask, k_folds, random_seed=ISOMER_SEED):
         test_osdas = list(set().union(*test))
         print("[utils/get_isomer_chunks] train/test length:", len(train_osdas), len(test_osdas))
         if np.any(metrics_mask):
-            # returns boolean array i.e. preserves order
-            # yield all_data.index.isin(train_osdas), all_data.index.isin(train_osdas), metrics_mask.index.isin(train_osdas)
-
-            # the one I was using with xgb. It changes the order to the train_osdas order but it doesn't matter because in HyperoptSearchCV._create_iterator we use index.isin lollll 
-            yield all_data.loc[train_osdas], all_data.loc[train_osdas], metrics_mask.loc[train_osdas]
+            yield all_data.index.isin(train_osdas), all_data.index.isin(train_osdas), metrics_mask.index.isin(train_osdas)
         else:
             # no masking of non-binding involved, used in baseline_models for predicting binding energies
-            # returns boolean array
-            # original from YT
             yield all_data.index.isin(train_osdas), all_data.index.isin(test_osdas)
 
 
