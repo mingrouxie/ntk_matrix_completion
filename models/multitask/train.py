@@ -4,19 +4,19 @@ import os
 import json
 import argparse
 import logging
+from ast import literal_eval
 import yaml
 from pathlib import Path
 from datetime import datetime
+import torch
+from torch.utils.data import TensorDataset, DataLoader
 
 # from ntk_matrix_completion.utils.logger import setup_logger
 # import pytorch_lightning as pl
 # from torch.utils.data import DataLoader
 
-from ntk_matrix_completion.utils.package_matrix import Energy_Type
-from ntk_matrix_completion.models.neural_tangent_kernel.ntk import (
-    SplitType,
-)  # TODO: this should be in utils.package_matrix
-from ntk_matrix_completion.models.multitask.multitask_model import MLP
+from ntk_matrix_completion.models.multitask.multitask_nn import MULTITASK_MODELS
+from ntk_matrix_completion.utils.loss import multitask_loss
 from ntk_matrix_completion.features.prior import make_prior
 from ntk_matrix_completion.utils.package_matrix import (
     Energy_Type,
@@ -28,178 +28,22 @@ from ntk_matrix_completion.utils.random_seeds import (
     MODEL_SEED,
 )
 from ntk_matrix_completion.utils.utilities import (
-    IsomerKFold,
     cluster_isomers,
     get_isomer_chunks,
     scale_data,
     report_best_scores,
+    SplitType
 )
 
 from sklearn.model_selection import train_test_split
 
-def train_simple(kwargs):  # simple
+# TODO: truth in main() but y in train() etc.? 
 
-    # extract data
-
-    # define data loaders
-
-    # define model
-
-    # create trainer (tensorboard)
-
-    # load from checkpoint
-
-    return
-
-
-def train(kwargs):
+def train_notes(kwargs):
+    '''for 1 epoch'''
     # TODO: working notes
     # see sam's code for structure reference
     # see xgb on how to retrieve the data zzz
-
-#### TODO: dedup because code is the same as in xgb.py START
-
-    # get labels
-    if kwargs["energy_type"] == Energy_Type.BINDING:
-        # truth = pd.read_csv(BINDING_CSV) # binding values only
-        truth = pd.read_csv(kwargs["truth"])  # binding with non-binding values
-    else:
-        print("[XGB] Please work only with binding energies")
-        breakpoint()
-
-    if kwargs["sieved_file"]:
-        sieved_priors_index = pd.read_pickle(kwargs["sieved_file"]).index
-        sieved_priors_index.name = "SMILES"
-        truth = truth[truth["SMILES"].isin(sieved_priors_index)]
-
-    truth = truth.set_index(["SMILES", "Zeolite"])
-    truth = truth[["Binding (SiO2)"]]
-    mask = pd.read_csv(kwargs["mask"])
-
-    # get features
-    print("[MT] prior_method used is", kwargs["prior_method"])
-    prior = make_prior(
-        test=None,
-        train=None,
-        method=kwargs["prior_method"],
-        normalization_factor=0,
-        all_data=truth,
-        stack_combined_priors=False,
-        osda_prior_file=kwargs["osda_prior_file"],
-        zeolite_prior_file=kwargs["zeolite_prior_file"],
-        osda_prior_map=kwargs["osda_prior_map"],
-        zeolite_prior_map=kwargs["zeolite_prior_map"],
-        other_prior_to_concat=kwargs["other_prior_to_concat"],
-    )
-
-    # TODO: THIS IF THREAD IS RATHER UNKEMPT. WHEN WE GENERALIZE TO ZEOLITES....
-    if kwargs["prior_method"] == "CustomOSDAVector":
-        X = prior
-        print(f"[XGB] Prior of shape {prior.shape}")
-    elif kwargs["prior_method"] == "CustomOSDAandZeoliteAsRows":
-        X_osda_handcrafted_prior = prior[0]
-        X_osda_getaway_prior = prior[1]
-        X_zeolite_prior = prior[2]
-
-        print(
-            f"[XGB] Check prior shapes:",
-            X_osda_handcrafted_prior.shape,
-            X_osda_getaway_prior.shape,
-            X_zeolite_prior.shape,
-        )
-
-        ### what to do with the retrieved priors
-        if kwargs["prior_treatment"] == 1:
-            X = X_osda_handcrafted_prior
-        elif kwargs["prior_treatment"] == 2:
-            X = np.concatenate([X_osda_handcrafted_prior, X_osda_getaway_prior], axis=1)
-        elif kwargs["prior_treatment"] == 3:
-            X = np.concatenate([X_osda_handcrafted_prior, X_zeolite_prior], axis=1)
-        elif kwargs["prior_treatment"] == 4:
-            X = np.concatenate([X_osda_getaway_prior, X_zeolite_prior], axis=1)
-        elif kwargs["prior_treatment"] == 5:
-            X = np.concatenate(
-                [X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior],
-                axis=1,
-            )
-        elif kwargs["prior_treatment"] == 6:
-            X = X_zeolite_prior
-        else:
-            # if kwargs["stack_combined_priors"] == "all":
-            #     X = np.concatenate(
-            #         [X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior],
-            #         axis=1,
-            #     )
-            # elif kwargs["stack_combined_priors"] == "osda":
-            #     X = np.concatenate([X_osda_handcrafted_prior, X_osda_getaway_prior], axis=1)
-            # elif kwargs["stack_combined_priors"] == "zeolite":
-            #     X = X_zeolite_prior
-            # else:
-            print(f"[MT] What do you want to do with the priors??")
-            breakpoint()
-
-    else:
-        print(f"[MT] prior_method {kwargs['prior_method']} not implemented")
-        breakpoint()
-
-    X = pd.DataFrame(X, index=truth.index)
-    print("[MT] Final prior X shape:", X.shape)
-
-    # split data
-    truth = truth.reset_index("Zeolite")
-
-    if kwargs["split_type"] == SplitType.OSDA_ISOMER_SPLITS:
-        # get train_test_split by isomers
-        clustered_isomers = pd.Series(cluster_isomers(truth.index).values())
-        clustered_isomers = clustered_isomers.sample(frac=1, random_state=ISOMER_SEED)
-    else:
-        print("[XGB] What data splits do you want?")
-        breakpoint()
-    clustered_isomers_train, clustered_isomers_test = train_test_split(
-        clustered_isomers, test_size=0.1, shuffle=False, random_state=ISOMER_SEED
-    )
-    smiles_train = sorted(list(set().union(*clustered_isomers_train)))
-    smiles_test = sorted(list(set().union(*clustered_isomers_test)))
-
-    truth_train = truth.loc[smiles_train].reset_index().set_index(["SMILES", "Zeolite"])
-    truth_test = truth.loc[smiles_test].reset_index().set_index(["SMILES", "Zeolite"])
-
-    # scale ground truth if specified
-    if kwargs["truth_scaler"]:
-        truth_train_scaled, truth_test_scaled = scale_data(
-            kwargs["truth_scaler"], truth_train, truth_test, kwargs["output"], "truth"
-        )
-    else:
-        truth_train_scaled = truth_train
-        truth_test_scaled = truth_test
-
-    truth_train_scaled.to_pickle(
-        os.path.join(kwargs["output"], "truth_train_scaled.pkl")
-    )
-    truth_test_scaled.to_pickle(os.path.join(kwargs["output"], "truth_test_scaled.pkl"))
-
-    # split inputs
-    X_train = X.loc[smiles_train]
-    X_test = X.loc[smiles_test]
-
-    # scale inputs
-    X_train_scaled, X_test_scaled = scale_data(
-        kwargs["input_scaler"], X_train, X_test, kwargs["output"], "input"
-    )
-    # print("[XGB] DEBUG: Check X and mask have been created properly")
-    # breakpoint()
-    X_train_scaled.to_pickle(os.path.join(kwargs["output"], "X_train_scaled.pkl"))
-    X_test_scaled.to_pickle(os.path.join(kwargs["output"], "X_test_scaled.pkl"))
-
-    # split mask
-    mask_train = mask.set_index("SMILES").loc[smiles_train][["Zeolite", "exists"]]
-    mask_train.to_pickle(os.path.join(kwargs["output"], "mask_train.pkl"))
-    mask_test = mask.set_index("SMILES").loc[smiles_test][["Zeolite", "exists"]]
-    mask_test.to_pickle(os.path.join(kwargs["output"], "mask_test.pkl"))
-
-#### TODO: dedup because code is the same as in xgb.py END
-
-    
 
     # hyperparam
     # run sigopt
@@ -223,7 +67,367 @@ def train(kwargs):
 
     # save model
 
+    # class MultipleOptimizer(object):
+    #     def __init__(*op):
+    #         self.optimizers = op
+
+    #     def zero_grad(self):
+    #         for op in self.optimizers:
+    #             op.zero_grad()
+
+    #     def step(self):
+    #         for op in self.optimizers:
+    #             op.step()
+
+
+    # opt = MultipleOptimizer(optimizer1(params1, lr=lr1), 
+    #                         optimizer2(params2, lr=lr2))
+
+    # loss.backward()
+    # opt.zero_grad()
+    # opt.step()
+
     return
+
+
+def train(model, dataloader, optimizers, device):
+    
+    '''
+    A function to train on the entire dataset for one epoch.
+    
+    Args: 
+        model (torch.nn.Module): multitask model 
+        dataloader (torch.utils.data.Dataloader): DataLoader object for the train data
+        optimizers (list of torch.optim.Optimizer): list of Optimizer objects to interface gradient calculation and optimization. Hardcoded as [classification_optimizer, regression_optimizer] 
+        device (str): Your device
+        
+    Returns: 
+        float: loss averaged over all the batches 
+    
+    '''
+    batch_loss = []
+    model.train()
+    
+    for batch in dataloader:    
+        X, y, mask = batch
+        X = X.to(device)
+        y = y.to(device)
+        mask = mask.to(device)
+        
+        # TODO: where to separate NB and B? Do we need to separate it?? 
+        y_preds = model(X) 
+        load_loss, energy_loss = multitask_loss(y, y_preds, mask)
+        batch_loss.append((load_loss.item(), energy_loss.item()))
+
+        # TODO: checked ordering for multitasknnsep and multitasknncorr! 
+        optimizers[0].zero_grad()
+        load_loss.backward()
+        optimizers[1].zero_grad()
+        energy_loss.backward()
+
+        optimizers[0].step()
+        optimizers[1].step()
+
+    return np.array(batch_loss).mean()
+
+def validate(model, dataloader, device):
+    
+    '''
+    A function to validate on the validation dataset for one epoch.
+    
+    Args: 
+        model (torch.nn.Module): multitask model 
+        dataloader (torch.utils.data.Dataloader): DataLoader object for the validation data
+        device (str): Your device
+        
+    Returns: 
+        float: loss averaged over all the batches 
+    
+    '''
+    val_loss = []
+    model.eval() 
+
+    with torch.no_grad():    
+        for batch in dataloader:
+            X, y, mask = batch
+            X = X.to(device)
+            y = y.to(device)
+            mask = mask.to(device)
+            
+            y_pred = model(X)
+            load_loss, energy_loss = multitask_loss(y, y_pred, mask)
+            val_loss.append((load_loss.item(), energy_loss.item())) 
+    
+    return np.array(val_loss).mean()
+
+
+def evaluate(model, dataloader, device):
+
+    '''
+    A function to return the classification probabilities and true ys (for evaluation). 
+    
+    Args: 
+        model (torch.nn.Module): multitask model 
+        dataloader (torch.utils.data.Dataloader): DataLoader object for the train data
+        device (str): Your device
+        
+    Returns: 
+        (np.array, np.array, np.array): true ys, predicted loads, predicted energies
+    '''
+    y_preds_all = [[],[]]
+    ys = []
+    masks = []
+
+    with torch.no_grad():
+        model.eval()
+        for batch in dataloader:
+            # epoch_loss = []
+            X, y, mask = batch
+
+            X = X.to(device)
+            y = y.to(device)
+            mask = mask.to(device)
+            
+            y_preds = model(X) 
+            # TODO: hardcoded
+            y_preds_all[0].extend(y_preds[0])
+            y_preds_all[1].extend(y_preds[1])
+            ys.extend(y)
+            masks.extend(mask)
+
+    return ys, y_preds, masks
+
+
+def main(kwargs):
+#### TODO: dedup because code is almost the same as in xgb.py START
+
+    # get ys
+    if kwargs["energy_type"] == Energy_Type.BINDING:
+        # truth = pd.read_csv(BINDING_CSV) # TODO: debug: binding values only
+        truth = pd.read_csv(kwargs["truth"])  # B with NB values
+    else:
+        print("[MT] Please work only with binding energies")
+        breakpoint()
+
+    if kwargs["sieved_file"]:
+        sieved_priors_index = pd.read_pickle(kwargs["sieved_file"]).index
+        sieved_priors_index.name = "SMILES"
+        truth = truth[truth["SMILES"].isin(sieved_priors_index)]
+
+    truth = truth.set_index(["SMILES", "Zeolite"])
+
+    # ys are binding energy and normalized loading TODO: hardcoded hm
+    truth = truth[["Binding (SiO2)", "loading_norm"]]
+    truth.loading_norm = truth.loading_norm.fillna(0)
+    mask = pd.read_csv(kwargs["mask"])
+
+    # get features
+    print("[MT] prior_method used is", kwargs["prior_method"])
+    prior = make_prior(
+        test=None,
+        train=None,
+        method=kwargs["prior_method"],
+        normalization_factor=0,
+        all_data=truth,
+        stack_combined_priors=False,
+        osda_prior_file=kwargs["osda_prior_file"],
+        zeolite_prior_file=kwargs["zeolite_prior_file"],
+        osda_prior_map=kwargs["osda_prior_map"],
+        zeolite_prior_map=kwargs["zeolite_prior_map"],
+        other_prior_to_concat=kwargs["other_prior_to_concat"],
+    )
+
+    # TODO: THIS IF THREAD IS RATHER UNKEMPT. WHEN WE GENERALIZE TO ZEOLITES....
+    if kwargs["prior_method"] == "CustomOSDAVector":
+        X = prior
+        print(f"[MT] Prior of shape {prior.shape}")
+    elif kwargs["prior_method"] == "CustomOSDAandZeoliteAsRows":
+        X_osda_handcrafted_prior = prior[0]
+        X_osda_getaway_prior = prior[1]
+        X_zeolite_prior = prior[2]
+
+        print(
+            f"[MT] Check prior shapes:",
+            X_osda_handcrafted_prior.shape,
+            X_osda_getaway_prior.shape,
+            X_zeolite_prior.shape,
+        )
+
+        ### what to do with the retrieved X
+        if kwargs["prior_treatment"] == 1:
+            X = X_osda_handcrafted_prior
+        elif kwargs["prior_treatment"] == 2:
+            X = np.concatenate([X_osda_handcrafted_prior, X_osda_getaway_prior], axis=1)
+        elif kwargs["prior_treatment"] == 3:
+            X = np.concatenate([X_osda_handcrafted_prior, X_zeolite_prior], axis=1)
+        elif kwargs["prior_treatment"] == 4:
+            X = np.concatenate([X_osda_getaway_prior, X_zeolite_prior], axis=1)
+        elif kwargs["prior_treatment"] == 5:
+            X = np.concatenate(
+                [X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior],
+                axis=1,
+            )
+        elif kwargs["prior_treatment"] == 6:
+            X = X_zeolite_prior
+        else:
+            # if kwargs["stack_combined_X"] == "all":
+            #     X = np.concatenate(
+            #         [X_osda_handcrafted_prior, X_osda_getaway_prior, X_zeolite_prior],
+            #         axis=1,
+            #     )
+            # elif kwargs["stack_combined_X"] == "osda":
+            #     X = np.concatenate([X_osda_handcrafted_prior, X_osda_getaway_prior], axis=1)
+            # elif kwargs["stack_combined_X"] == "zeolite":
+            #     X = X_zeolite_prior
+            # else:
+            print(f"[MT] What do you want to do with the X??")
+            breakpoint()
+
+    else:
+        print(f"[MT] prior_method {kwargs['prior_method']} not implemented")
+        breakpoint()
+
+    X = pd.DataFrame(X, index=truth.index)
+    print("[MT] Final prior X shape:", X.shape)
+
+    # split data
+    truth = truth.reset_index("Zeolite")
+
+    if kwargs["split_type"] == SplitType.OSDA_ISOMER_SPLITS:
+        # get train_test_split by isomers
+        clustered_isomers = pd.Series(cluster_isomers(truth.index).values())
+        clustered_isomers = clustered_isomers.sample(frac=1, random_state=ISOMER_SEED)
+    else:
+        print("[MT] What data splits do you want?")
+        breakpoint()
+
+    clustered_isomers_train, clustered_isomers_test = train_test_split(
+        clustered_isomers, test_size=0.1, shuffle=False, random_state=ISOMER_SEED
+    )
+    smiles_train = sorted(list(set().union(*clustered_isomers_train)))
+    smiles_test = sorted(list(set().union(*clustered_isomers_test)))
+
+    truth_train = truth.loc[smiles_train].reset_index().set_index(["SMILES", "Zeolite"])
+    truth_test = truth.loc[smiles_test].reset_index().set_index(["SMILES", "Zeolite"])
+
+    # scale ground truth if specified
+    truth_train_scaled = pd.DataFrame(index=truth_train.index)
+    truth_test_scaled = pd.DataFrame(index=truth_test.index)
+    if kwargs["energy_scaler"]:
+        truth_train_scaled['Binding (SiO2)'], truth_test_scaled['Binding (SiO2)'], kwargs["energy_scaler_info"] = scale_data(
+            kwargs["energy_scaler"], 
+            pd.DataFrame(truth_train['Binding (SiO2)']), 
+            pd.DataFrame(truth_test['Binding (SiO2)']), 
+            kwargs['output'], # save scaling info
+            "truth_energy" # scaling info filename
+            )
+    else:
+        truth_train_scaled['Binding (SiO2)'] = truth_train['Binding (SiO2)']
+        truth_test_scaled['Binding (SiO2)'] = truth_test['Binding (SiO2)']
+
+    if kwargs ["load_scaler"]:
+        truth_train_scaled['loading_norm'], truth_test_scaled['loading_norm'], kwargs["load_scaler_info"] = scale_data(
+            kwargs["energy_scaler"], 
+            pd.DataFrame(truth_train['loading_norm']), 
+            pd.DataFrame(truth_test['loading_norm']), 
+            kwargs['output'], # save scaling info
+            "truth_load" # scaling info filename
+            )
+    else:
+        truth_train_scaled['loading_norm'] = truth_train['loading_norm']
+        truth_test_scaled['loading_norm'] = truth_test['loading_norm']
+
+    # save scaled truths
+    truth_train_scaled.to_pickle(
+        os.path.join(kwargs["output"], "truth_train_scaled.pkl")
+    )
+    truth_test_scaled.to_pickle(os.path.join(kwargs["output"], "truth_test_scaled.pkl"))
+
+    # split inputs
+    X_train = X.loc[smiles_train]
+    X_test = X.loc[smiles_test]
+
+    # scale inputs
+    X_train_scaled, X_test_scaled, input_scaler_info = scale_data(
+        kwargs["input_scaler"], X_train, X_test, kwargs["output"], "input"
+    )
+    # TODO: print("DEBUG: Check X and mask have been created properly")
+    # breakpoint()
+    X_train_scaled.to_pickle(os.path.join(kwargs["output"], "X_train_scaled.pkl"))
+    X_test_scaled.to_pickle(os.path.join(kwargs["output"], "X_test_scaled.pkl"))
+
+    # split mask;
+    mask_train = mask.set_index("SMILES").loc[smiles_train][["Zeolite", "exists"]]
+    mask_train.to_pickle(os.path.join(kwargs["output"], "mask_train.pkl"))
+    mask_test = mask.set_index("SMILES").loc[smiles_test][["Zeolite", "exists"]]
+    mask_test.to_pickle(os.path.join(kwargs["output"], "mask_test.pkl"))
+
+#### TODO: dedup because code is almost the same as in xgb.py END
+    
+    # make it torch friendly
+    mask_train = mask_train.reset_index().set_index(['SMILES', 'Zeolite'])
+    mask_test = mask_test.reset_index().set_index(['SMILES', 'Zeolite'])
+    X_train_scaled = torch.tensor(X_train_scaled.values, device=kwargs['device']).float()
+    truth_train_scaled = torch.tensor(truth_train_scaled.values, device=kwargs['device']).float()
+    mask_train = torch.tensor(mask_train.values, device=kwargs['device']).float()
+    X_test_scaled = torch.tensor(X_test_scaled.values, device=kwargs['device']).float()
+    truth_test_scaled = torch.tensor(truth_test_scaled.values, device=kwargs['device']).float()
+    mask_test = torch.tensor(mask_test.values, device=kwargs['device']).float()
+
+    # get datasets and dataloaders
+    train_dataset = TensorDataset(X_train_scaled, truth_train_scaled, mask_train)
+    test_dataset = TensorDataset(X_test_scaled, truth_test_scaled, mask_test)
+
+    # TODO: debug check
+    assert set(train_dataset).isdisjoint(set(test_dataset)), "Train and test not disjoint"
+
+    train_dataloader = DataLoader(train_dataset, batch_size=kwargs['batch_size'], shuffle=False) # TODO: no shuffle to preserve isomer ordering as much as possible during CV?
+    test_dataloader = DataLoader(test_dataset, batch_size=kwargs['batch_size'], shuffle=False) # TODO: no shuffle to preserve isomer ordering as much as possible during CV?
+
+    # get model
+    model = kwargs['model'](l_sizes=kwargs['l_sizes'])
+
+    # get optimizers
+    cla_params = model.classifier.parameters()
+    reg_params = model.regressor.parameters()
+    if kwargs["optimizer"]["cla_opt"] == 'adam': #TODO: hardcoded for now
+        cla_opt = torch.optim.Adam(params=cla_params, lr=1e-2) # TODO: lr
+    if kwargs["optimizer"]["reg_opt"] == 'adam':
+        reg_opt = torch.optim.Adam(params=reg_params, lr=1e-2)
+    optimizers = [cla_opt, reg_opt]
+
+    # get scheduler
+    # lr scheduler to prevent overfitting or overshooting a loss minimum (from PS3)
+    # TODO: disable first
+    # TODO: what kind of schedulers are there
+    # if kwargs['scheduler']:
+    #     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', verbose=True, factor=0.5)
+
+    # TODO: before below, somewhere: UserWarning: non-inplace resize is deprecated warnings.warn("non-inplace resize is deprecated")
+
+    # train model
+    epoch_losses = []
+    val_losses = []
+    print("\n[MT] Training model")
+    for epoch in range(kwargs['epochs']):
+        epoch_loss = train(model, train_dataloader, optimizers, kwargs['device'])
+        val_loss = validate(model, train_dataloader, kwargs['device'])
+        epoch_losses.append(epoch_loss)
+        val_losses.append(val_loss)
+        # if kwargs['scheduler']:
+        #     scheduler.step(val_loss)
+        print("Epoch", epoch, "{:.4f}".format(epoch_loss), "{:.4f}".format(val_loss))
+
+    # evaluate on test set
+    ys, y_preds, masks = evaluate(model, test_dataloader, kwargs['device'])
+    ys = torch.stack(ys)
+    # TODO: warning here: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+    y_preds = [torch.tensor(y_preds[0]), torch.tensor(y_preds[1])]
+    masks = torch.tensor(masks)
+
+    load_loss, energy_loss = multitask_loss(ys, y_preds, masks)
+    print("main: Test set load_loss:", "{:.4f}".format(load_loss.item()), "energy_loss:", "{:.4f}".format(energy_loss.item()))
+    breakpoint()
 
 
 def preprocess(args):
@@ -243,11 +447,13 @@ def preprocess(args):
         )
         kwargs["output"] = kwargs["output"] + now
     print("[MT] Output folder is", kwargs["output"])
-    os.mkdir(kwargs["output"], exist_ok=True)
+    os.makedirs(kwargs["output"], exist_ok=True)
     # setup_logger(kwargs["output"], log_name="multitask_train.log", debug=kwargs["debug"])
     # pl.utilities.seed.seed_everything(kwargs.get("seed"))
 
     # transform some inputs
+    kwargs['model'] = MULTITASK_MODELS[kwargs['model']]
+    kwargs['l_sizes'] = literal_eval(kwargs['l_sizes'])
     kwargs["energy_type"] = Energy_Type(kwargs["energy_type"])
     kwargs["split_type"] = SplitType(kwargs["split_type"])
 
@@ -263,17 +469,13 @@ def preprocess(args):
     with open(Path(kwargs["output"]) / "args.yaml", "w") as fp:
         fp.write(yaml_args)
 
-    print("Output folder:", kwargs["output"], "\n")
-    print(f"Args:\n{yaml_args}\n")
+    print("Output folder:", kwargs["output"])
+    print(f"Args:\n{yaml_args}")
     return kwargs
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="multitask")
     parser.add_argument("--config", help="Config file", required=True)
-
-
-
     args = parser.parse_args()
     kwargs = preprocess(args)
-    train(kwargs)
+    main(kwargs)

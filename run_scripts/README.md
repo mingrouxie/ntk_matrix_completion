@@ -11,6 +11,8 @@
 - 230103_xgb_2.sh: 230103_xgb_1 but with -n 24 and --nthread 24
 - 230103_xgb_3.sh: Testing XGB training on Engaging 
 
+- 230123_mt_1.sh: Multitask model - currently WIP
+
 ## create_files
 
 - create_files.sh: 
@@ -26,4 +28,5 @@
 - predict_xgb.sh: script for inference for given ligands and substrates
 
 ## feature_selection
+
 - substrate_prior_selection.py: Selecting persistent homology features

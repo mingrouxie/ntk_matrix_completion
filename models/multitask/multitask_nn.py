@@ -1,0 +1,152 @@
+import sys
+import pathlib
+import pdb
+from typing import List
+import numpy as np
+import torch
+import torch.nn as nn
+from torch.utils.tensorboard import SummaryWriter
+from dataclasses import dataclass
+
+class MultiTaskNNSep(nn.Module):
+    def __init__(self, l_sizes=[(16,8,4), (16,8,4)]) -> None:
+        '''
+        Architecture where classifier and regressor do not share layers (essentially 2 separate NNs)
+
+        Args:
+            l_sizes: An iterable of length 2. The first entry contains a list of layers sizes for the classifier, the second entry for the regressor. Note the first entry in both lists is the input feature size.
+        '''
+        super().__init__()
+        c_sizes, r_sizes = l_sizes
+
+        # classifier
+        c_num_layers = len(c_sizes)
+        c_layers_list = [
+            nn.Sequential(
+                nn.Linear(c_sizes[i], c_sizes[i+1]), #TODO: check
+                nn.ReLU()
+            ) for i in range(0, c_num_layers-1) 
+        ]
+        self.classifier = nn.Sequential(
+            *c_layers_list,
+            nn.Linear(c_sizes[-1], 1) # max loading is 24 in the db (point of contention TODO) wth darling linear??
+        )
+
+        # regressor
+        r_num_layers = len(r_sizes)
+        r_layers_list = [
+            nn.Sequential(
+                nn.Linear(r_sizes[i], r_sizes[i+1]),
+                nn.ReLU()
+            ) for i in range(0, r_num_layers-1) # TODO: check
+        ]
+        self.regressor = nn.Sequential(
+            *r_layers_list,
+            nn.Linear(r_sizes[-1], 1)
+        )
+    
+    def forward(self, x):
+        return self.classifier(x), self.regressor(x)
+
+class MultiTaskNNCorr(nn.Module): 
+    def __init__(self, l_sizes=[(16,8), (8,4), (8,4)]) -> None:
+        '''
+        Architecture where classifier and regressor share layers
+
+        Args:
+            l_sizes: An iterable of length 2. The first entry contains a lsit of layer sizes for the common layers, the second entry contains a list of layers sizes for the classifier, the third entry for the regressor. Note the first entry in both lists is the input feature size.
+        '''
+        super().__init__()
+        com_sizes, c_sizes, r_sizes = l_sizes
+        # check common output layer is same size as input layers for both classifier and regressor
+        assert c_sizes[0] == r_sizes[0]
+
+        # common
+        com_num_layers = len(com_sizes)
+        com_layers_list = [
+            nn.Sequential(
+                nn.Linear(com_sizes[i], com_sizes[i+1]), #TODO: check
+                nn.ReLU()
+            ) for i in range(0, com_num_layers-1) 
+        ]
+        self.common = nn.Sequential(
+            *com_layers_list,
+            nn.Linear(com_sizes[-1], c_sizes[0]) # max loading is 24 in the db (point of contention TODO)
+        )
+
+        # classifier
+        c_num_layers = len(c_sizes)
+        c_layers_list = [
+            nn.Sequential(
+                nn.Linear(c_sizes[i], c_sizes[i+1]), #TODO: check
+                nn.ReLU()
+            ) for i in range(0, c_num_layers-1) 
+        ]
+        self.classifier = nn.Sequential(
+            self.common,
+            *c_layers_list,
+            nn.Linear(c_sizes[-1], 1) # max loading is 24 in the db (point of contention TODO)
+        )
+
+        # regressor
+        r_num_layers = len(r_sizes)
+        r_layers_list = [
+            nn.Sequential(
+                nn.Linear(r_sizes[i], r_sizes[i+1]),
+                nn.ReLU()
+            ) for i in range(0, r_num_layers-1) # TODO: check
+        ]
+        self.regressor = nn.Sequential(
+            self.common,
+            *r_layers_list,
+            nn.Linear(r_sizes[-1], 1)
+        )
+
+    def forward(self, x):
+        return self.classifier(x), self.regressor(x)
+
+
+MULTITASK_MODELS = {'multitasknnsep': MultiTaskNNSep, 'multitasknncorr': MultiTaskNNCorr}
+
+
+class OldMultiTaskNN(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        # hidden n-1 layers
+        l_sizes = [int(x) for x in l_sizes]
+        num_layers = len(l_sizes)
+        hl_list = [
+            nn.Sequential(
+                nn.Linear(l_sizes[i], l_sizes[i+1]),
+                nn.ReLU()
+            ) for i in range(0, num_layers-1) # TODO: check
+        ]
+        self.hl = nn.Sequential(*hl_list)
+
+        # final hidden layer
+        fl_dict = {'relu': nn.ReLU(), 'tanh': nn.Tanh()}
+        self.fl = nn.Sequential(
+            nn.Linear(l_sizes[-2], l_sizes[-1]),
+            fl_dict[fnl]
+            )
+
+        # output layer
+        self.ol = nn.Sequential(nn.Linear(l_sizes[-1],2))
+
+        # all
+        self.net = nn.Sequential(self.hl, self.fl, self.ol)
+        print(self.net)
+
+
+    def forward(self, x):
+
+        return self.net(x)
+
+
+# testing
+if __name__ == '__main__':
+    # model = MultiTaskNNSep()
+    model = MultiTaskNNCorr()
+    x = torch.randn(16)
+    op = model(x)
+    print(x) 
