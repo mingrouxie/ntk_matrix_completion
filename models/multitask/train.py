@@ -107,7 +107,6 @@ def train(model, dataloader, optimizers, device):
     '''
     batch_loss = []
     model.train()
-    
     for batch in dataloader:    
         X, y, mask = batch
         X = X.to(device)
@@ -118,6 +117,7 @@ def train(model, dataloader, optimizers, device):
         y_preds = model(X) 
         load_loss, energy_loss = multitask_loss(y, y_preds, mask)
         batch_loss.append((load_loss.item(), energy_loss.item()))
+        # print("[train] indiv loss in a batch", (load_loss.item(), energy_loss.item()))
 
         # TODO: checked ordering for multitasknnsep and multitasknncorr! 
         optimizers[0].zero_grad()
@@ -157,7 +157,7 @@ def validate(model, dataloader, device):
             y_pred = model(X)
             load_loss, energy_loss = multitask_loss(y, y_pred, mask)
             val_loss.append((load_loss.item(), energy_loss.item())) 
-    
+
     return np.array(val_loss).mean()
 
 
@@ -181,7 +181,6 @@ def evaluate(model, dataloader, device):
     with torch.no_grad():
         model.eval()
         for batch in dataloader:
-            # epoch_loss = []
             X, y, mask = batch
 
             X = X.to(device)
@@ -195,7 +194,7 @@ def evaluate(model, dataloader, device):
             ys.extend(y)
             masks.extend(mask)
 
-    return ys, y_preds, masks
+    return ys, y_preds_all, masks
 
 
 def main(kwargs):
@@ -254,6 +253,7 @@ def main(kwargs):
         )
 
         ### what to do with the retrieved X
+        print("[MT] Prior treatment is", kwargs["prior_treatment"])
         if kwargs["prior_treatment"] == 1:
             X = X_osda_handcrafted_prior
         elif kwargs["prior_treatment"] == 2:
@@ -402,8 +402,6 @@ def main(kwargs):
     # TODO: what kind of schedulers are there
     # if kwargs['scheduler']:
     #     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', verbose=True, factor=0.5)
-
-    # TODO: before below, somewhere: UserWarning: non-inplace resize is deprecated warnings.warn("non-inplace resize is deprecated")
 
     # train model
     epoch_losses = []

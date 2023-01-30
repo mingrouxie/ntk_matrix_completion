@@ -18,8 +18,9 @@
 
 ### TLDR
 
-- Use 221216/ for OSDA prior files
-- Use zeolite_priors_20221118_25419.pkl for zeolite structural prior file
+- Use /home/mrx/projects/binding_energies/ntk_matrix_completion/data/priors/221216/ for OSDA prior files
+- Use /home/mrx/projects/binding_energies/ntk_matrix_completion/data/priors/zeolite_priors_20221118_25419.pkl for zeolite structural prior file
+- Use /home/mrx/projects/binding_energies/ntk_matrix_completion/data/priors/221221_hyp_osdas_omar and 221221_hyp_osdas_others for predictions in hypothetical space
 
 ### Relevant
 

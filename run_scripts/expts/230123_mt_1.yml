@@ -9,11 +9,18 @@ energy_scaler: minmax
 load_scaler: minmax
 ignore_train: false
 seed: 12934
-truth: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_3/truth.csv
 sieved_file: null
-mask: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_3/mask.csv
 prior_method: CustomOSDAVector
-osda_prior_file: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/priors/testing_3/osda_priors_0.pkl
+# truth: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_3/truth.csv
+# mask: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_3/mask.csv
+# osda_prior_file: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/priors/testing_3/osda_priors_0.pkl
+# truth: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_4/truth.csv
+# mask: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_4/mask.csv
+# truth: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_4/truth_nbonly.csv
+# mask: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_4/mask_nbonly.csv
+# truth: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/221216/iza_all/zero/20221217_5208_truth.csv
+# mask: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/221216/iza_all/zero/20221217_5208_mask.csv
+osda_prior_file: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/priors/221216/iza_all/osda_priors_all.pkl
 zeolite_prior_file: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/priors/zeolite_priors_20221118_25419.pkl
 osda_prior_map: /home/mrx/projects/binding_energies/ntk_matrix_completion/configs/osda_weights_structural_v2.json
 zeolite_prior_map: /home/mrx/projects/binding_energies/ntk_matrix_completion/configs/zeolite_weights_structural_extendable.json
@@ -25,7 +32,7 @@ optimizer:
   reg_opt: adam
 scheduler: false
 # debug
-epochs: 100
+epochs: 5
 device: cpu
 batch_size: 256
 model: multitasknnsep

@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.metrics import mean_squared_error
 from math import sqrt
 import torch.nn as nn
+import torch
 
 
 def masked_rmse(truth, pred, mask):
@@ -20,18 +21,31 @@ def masked_rmse(truth, pred, mask):
     return rmse
 
 def classifier_loss(y, pred):
-    y_rs = y.resize(y.shape[0], 1) # TODO: hardcoded
+    '''"Classifier" loss. Since normalized loadings are continuous instead of integer numbers, this ends up being a MSE loss'''
+    y_rs = y.reshape(y.shape[0], 1) # TODO: hardcoded
     loss = nn.MSELoss(reduction='mean')
+
+    if np.isnan(loss(y_rs, pred).detach().numpy()):
+        print("[classifier] nan present in loss")
+
     return loss(y_rs, pred)
     # proba = pred.softmax(dim=1)
     # return nn.CrossEntropyLoss(y, proba)
 
 def regressor_loss(y, pred, mask):
+    '''Masked regression loss for binding energies'''
+    if sum(mask) == 0:
+        # all non-binding entries
+        return torch.tensor([0.0], requires_grad=True)
+        
     y_rs = y.resize(y.shape[0], 1) # TODO: hardcoded
     y_masked = y_rs[mask==1]
     pred_masked = pred[mask==1]
-    # print("y shape:", y_rs.shape, "and y_masked shape:", y_masked.shape)
     loss = nn.MSELoss(reduction='mean')
+
+    if np.isnan(loss(y_masked, pred_masked).detach().numpy()):
+        print("[regressor] nan present in loss")
+
     return loss(y_masked, pred_masked)
 
 def multitask_loss(y, y_preds, mask):
