@@ -16,6 +16,7 @@ from torch.utils.data import TensorDataset, DataLoader
 # import pytorch_lightning as pl
 # from torch.utils.data import DataLoader
 
+from ntk_matrix_completion.utils.early_stopping import EarlyStopper
 from ntk_matrix_completion.models.multitask.multitask_nn import MULTITASK_MODELS
 from ntk_matrix_completion.utils.loss import multitask_loss
 from ntk_matrix_completion.features.prior import make_prior
@@ -422,6 +423,9 @@ def main(kwargs):
     # if kwargs['scheduler']:
     #     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', verbose=True, factor=0.5)
 
+    # early stopping
+    early_stopper = EarlyStopper(patience=3, min_delta=10)
+
     # train model
     epoch_losses = []
     val_losses = []
@@ -434,6 +438,9 @@ def main(kwargs):
         # if kwargs['scheduler']:
         #     scheduler.step(val_loss)
         print("Epoch", epoch, "{:.4f}".format(epoch_loss), "{:.4f}".format(val_loss))
+        if early_stopper.early_stop(val_loss):  
+            print("Early stopping, val_loss:", val_loss)
+            break
 
     # save model
     torch.save({

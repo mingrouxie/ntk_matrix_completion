@@ -15,13 +15,16 @@ source /home/mrx/bin/miniconda3/bin/activate /home/mrx/bin/miniconda3/envs/ntk
 ROOT="/home/mrx/projects/binding_energies"
 SRC="${ROOT}/ntk_matrix_completion"
 LOGS="${ROOT}/logs/23_mt"
+OUTPUT="/pool001/mrx/projects/binding_energies/ntk_matrix_completion/output"
 
 echo 'Debug with multitasksep and prior_treatment: 3, structural features'
 
-# python $SRC/models/multitask/train.py --config $SRC/run_scripts/expts/230131_mt/debug.yml
-# python $SRC/utils/analysis_utilities.py --config $SRC/output/2023_multitask/multitask_202321_192447
+python $SRC/models/multitask/train.py --config $SRC/run_scripts/expts/230131_mt/debug.yml
 
-python $SRC/utils/analysis_utilities.py --config /home/mrx/projects/binding_energies_output/output/2023_multitask/multitask_202321_225523
+# python $SRC/utils/analysis_utilities.py --config $SRC/output/2023_multitask/multitask_202321_192447
+# python $SRC/utils/analysis_utilities.py --config /home/mrx/projects/binding_energies_output/output/2023_multitask/multitask_202321_225523
+
+# python $SRC/utils/analysis_utilities.py --config $OUTPUT/2023_multitask/
 
 echo 'done'
 # python -m cProfile -o $LOGS/230123_mt_1.prof $ROOT/models/multitask/train.py --config $ROOT/run_scripts/expts/230123_mt_1.yml

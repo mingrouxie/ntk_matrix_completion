@@ -1,5 +1,13 @@
 # run_scripts record
 
+## Paths 
+- Engaging ran out of space (surprise, surprise), so will be moving data and output out to pool001/mrx
+- /home/mrx/projects/binding_energies/ntk_matrix_completion/data
+    - /pool001/mrx/projects/binding_energies/ntk_matrix_completion/data
+- /home/mrx/projects/binding_energies/ntk_matrix_completion/output
+    - /home/mrx/projects/binding_energies_output/output
+    - /pool001/mrx/projects/binding_energies/ntk_matrix_completion/output
+
 ## expts
 
 - expts_ntk.sh: Training model with NTK pre Aug 22

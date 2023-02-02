@@ -1,3 +1,5 @@
+import numpy as np
+
 class EarlyStopper:
     '''From https://stackoverflow.com/questions/71998978/early-stopping-in-pytorch'''
     def __init__(self, patience=1, min_delta=0):

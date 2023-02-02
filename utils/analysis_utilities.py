@@ -10,6 +10,7 @@ import pdb
 import math
 import argparse
 import torch
+import json
 
 from pandas.core.frame import DataFrame
 import matplotlib.pyplot as plt
@@ -483,6 +484,15 @@ if __name__ == '__main__':
     test_y = pd.read_csv(os.path.join(op, "pred_test_ys.csv"), index_col=0).set_index(pd.MultiIndex.from_frame(test_indices))
     test_pred = pd.read_csv(os.path.join(op, "pred_test_y_preds.csv"), index_col=0).set_index(pd.MultiIndex.from_frame(test_indices))
     model = torch.load(os.path.join(op, "model.pt"))
+
+
+    # TODO scaling
+    with open(os.path.join(op, "input_scaler.json"), "r") as f:
+        input_scaler = json.load(f)
+    with open(os.path.join(op, "truth_load_scaling.json"), "r") as f:
+        l_scaler = json.load(f)
+    with open(os.path.join(op, "truth_energy_scaling.json"), "r") as f:
+        e_scaler = json.load(f)
 
     # TODO: check dimensions lol for the nb what is it
 

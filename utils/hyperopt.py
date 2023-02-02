@@ -165,6 +165,8 @@ class HyperoptSearchCV:
             if self.mask is None:
                 yield train, test
             else:
+                # TODO: does these have the same order as train/ test?
+                # TODO: model_eval below does not seem to be using the test_mask_chunk, i.e. m that is being returned
                 m = self.mask.reset_index()
                 m = m[m[self.split_name].isin(split[2].reset_index()[self.split_name])].set_index(self.split_name)
                 yield train, test, m

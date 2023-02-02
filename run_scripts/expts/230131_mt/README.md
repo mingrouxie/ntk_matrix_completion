@@ -1,0 +1,2 @@
+- run_1: multitasknncorr, cpu, 
+- run_2: multitasknnsep, cpu
