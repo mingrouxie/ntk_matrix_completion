@@ -16,6 +16,7 @@ from sklearn import metrics
 from sklearn.model_selection import KFold, StratifiedKFold
 from sklearn.preprocessing import MinMaxScaler, StandardScaler, QuantileTransformer
 from ntk_matrix_completion.utils.path_constants import OUTPUT_DIR
+from torch.utils.data import TensorDataset, DataLoader, Dataset
 
 # from rdkit.Chem import RemoveAllHs
 
@@ -308,3 +309,30 @@ def create_iterator(split_type, all_data, metrics_mask, k_folds, seed):
     else:
         raise Exception("[create_iterator] Need to provide a SplitType for run_ntk(), xgb hyperopt,")
     return iterator
+
+
+class MultiTaskTensorDataset(Dataset):
+    r"""Dataset wrapping tensors and molecule-zeolite pair indices (list)
+
+    Each sample will be retrieved by indexing tensors along the first dimension (the list is indexed as is).
+
+    Args:
+        *tensors (Tensor): tensors that have the same size of the first dimension.
+    """
+
+    def __init__(self, *iterables) -> None:
+        tensors = iterables[:-1]
+        pair_indices = iterables[-1]
+        assert all(tensors[0].size(0) == tensor.size(0) for tensor in tensors), "Size mismatch between tensors"
+        assert len(pair_indices) == tensors[0].size(0), "Size mismatch between tensor and pair indices"
+        self.tensors = tensors
+        self.pair_indices = pair_indices
+
+    def __getitem__(self, index):
+        item = [tensor[index] for tensor in self.tensors]
+        item.extend([self.pair_indices[index]])
+        return item
+
+    def __len__(self):
+        return self.tensors[0].size(0)
+
