@@ -5,7 +5,7 @@ from typing import List
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 from dataclasses import dataclass
 
 class MultiTaskNNSep(nn.Module):
@@ -71,7 +71,7 @@ class MultiTaskNNCorr(nn.Module):
         ]
         self.common = nn.Sequential(
             *com_layers_list,
-            nn.Linear(com_sizes[-1], c_sizes[0]) # max loading is 24 in the db (point of contention TODO)
+            # nn.Linear(com_sizes[-1], c_sizes[0]) 
         )
 
         # classifier
