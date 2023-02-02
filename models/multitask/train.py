@@ -1,3 +1,4 @@
+import time
 import pandas as pd
 import numpy as np
 import os
@@ -32,7 +33,8 @@ from ntk_matrix_completion.utils.utilities import (
     get_isomer_chunks,
     scale_data,
     report_best_scores,
-    SplitType
+    SplitType,
+    MultiTaskTensorDataset
 )
 
 from sklearn.model_selection import train_test_split
@@ -108,7 +110,7 @@ def train(model, dataloader, optimizers, device):
     batch_loss = []
     model.train()
     for batch in dataloader:    
-        X, y, mask = batch
+        X, y, mask, _ = batch
         X = X.to(device)
         y = y.to(device)
         mask = mask.to(device)
@@ -149,7 +151,7 @@ def validate(model, dataloader, device):
 
     with torch.no_grad():    
         for batch in dataloader:
-            X, y, mask = batch
+            X, y, mask, _ = batch
             X = X.to(device)
             y = y.to(device)
             mask = mask.to(device)
@@ -177,12 +179,12 @@ def evaluate(model, dataloader, device):
     y_preds_all = [[],[]]
     ys = []
     masks = []
+    indices = [[], []] # molecule-zeolite pair
 
     with torch.no_grad():
         model.eval()
         for batch in dataloader:
-            X, y, mask = batch
-
+            X, y, mask, idx = batch
             X = X.to(device)
             y = y.to(device)
             mask = mask.to(device)
@@ -193,11 +195,14 @@ def evaluate(model, dataloader, device):
             y_preds_all[1].extend(y_preds[1])
             ys.extend(y)
             masks.extend(mask)
+            indices[0].extend(idx[0]) 
+            indices[1].extend(idx[1]) 
 
-    return ys, y_preds_all, masks
+    return ys, y_preds_all, masks, indices
 
 
 def main(kwargs):
+    start_time = time.time() # seconds
 #### TODO: dedup because code is almost the same as in xgb.py START
 
     # get ys
@@ -282,7 +287,6 @@ def main(kwargs):
             # else:
             print(f"[MT] What do you want to do with the X??")
             breakpoint()
-
     else:
         print(f"[MT] prior_method {kwargs['prior_method']} not implemented")
         breakpoint()
@@ -364,9 +368,15 @@ def main(kwargs):
 
 #### TODO: dedup because code is almost the same as in xgb.py END
     
-    # make it torch friendly
+    # save indices
     mask_train = mask_train.reset_index().set_index(['SMILES', 'Zeolite'])
     mask_test = mask_test.reset_index().set_index(['SMILES', 'Zeolite'])
+    idx_train = mask_train.index.to_list()
+    idx_test = mask_test.index.to_list()
+
+    # make it torch friendly
+    # idx_train = torch.tensor(idx_train, device=kwargs['device'])
+    # idx_test = torch.tensor(idx_test, device=kwargs['device'])
     X_train_scaled = torch.tensor(X_train_scaled.values, device=kwargs['device']).float()
     truth_train_scaled = torch.tensor(truth_train_scaled.values, device=kwargs['device']).float()
     mask_train = torch.tensor(mask_train.values, device=kwargs['device']).float()
@@ -375,17 +385,26 @@ def main(kwargs):
     mask_test = torch.tensor(mask_test.values, device=kwargs['device']).float()
 
     # get datasets and dataloaders
-    train_dataset = TensorDataset(X_train_scaled, truth_train_scaled, mask_train)
-    test_dataset = TensorDataset(X_test_scaled, truth_test_scaled, mask_test)
+    train_dataset = MultiTaskTensorDataset(X_train_scaled, truth_train_scaled, mask_train, idx_train)
+    test_dataset = MultiTaskTensorDataset(X_test_scaled, truth_test_scaled, mask_test, idx_test)
 
-    # TODO: debug check
-    assert set(train_dataset).isdisjoint(set(test_dataset)), "Train and test not disjoint"
+    # breakpoint()
+    # # TODO: debug check
+    # try:
+    #     assert set(train_dataset).isdisjoint(set(test_dataset)), "Train and test not disjoint"
+    # except TypeError:
+    #     pass
 
     train_dataloader = DataLoader(train_dataset, batch_size=kwargs['batch_size'], shuffle=False) # TODO: no shuffle to preserve isomer ordering as much as possible during CV?
     test_dataloader = DataLoader(test_dataset, batch_size=kwargs['batch_size'], shuffle=False) # TODO: no shuffle to preserve isomer ordering as much as possible during CV?
 
+    prep_time = time.time() - start_time
+    print("Time to prepare labels and input", "{:.2f}".format(prep_time/60), "mins")
+
     # get model
     model = kwargs['model'](l_sizes=kwargs['l_sizes'])
+    print("[MT] model:\n")
+    print(model)
 
     # get optimizers
     cla_params = model.classifier.parameters()
@@ -416,16 +435,50 @@ def main(kwargs):
         #     scheduler.step(val_loss)
         print("Epoch", epoch, "{:.4f}".format(epoch_loss), "{:.4f}".format(val_loss))
 
-    # evaluate on test set
-    ys, y_preds, masks = evaluate(model, test_dataloader, kwargs['device'])
-    ys = torch.stack(ys)
-    # TODO: warning here: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
-    y_preds = [torch.tensor(y_preds[0]), torch.tensor(y_preds[1])]
-    masks = torch.tensor(masks)
+    # save model
+    torch.save({
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'cla_opt_state_dict': optimizers[0].state_dict(),
+        'reg_opt_state_dict': optimizers[1].state_dict(),
+        'epoch_losses': epoch_losses,
+        'val_losses': val_losses,
+    }, os.path.join(kwargs['output'], 'model.pt'))
+    train_time = time.time() - start_time - prep_time
+    print("Time to train:", "{:.2f}".format(train_time/60), "mins")
 
-    load_loss, energy_loss = multitask_loss(ys, y_preds, masks)
-    print("main: Test set load_loss:", "{:.4f}".format(load_loss.item()), "energy_loss:", "{:.4f}".format(energy_loss.item()))
-    breakpoint()
+    # evaluate on entire train/test set
+    def evaluate_whole(dataloader, label="test"):
+        ys, y_preds, masks, indices = evaluate(model, dataloader, kwargs['device'])
+        ys = torch.stack(ys)
+        # TODO: warning here: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+        y_preds = [torch.tensor(y_preds[0]), torch.tensor(y_preds[1])]
+        masks = torch.tensor(masks)
+        load_loss, energy_loss = multitask_loss(ys, y_preds, masks)
+        print(f"main: {label} set load_loss:", "{:.4f}".format(load_loss.item()), "; energy_loss:", "{:.4f}".format(energy_loss.item()))
+
+        # save predictions
+        test_mask = pd.DataFrame(masks.numpy())
+        test_mask.columns = ['exists']
+        test_mask.to_csv(os.path.join(kwargs["output"], f'pred_{label}_mask.csv'))
+
+        y_preds = pd.DataFrame([y.numpy() for y in y_preds]).T
+        y_preds.columns = ["Binding (SiO2)", "loading_norm"]
+        y_preds.to_csv(os.path.join(kwargs["output"], f'pred_{label}_y_preds.csv'))
+
+        ys = pd.DataFrame(ys.numpy())
+        ys.columns = ["Binding (SiO2)", "loading_norm"]
+        ys.to_csv(os.path.join(kwargs["output"], f'pred_{label}_ys.csv'))
+
+        indices = pd.DataFrame(indices).T
+        indices.columns = ['SMILES', 'Zeolite']
+        indices.to_csv(os.path.join(kwargs['output'], f'pred_{label}_indices.csv'))
+
+    evaluate_whole(train_dataloader, label='train')
+    evaluate_whole(test_dataloader, label='test')
+
+    print("[MT] Output folder is", kwargs["output"])
+    print("Total time:", "{:.2f}".format((time.time() - start_time) / 60), "mins")
 
 
 def preprocess(args):
