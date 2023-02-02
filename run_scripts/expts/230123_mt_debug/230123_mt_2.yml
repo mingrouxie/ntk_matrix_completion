@@ -10,7 +10,6 @@ load_scaler: minmax
 ignore_train: false
 seed: 12934
 sieved_file: null
-prior_method: CustomOSDAVector
 # truth: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_3/truth.csv
 # mask: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_3/mask.csv
 # osda_prior_file: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/priors/testing_3/osda_priors_0.pkl
@@ -18,8 +17,10 @@ prior_method: CustomOSDAVector
 # mask: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_4/mask.csv
 # truth: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_4/truth_nbonly.csv
 # mask: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_4/mask_nbonly.csv
-# truth: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/221216/iza_all/zero/20221217_5208_truth.csv
-# mask: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/221216/iza_all/zero/20221217_5208_mask.csv
+# truth: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_5/truth.csv
+# mask: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_5/mask.csv
+truth: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/221216/iza_all/zero/20221217_5208_truth.csv
+mask: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/221216/iza_all/zero/20221217_5208_mask.csv
 osda_prior_file: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/priors/221216/iza_all/osda_priors_all.pkl
 zeolite_prior_file: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/priors/zeolite_priors_20221118_25419.pkl
 osda_prior_map: /home/mrx/projects/binding_energies/ntk_matrix_completion/configs/osda_weights_structural_v2.json
@@ -27,6 +28,7 @@ zeolite_prior_map: /home/mrx/projects/binding_energies/ntk_matrix_completion/con
 other_prior_to_concat: null
 prior_method: CustomOSDAVector
 prior_treatment: 2
+# 1 struct, 2 struct and getaway, 3 struct and zeo, 4 getaway and zeo, 5 struct, getaway and zeo
 optimizer: 
   cla_opt: adam
   reg_opt: adam

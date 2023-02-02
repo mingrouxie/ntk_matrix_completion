@@ -1,0 +1,47 @@
+output: /home/mrx/projects/binding_energies/ntk_matrix_completion/output/2023_multitask/multitask
+config: /home/mrx/projects/binding_energies/ntk_matrix_completion/run_scripts/expts/230123_mt_1.yml
+tune: true
+gpu: false
+split_type: 3
+energy_type: 2
+input_scaler: standard
+energy_scaler: minmax
+load_scaler: minmax
+ignore_train: false
+seed: 12934
+sieved_file: null
+# truth: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_3/truth.csv
+# mask: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_3/mask.csv
+# osda_prior_file: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/priors/testing_3/osda_priors_0.pkl
+# truth: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_4/truth.csv
+# mask: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_4/mask.csv
+# truth: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_4/truth_nbonly.csv
+# mask: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_4/mask_nbonly.csv
+# truth: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_5/truth.csv
+# mask: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/testing_5/mask.csv
+truth: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/221216/iza_all/zero/20221217_5208_truth.csv
+mask: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/truths/221216/iza_all/zero/20221217_5208_mask.csv
+osda_prior_file: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/priors/221216/iza_all/osda_priors_all.pkl
+zeolite_prior_file: /home/mrx/projects/binding_energies/ntk_matrix_completion/data/priors/zeolite_priors_20221118_25419.pkl
+osda_prior_map: /home/mrx/projects/binding_energies/ntk_matrix_completion/configs/osda_weights_structural_v2.json
+zeolite_prior_map: /home/mrx/projects/binding_energies/ntk_matrix_completion/configs/zeolite_weights_structural_extendable.json
+other_prior_to_concat: null
+prior_method: CustomOSDAandZeoliteAsRows
+prior_treatment: 3
+# 1 struct, 2 struct and getaway, 3 struct and zeo, 4 getaway and zeo, 5 struct, getaway and zeo
+optimizer: 
+  cla_opt: adam
+  reg_opt: adam
+scheduler: false
+# debug
+epochs: 1000
+device: cpu
+batch_size: 256
+model: multitasknnsep
+l_sizes: '[(35, 18), (35, 18)]'
+# l_sizes: '[(35,16,8,4), (35,16,8,4)]'
+# l_sizes: '[(290,16,8,4), (290,16,8,4)]'
+# model: multitasknncorr
+# l_sizes: '[(35, 18), (18, 1), (18, 1)]'
+# l_sizes: '[(290,16), (16,8,4), (16,8,4)]'
+# debug please change afterwards
