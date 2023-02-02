@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 import pdb
 import math
+import argparse
+import torch
 
 from pandas.core.frame import DataFrame
 import matplotlib.pyplot as plt
@@ -312,3 +314,244 @@ def examine_osda_feature_causes(prediction_ntk):
         }
     print(feature_to_regression)
     print("all done")
+
+sys.path.append("/home/mrx")
+from general.utils.figures import single_scatter, single_hist, format_axs, single_line
+
+def plot_energy_dist(y, pred, save=False):
+    '''Plot distribution of energies'''
+    fig, axs = plt.subplots(figsize=(10,5))
+    colors = ['#00429d', '#93003a']
+    axs.hist(y, bins=100, label='Truth', color=colors[0], alpha=0.7)
+    axs.hist(pred, bins=100, label='Prediction', color=colors[1], alpha=0.7)
+    fig.legend(fontsize=15, loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=2, frameon=False)
+    axs = format_axs(axs, 30, 30, 3, "Binding energy (kJ/ mol Si)", "Count", 30, 30)
+    
+    if save:
+        fig.savefig(save, dpi=300, bbox_inches = "tight")
+    
+
+# Plot predicted energy distribution versus actual (only for binding)
+def plot_load_dist(y, pred, save=False):
+    '''Plot distribution of normalized loadings'''
+    fig, axs = plt.subplots(figsize=(10,5))
+    colors = ['#00429d', '#93003a']
+    axs.hist(y.values, bins=100, label='Truth', color=colors[0], alpha=0.7)
+    axs.hist(pred.values, bins=100, label='Prediction', color=colors[1], alpha=0.7)
+    fig.legend(fontsize=15, loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=2, frameon=False)
+    axs = format_axs(axs, 30, 30, 3, f"Normalized loading", "Count", 30, 30)
+
+    if save:
+        fig.savefig(save, dpi=300, bbox_inches = "tight")
+
+
+def plot_energy_parity(y, pred, save=False):
+    '''Plot parity plot for energy'''
+    fig, axs = single_scatter(
+        x=y,
+        y=pred,
+        xlabel='Truth (kJ/mol Si)', 
+        ylabel='Prediction (kJ/mol Si)', 
+        limits={
+            "x": [min(y), 5],
+            "y": [min(pred), 5]
+        }, 
+        colorbar="Count", tight_layout=True, savefig=None
+    )
+    
+    if save:
+        fig.savefig(save, dpi=300, bbox_inches = "tight")
+
+
+def plot_load_parity(y, pred, save=False):
+    '''Plot parity plot for normalized loading'''
+    fig, axs = single_scatter(
+        x=y,
+        y=pred,
+        xlabel='Truth', 
+        ylabel='Prediction', 
+        # limits={
+        #     "x": [min(y), 5],
+        #     "y": [min(pred), 5]
+        # }, 
+        colorbar="Count", tight_layout=True, savefig=None
+    )
+    
+    if save:
+        fig.savefig(save, dpi=300, bbox_inches = "tight")
+
+
+def plot_heatmap(y, pred, index="SMILES", columns="Zeolite", values="Binding (SiO2)", save=False):
+    '''Plots heatmap of values. Assumes that data can pivot into a full matrix'''
+    y_mat = y.reset_index().pivot(values=values, index=index, columns=columns)
+    pred_mat = pred.reset_index().pivot(values=values, index=index, columns=columns)
+
+    fig, axs = plt.subplots(1, 2, figsize=(5,10), sharex=True, sharey=True)
+    cmaps = 'inferno'
+    pcm = axs[0].pcolormesh(y_mat, cmap=cmaps, vmin=-25, vmax=0)
+    pcm = axs[1].pcolormesh(pred_mat, cmap=cmaps, vmin=-25, vmax=0)
+    cb = fig.colorbar(pcm, ax=axs[:], shrink=0.6, )
+    cb.set_label("Binding energy (kJ/mol Si)", size=20)
+    cb.ax.tick_params(labelsize=20)
+    ylabels = ['OSDA', None]
+    for idx, ax in enumerate(axs):
+        ax = format_axs(ax, 20, 20, 1, "Zeolite", ylabels[idx], 20, 20)
+
+    if save:
+        fig.savefig(save, dpi=300, bbox_inches = "tight")
+
+
+def plot_topktopk(y, pred, mask, index="SMILES", columns="Zeolite", values="Binding (SiO2)", save=False):
+    '''Plot top k in top k accuracy. Assumes that data can pivot into a full matrix'''
+    y_mat = y.reset_index().pivot(values=values, index=index, columns=columns)
+    pred_mat = pred.reset_index().pivot(values=values, index=index, columns=columns)
+
+    metrics = calculate_metrics(
+        y_mat, 
+        pred_mat, 
+        mask, 
+        verbose=True,
+        method="top_k_in_top_k",
+        to_plot=False,
+        top_x_accuracy=y_mat.shape[1]
+        )
+
+    fig, axs = plt.subplots(figsize=(5,5))
+    axs.plot(range(1,209), metrics['top_x_accuracy'], 'k')
+    axs = format_axs(axs, 20, 20, 2, "k", "Top k in top k accuracy", 20, 20)
+    
+    if save:
+        fig.savefig(save, dpi=300, bbox_inches = "tight")
+    
+def plot_errors(y, pred, mask, col, save=False):
+    '''Plot distribution of errors'''
+    err_test = y[mask.exists==1][col] - pred[mask.exists==1][col]
+    err_test_unmasked = y[col] - pred[col]
+    print("maximum error", err_test.max(), err_test_unmasked.max())
+
+    fig, axs = plt.subplots(2, 2, figsize=(18,10))
+    colors = ['#00429d', '#93003a']
+    axs[0,1].hist(err_test,bins=100, color=colors[0])
+    axs[1,1].hist(err_test_unmasked,bins=100, color=colors[0]);
+    for i in [0,1]:
+        for j in [0,1]:
+            ax = format_axs(axs[i,j], 20, 20, 2, col, 'Count', 20, 20)
+    if save:
+        fig.savefig(save, dpi=300, bbox_inches = "tight")
+
+
+def plot_loss_curves(train_losses, val_losses, save=False):
+    '''training versus test curve'''
+    # there is another thing called the learning curve where the x-axis is the number of data points in the train dataset
+
+    fig, axs = plt.subplots(figsize=(10,10))
+    colors = ['#00429d', '#93003a']
+    axs.plot(train_losses, label='Train loss', color=colors[0])
+    axs.plot(val_losses, label='Validation loss', color=colors[1])
+    axs = format_axs(
+        axs, 30, 30, 3, "Epoch", "Loss", 30, 30
+    )
+    fig.legend(loc="upper right", borderaxespad=3, fontsize=20)
+    if save:
+        fig.savefig(save, dpi=300, bbox_inches = "tight")
+
+
+
+# FEATURE IMPORTANCE TODO
+
+# COMPUTE TEMPLATING ENERGY AFTER PREDICTING TODO
+
+# THAT'S RIGHT, DO WE WANT TO CHECK ON THE SCIENCE PAPER DATASET AND ITS TEMPLATING ENERGY TODO
+
+# ALSO THE ZACH+SCIENCE DATASET, IF POSSIBLE TODO 
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="analysis_utilities")
+    parser.add_argument("--config", help="Config file", required=True)
+    args = parser.parse_args()
+    kwargs = args.__dict__
+    op = kwargs['config']
+
+    train_indices = pd.read_csv(os.path.join(op, "pred_train_indices.csv"), index_col=0)
+    train_mask = pd.read_csv(os.path.join(op, "pred_train_mask.csv"), index_col=0).set_index(pd.MultiIndex.from_frame(train_indices))
+    train_y = pd.read_csv(os.path.join(op, "pred_train_ys.csv"), index_col=0).set_index(pd.MultiIndex.from_frame(train_indices))
+    train_pred = pd.read_csv(os.path.join(op, "pred_train_y_preds.csv"), index_col=0).set_index(pd.MultiIndex.from_frame(train_indices))
+
+    test_indices = pd.read_csv(os.path.join(op, "pred_test_indices.csv"), index_col=0)
+    test_mask = pd.read_csv(os.path.join(op, "pred_test_mask.csv"), index_col=0).set_index(pd.MultiIndex.from_frame(test_indices))
+    test_y = pd.read_csv(os.path.join(op, "pred_test_ys.csv"), index_col=0).set_index(pd.MultiIndex.from_frame(test_indices))
+    test_pred = pd.read_csv(os.path.join(op, "pred_test_y_preds.csv"), index_col=0).set_index(pd.MultiIndex.from_frame(test_indices))
+    model = torch.load(os.path.join(op, "model.pt"))
+
+    # TODO: check dimensions lol for the nb what is it
+
+    # TODO: what about training set prediction >.< can we predict that too
+
+    def make_plots(y, pred, mask, label="test"):
+        # BINDING ONLY ENERGY
+        plot_energy_dist(y.loc[mask.exists==1]['Binding (SiO2)'], pred.loc[mask.exists==1]['Binding (SiO2)'], save=os.path.join(op, f"{label}_e_dist.png"))
+        plot_energy_parity(y.loc[mask.exists==1]['Binding (SiO2)'], pred.loc[mask.exists==1]['Binding (SiO2)'], save=os.path.join(op, f"{label}_e_par.png"))
+
+        # BINDING ONLY LOADING
+        plot_load_dist(y.loc[mask.exists==1]['loading_norm'], pred.loc[mask.exists==1]['loading_norm'], save=os.path.join(op, f"{label}_l_dist_b.png"))
+        plot_load_parity(y.loc[mask.exists==1]['loading_norm'], pred.loc[mask.exists==1]['loading_norm'], save=os.path.join(op, f"{label}_l_par_b.png"))
+
+        # NON BINDING ONLY LOADING
+        plot_load_dist(y.loc[mask.exists!=1]['loading_norm'], pred.loc[mask.exists!=1]['loading_norm'], save=os.path.join(op, f"{label}_l_dist_nb.png"))
+        plot_load_parity(y.loc[mask.exists!=1]['loading_norm'], pred.loc[mask.exists!=1]['loading_norm'], save=os.path.join(op, f"{label}_l_par_nb.png"))
+
+        # HEATMAP
+        plot_heatmap(y, pred, values="Binding (SiO2)", save=os.path.join(op, f"{label}_heatmap_e.png"))
+        plot_heatmap(y, pred, values="loading_norm", save=os.path.join(op, f"{label}_heatmap_l.png"))
+        plot_heatmap(
+            y.loc[mask.exists==1].loc[mask.exists==1]['loading_norm'], 
+            pred.loc[mask.exists==1].loc[mask.exists==1]['loading_norm'], 
+            values="loading_norm", save=os.path.join(op, f"{label}_heatmap_l_b.png"))
+
+        # ERRORS
+        plot_errors(y, pred, mask, col="Binding (SiO2)", save=os.path.join(op, f"{label}_err_e.png"))
+        plot_errors(y, pred, mask, col="loading_norm", save=os.path.join(op, f"{label}_err_l.png"))
+
+
+    make_plots(train_y, train_pred, train_mask, label="train")
+    make_plots(test_y, test_pred, test_mask, label="test")
+
+    # LOSS CURVES
+    plot_loss_curves(model["epoch_losses"], model["val_losses"])
+
+    print("Analysis finished")
+
+# NOTES ON OUTPUT FILES
+
+# # -rw-rw-r-- 1 mrx mrx  26259538 Jan 31 18:14 X_test_scaled.pkl
+# multiindex SMILEs then Zeolite, cols are 0 to whatever (34 in this case)
+# # -rw-rw-r-- 1 mrx mrx 242678898 Jan 31 18:14 X_train_scaled.pkl
+# multiindex SMILEs then Zeolite, cols are 0 to whatever (34 in this case)
+# # -rw-rw-r-- 1 mrx mrx      1637 Jan 31 18:08 args.yaml
+# args.keys() = dict_keys(['batch_size', 'config', 'device', 'energy_scaler', 'energy_type', 'epochs', 'gpu', 'ignore_train', 'input_scaler', 'l_sizes', 'load_scaler', 'mask', 'model', 'optimizer', 'osda_prior_file', 'osda_prior_map', 'other_prior_to_concat', 'output', 'prior_method', 'prior_treatment', 'scheduler', 'seed', 'sieved_file', 'split_type', 'truth', 'tune', 'zeolite_prior_file', 'zeolite_prior_map'])
+# # -rw-rw-r-- 1 mrx mrx      1429 Jan 31 18:13 input_scaling.json
+# scalar_type
+# mean in []
+# var in []
+# # -rw-rw-r-- 1 mrx mrx   1531419 Jan 31 18:14 mask_test.pkl
+# SMILEs is index, col is Zeolite and exists
+# # -rw-rw-r-- 1 mrx mrx  14359274 Jan 31 18:14 mask_train.pkl
+# SMILEs is index, col is Zeolite and exists
+# # -rw-rw-r-- 1 mrx mrx        85 Jan 31 18:13 truth_energy_scaling.json
+# scaler_type is str
+# scale is in []
+# min is in []
+# # -rw-rw-r-- 1 mrx mrx        72 Jan 31 18:13 truth_load_scaling.json
+# # -rw-rw-r-- 1 mrx mrx   1867547 Jan 31 18:13 truth_test_scaled.pkl
+# multiindex SMILEs then Zeolite, cols are Binding (SiO2) and loading_norm
+# # -rw-rw-r-- 1 mrx mrx  17561137 Jan 31 18:13 truth_train_scaled.pkl
+# multiindex SMILEs then Zeolite, cols are Binding (SiO2) and loading_norm
+# # -rw-rw-r-- 1 mrx mrx  14508 Feb  1 16:05 test_indices.csv
+# SMILES and Zeolite
+# # -rw-rw-r-- 1 mrx mrx   1898 Feb  1 16:05 test_mask.csv
+# exists
+# # -rw-rw-r-- 1 mrx mrx   6282 Feb  1 16:05 test_y_preds.csv
+# Binding (SiO2) and loading_norm
+# # -rw-rw-r-- 1 mrx mrx   4133 Feb  1 16:05 test_ys.csv
+# Binding (SiO2) and loading_norm
