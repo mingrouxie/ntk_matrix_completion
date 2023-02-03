@@ -235,14 +235,17 @@ def scale_data(scaler_type: str, train: pd.DataFrame, test: pd.DataFrame, output
         if scaler_type == "standard":
             gts_dict = {
                 "scaler_type": "standard",
-                "mean": scaler.mean_.tolist(),
+                "mean": scaler.mean_.tolist(), # json cannot save array
                 "var": scaler.var_.tolist(),
             }
         elif scaler_type == "minmax":
             gts_dict = {
                 "scaler_type": "minmax", 
                 "scale": scaler.scale_.tolist(), 
-                "min": scaler.min_.tolist()}
+                "min": scaler.min_.tolist(),
+                "data_min": scaler.data_min_.tolist(),
+                "data_max": scaler.data_max_.tolist(),
+                }
         else:
             print("[utilities/scale_data] Scaler type not known")
         filename = os.path.join(output_folder, data_type+"_scaling.json")

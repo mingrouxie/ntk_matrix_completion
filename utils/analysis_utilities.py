@@ -32,6 +32,8 @@ sys.path.insert(
     1, os.path.join(str(pathlib.Path(__file__).parent.absolute().parent), "graphical")
 )
 
+sys.path.append("/home/mrx")
+from general.utils.figures import single_scatter, single_hist, format_axs, single_line
 
 def plot_top_k_curves(top_accuracies, method):
     fig, axs = plt.subplots(figsize=(10, 10))
@@ -316,8 +318,6 @@ def examine_osda_feature_causes(prediction_ntk):
     print(feature_to_regression)
     print("all done")
 
-sys.path.append("/home/mrx")
-from general.utils.figures import single_scatter, single_hist, format_axs, single_line
 
 def plot_energy_dist(y, pred, save=False):
     '''Plot distribution of energies'''
@@ -330,6 +330,7 @@ def plot_energy_dist(y, pred, save=False):
     
     if save:
         fig.savefig(save, dpi=300, bbox_inches = "tight")
+    plt.close()
     
 
 # Plot predicted energy distribution versus actual (only for binding)
@@ -344,62 +345,73 @@ def plot_load_dist(y, pred, save=False):
 
     if save:
         fig.savefig(save, dpi=300, bbox_inches = "tight")
+    plt.close()
 
 
 def plot_energy_parity(y, pred, save=False):
     '''Plot parity plot for energy'''
+    min_e = min(min(y), min(pred))
+    max_e = max(max(y), max(pred))
     fig, axs = single_scatter(
         x=y,
         y=pred,
         xlabel='Truth (kJ/mol Si)', 
         ylabel='Prediction (kJ/mol Si)', 
         limits={
-            "x": [min(y), 5],
-            "y": [min(pred), 5]
+            "x": [min_e, max_e],
+            "y": [min_e, max_e]
         }, 
         colorbar="Count", tight_layout=True, savefig=None
     )
     
     if save:
         fig.savefig(save, dpi=300, bbox_inches = "tight")
+    plt.close()
 
 
 def plot_load_parity(y, pred, save=False):
     '''Plot parity plot for normalized loading'''
+    min_l = min(min(y), min(pred))
+    max_l = max(max(y), max(pred))
     fig, axs = single_scatter(
         x=y,
         y=pred,
         xlabel='Truth', 
         ylabel='Prediction', 
-        # limits={
-        #     "x": [min(y), 5],
-        #     "y": [min(pred), 5]
-        # }, 
+        limits={
+            "x": [min_l, max_l],
+            "y": [min_l, max_l]
+        }, 
         colorbar="Count", tight_layout=True, savefig=None
     )
     
     if save:
         fig.savefig(save, dpi=300, bbox_inches = "tight")
+    plt.close()
 
 
 def plot_heatmap(y, pred, index="SMILES", columns="Zeolite", values="Binding (SiO2)", save=False):
     '''Plots heatmap of values. Assumes that data can pivot into a full matrix'''
     y_mat = y.reset_index().pivot(values=values, index=index, columns=columns)
     pred_mat = pred.reset_index().pivot(values=values, index=index, columns=columns)
+    breakpoint()
+    vmin = min(y[values].min(), y[values].min())
+    vmax = max(pred[values].max(), pred[values].max())
 
     fig, axs = plt.subplots(1, 2, figsize=(5,10), sharex=True, sharey=True)
     cmaps = 'inferno'
-    pcm = axs[0].pcolormesh(y_mat, cmap=cmaps, vmin=-25, vmax=0)
-    pcm = axs[1].pcolormesh(pred_mat, cmap=cmaps, vmin=-25, vmax=0)
+    pcm = axs[0].pcolormesh(y_mat, cmap=cmaps, vmin=vmin, vmax=vmax)
+    pcm = axs[1].pcolormesh(pred_mat, cmap=cmaps, vmin=vmin, vmax=vmax)
     cb = fig.colorbar(pcm, ax=axs[:], shrink=0.6, )
-    cb.set_label("Binding energy (kJ/mol Si)", size=20)
+    cb.set_label(values, size=20)
     cb.ax.tick_params(labelsize=20)
-    ylabels = ['OSDA', None]
+    ylabels = [index, None]
     for idx, ax in enumerate(axs):
-        ax = format_axs(ax, 20, 20, 1, "Zeolite", ylabels[idx], 20, 20)
+        ax = format_axs(ax, 20, 20, 1, columns, ylabels[idx], 20, 20)
 
     if save:
         fig.savefig(save, dpi=300, bbox_inches = "tight")
+    plt.close()
 
 
 def plot_topktopk(y, pred, mask, index="SMILES", columns="Zeolite", values="Binding (SiO2)", save=False):
@@ -423,6 +435,7 @@ def plot_topktopk(y, pred, mask, index="SMILES", columns="Zeolite", values="Bind
     
     if save:
         fig.savefig(save, dpi=300, bbox_inches = "tight")
+    plt.close()
     
 def plot_errors(y, pred, mask, col, save=False):
     '''Plot distribution of errors'''
@@ -430,15 +443,15 @@ def plot_errors(y, pred, mask, col, save=False):
     err_test_unmasked = y[col] - pred[col]
     print("maximum error", err_test.max(), err_test_unmasked.max())
 
-    fig, axs = plt.subplots(2, 2, figsize=(18,10))
+    fig, axs = plt.subplots(2, 1, figsize=(18,10))
     colors = ['#00429d', '#93003a']
-    axs[0,1].hist(err_test,bins=100, color=colors[0])
-    axs[1,1].hist(err_test_unmasked,bins=100, color=colors[0]);
-    for i in [0,1]:
-        for j in [0,1]:
-            ax = format_axs(axs[i,j], 20, 20, 2, col, 'Count', 20, 20)
+    axs[0].hist(err_test,bins=100, color=colors[0])
+    axs[1].hist(err_test_unmasked,bins=100, color=colors[0]);
+    for idx, label in enumerate([" error (masked)", " error (unmasked)"]):
+        ax = format_axs(axs[idx], 20, 20, 2, col+label, 'Count', 20, 20)
     if save:
         fig.savefig(save, dpi=300, bbox_inches = "tight")
+    plt.close()
 
 
 def plot_loss_curves(train_losses, val_losses, save=False):
@@ -466,6 +479,52 @@ def plot_loss_curves(train_losses, val_losses, save=False):
 
 # ALSO THE ZACH+SCIENCE DATASET, IF POSSIBLE TODO 
 
+def rescale(data, scaler):
+    '''Rescale data back. TODO: check that multiple columns work'''
+    if scaler['scaler_type'] == 'minmax':
+        return data * (np.array(scaler['data_max']) - np.array(scaler['data_min'])) + np.array(scaler['data_min'])
+    elif scaler['scaler_type'] == 'standard':
+        return data * np.sqrt(np.array(scaler['std'])) + np.array(scaler['mean'])
+
+
+def make_plots(y, pred, mask, label="test", energy=True, load=True):
+    # BINDING ONLY ENERGY
+    if energy:
+        plot_energy_dist(y.loc[mask.exists==1]['Binding (SiO2)'], pred.loc[mask.exists==1]['Binding (SiO2)'], save=os.path.join(op, f"{label}_e_dist.png"))
+        plot_energy_parity(y.loc[mask.exists==1]['Binding (SiO2)'], pred.loc[mask.exists==1]['Binding (SiO2)'], save=os.path.join(op, f"{label}_e_par.png"))
+
+    # BINDING ONLY LOADING
+    if load:
+        plot_load_dist(y.loc[mask.exists==1]['loading_norm'], pred.loc[mask.exists==1]['loading_norm'], save=os.path.join(op, f"{label}_l_dist_b.png"))
+        plot_load_parity(y.loc[mask.exists==1]['loading_norm'], pred.loc[mask.exists==1]['loading_norm'], save=os.path.join(op, f"{label}_l_par_b.png"))
+
+    # NON BINDING ONLY LOADING
+    if load:
+        plot_load_dist(y.loc[mask.exists!=1]['loading_norm'], pred.loc[mask.exists!=1]['loading_norm'], save=os.path.join(op, f"{label}_l_dist_nb.png"))
+        plot_load_parity(y.loc[mask.exists!=1]['loading_norm'], pred.loc[mask.exists!=1]['loading_norm'], save=os.path.join(op, f"{label}_l_par_nb.png"))
+
+    # HEATMAP
+    if energy:
+        plot_heatmap(y, pred, values="Binding (SiO2)", save=os.path.join(op, f"{label}_heatmap_e.png"))
+        plot_heatmap(
+            y.loc[mask.exists==1], 
+            pred.loc[mask.exists==1], 
+            values="Binding (SiO2)", save=os.path.join(op, f"{label}_heatmap_e_b.png"))
+    if load:
+        plot_heatmap(y, pred, values="loading_norm", save=os.path.join(op, f"{label}_heatmap_l.png"))
+        plot_heatmap(
+            y.loc[mask.exists==1], 
+            pred.loc[mask.exists==1], 
+            values="loading_norm", save=os.path.join(op, f"{label}_heatmap_l_b.png"))
+
+    # ERRORS
+    if energy:
+        print("energy error")
+        plot_errors(y, pred, mask, col="Binding (SiO2)", save=os.path.join(op, f"{label}_err_e.png"))
+    if load:
+        print("loading error")
+        plot_errors(y, pred, mask, col="loading_norm", save=os.path.join(op, f"{label}_err_l.png"))
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="analysis_utilities")
@@ -474,6 +533,7 @@ if __name__ == '__main__':
     kwargs = args.__dict__
     op = kwargs['config']
 
+    # read files
     train_indices = pd.read_csv(os.path.join(op, "pred_train_indices.csv"), index_col=0)
     train_mask = pd.read_csv(os.path.join(op, "pred_train_mask.csv"), index_col=0).set_index(pd.MultiIndex.from_frame(train_indices))
     train_y = pd.read_csv(os.path.join(op, "pred_train_ys.csv"), index_col=0).set_index(pd.MultiIndex.from_frame(train_indices))
@@ -485,45 +545,25 @@ if __name__ == '__main__':
     test_pred = pd.read_csv(os.path.join(op, "pred_test_y_preds.csv"), index_col=0).set_index(pd.MultiIndex.from_frame(test_indices))
     model = torch.load(os.path.join(op, "model.pt"))
 
-
     # TODO scaling
-    with open(os.path.join(op, "input_scaler.json"), "r") as f:
+    with open(os.path.join(op, "input_scaling.json"), "r") as f:
         input_scaler = json.load(f)
     with open(os.path.join(op, "truth_load_scaling.json"), "r") as f:
         l_scaler = json.load(f)
     with open(os.path.join(op, "truth_energy_scaling.json"), "r") as f:
         e_scaler = json.load(f)
 
-    # TODO: check dimensions lol for the nb what is it
+    train_y["Binding (SiO2)"] = rescale(train_y["Binding (SiO2)"], e_scaler)
+    train_pred["Binding (SiO2)"] = rescale(train_pred["Binding (SiO2)"], e_scaler)
+    test_y["Binding (SiO2)"] = rescale(test_y["Binding (SiO2)"], e_scaler)
+    test_pred["Binding (SiO2)"] = rescale(test_pred["Binding (SiO2)"], e_scaler)
 
-    # TODO: what about training set prediction >.< can we predict that too
+    train_y["loading_norm"] = rescale(train_y["loading_norm"], l_scaler)
+    train_pred["loading_norm"] = rescale(train_pred["loading_norm"], l_scaler)
+    test_y["loading_norm"] = rescale(test_y["loading_norm"], l_scaler)
+    test_pred["loading_norm"] = rescale(test_pred["loading_norm"], l_scaler)
 
-    def make_plots(y, pred, mask, label="test"):
-        # BINDING ONLY ENERGY
-        plot_energy_dist(y.loc[mask.exists==1]['Binding (SiO2)'], pred.loc[mask.exists==1]['Binding (SiO2)'], save=os.path.join(op, f"{label}_e_dist.png"))
-        plot_energy_parity(y.loc[mask.exists==1]['Binding (SiO2)'], pred.loc[mask.exists==1]['Binding (SiO2)'], save=os.path.join(op, f"{label}_e_par.png"))
-
-        # BINDING ONLY LOADING
-        plot_load_dist(y.loc[mask.exists==1]['loading_norm'], pred.loc[mask.exists==1]['loading_norm'], save=os.path.join(op, f"{label}_l_dist_b.png"))
-        plot_load_parity(y.loc[mask.exists==1]['loading_norm'], pred.loc[mask.exists==1]['loading_norm'], save=os.path.join(op, f"{label}_l_par_b.png"))
-
-        # NON BINDING ONLY LOADING
-        plot_load_dist(y.loc[mask.exists!=1]['loading_norm'], pred.loc[mask.exists!=1]['loading_norm'], save=os.path.join(op, f"{label}_l_dist_nb.png"))
-        plot_load_parity(y.loc[mask.exists!=1]['loading_norm'], pred.loc[mask.exists!=1]['loading_norm'], save=os.path.join(op, f"{label}_l_par_nb.png"))
-
-        # HEATMAP
-        plot_heatmap(y, pred, values="Binding (SiO2)", save=os.path.join(op, f"{label}_heatmap_e.png"))
-        plot_heatmap(y, pred, values="loading_norm", save=os.path.join(op, f"{label}_heatmap_l.png"))
-        plot_heatmap(
-            y.loc[mask.exists==1].loc[mask.exists==1]['loading_norm'], 
-            pred.loc[mask.exists==1].loc[mask.exists==1]['loading_norm'], 
-            values="loading_norm", save=os.path.join(op, f"{label}_heatmap_l_b.png"))
-
-        # ERRORS
-        plot_errors(y, pred, mask, col="Binding (SiO2)", save=os.path.join(op, f"{label}_err_e.png"))
-        plot_errors(y, pred, mask, col="loading_norm", save=os.path.join(op, f"{label}_err_l.png"))
-
-
+    # plot
     make_plots(train_y, train_pred, train_mask, label="train")
     make_plots(test_y, test_pred, test_mask, label="test")
 
@@ -532,36 +572,3 @@ if __name__ == '__main__':
 
     print("Analysis finished")
 
-# NOTES ON OUTPUT FILES
-
-# # -rw-rw-r-- 1 mrx mrx  26259538 Jan 31 18:14 X_test_scaled.pkl
-# multiindex SMILEs then Zeolite, cols are 0 to whatever (34 in this case)
-# # -rw-rw-r-- 1 mrx mrx 242678898 Jan 31 18:14 X_train_scaled.pkl
-# multiindex SMILEs then Zeolite, cols are 0 to whatever (34 in this case)
-# # -rw-rw-r-- 1 mrx mrx      1637 Jan 31 18:08 args.yaml
-# args.keys() = dict_keys(['batch_size', 'config', 'device', 'energy_scaler', 'energy_type', 'epochs', 'gpu', 'ignore_train', 'input_scaler', 'l_sizes', 'load_scaler', 'mask', 'model', 'optimizer', 'osda_prior_file', 'osda_prior_map', 'other_prior_to_concat', 'output', 'prior_method', 'prior_treatment', 'scheduler', 'seed', 'sieved_file', 'split_type', 'truth', 'tune', 'zeolite_prior_file', 'zeolite_prior_map'])
-# # -rw-rw-r-- 1 mrx mrx      1429 Jan 31 18:13 input_scaling.json
-# scalar_type
-# mean in []
-# var in []
-# # -rw-rw-r-- 1 mrx mrx   1531419 Jan 31 18:14 mask_test.pkl
-# SMILEs is index, col is Zeolite and exists
-# # -rw-rw-r-- 1 mrx mrx  14359274 Jan 31 18:14 mask_train.pkl
-# SMILEs is index, col is Zeolite and exists
-# # -rw-rw-r-- 1 mrx mrx        85 Jan 31 18:13 truth_energy_scaling.json
-# scaler_type is str
-# scale is in []
-# min is in []
-# # -rw-rw-r-- 1 mrx mrx        72 Jan 31 18:13 truth_load_scaling.json
-# # -rw-rw-r-- 1 mrx mrx   1867547 Jan 31 18:13 truth_test_scaled.pkl
-# multiindex SMILEs then Zeolite, cols are Binding (SiO2) and loading_norm
-# # -rw-rw-r-- 1 mrx mrx  17561137 Jan 31 18:13 truth_train_scaled.pkl
-# multiindex SMILEs then Zeolite, cols are Binding (SiO2) and loading_norm
-# # -rw-rw-r-- 1 mrx mrx  14508 Feb  1 16:05 test_indices.csv
-# SMILES and Zeolite
-# # -rw-rw-r-- 1 mrx mrx   1898 Feb  1 16:05 test_mask.csv
-# exists
-# # -rw-rw-r-- 1 mrx mrx   6282 Feb  1 16:05 test_y_preds.csv
-# Binding (SiO2) and loading_norm
-# # -rw-rw-r-- 1 mrx mrx   4133 Feb  1 16:05 test_ys.csv
-# Binding (SiO2) and loading_norm

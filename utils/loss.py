@@ -32,7 +32,7 @@ def classifier_loss(y, pred):
     # proba = pred.softmax(dim=1)
     # return nn.CrossEntropyLoss(y, proba)
 
-def regressor_loss(y, pred, mask):
+def mse_loss(y, pred, mask):
     '''Masked regression loss for binding energies'''
     if sum(mask) == 0:
         # all non-binding entries
@@ -48,6 +48,17 @@ def regressor_loss(y, pred, mask):
 
     return loss(y_masked, pred_masked)
 
+def cross_entropy_loss(y, pred):
+    y_rs = y.reshape(y.shape[0], 1) # TODO: hardcoded
+    proba = pred.softmax(dim=1)
+    loss = nn.CrossEntropyLoss()
+
+    if np.isnan(loss(y_rs, proba).detach().numpy()):
+        print("[classifier] nan present in loss")
+
+    return loss(y_rs, proba)
+
+
 def multitask_loss(y, y_preds, mask):
     '''
     Args:
@@ -56,8 +67,9 @@ def multitask_loss(y, y_preds, mask):
         mask: 1D vector
 
     Returns:
-        "classification" loss, regression loss
+        classfication loss, regression loss
     '''
-    c_loss = classifier_loss(y[:,0], y_preds[0])
-    r_loss = regressor_loss(y[:,1], y_preds[1], mask)
+    # c_loss = classifier_loss(y[:,0], y_preds[0])
+    c_loss = cross_entropy_loss(y[:,0], y_preds[0])
+    r_loss = mse_loss(y[:,1], y_preds[1], mask)
     return c_loss, r_loss 
