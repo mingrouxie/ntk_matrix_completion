@@ -12,9 +12,9 @@
 source /home/mrx/.bashrc
 source /home/mrx/bin/miniconda3/bin/activate /home/mrx/bin/miniconda3/envs/ntk
 
-ROOT="/home/mrx/projects/binding_energies"
+ROOT="/home/mrx/projects/affinity"
 SRC="${ROOT}/ntk_matrix_completion"
-LOGS="${ROOT}/logs/23_mt"
+OUTPUT="/pool001/mrx/projects/affinity/ntk_matrix_completion/output"
 
 echo 'Experiment with multitaskcorr and prior_treatment: 3, structural features'
 
