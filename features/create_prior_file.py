@@ -8,6 +8,7 @@ from sklearn.preprocessing import normalize, OneHotEncoder
 import time
 import argparse
 import sys
+import json
 from rdkit import Chem
 
 from ntk_matrix_completion.utils.path_constants import (
@@ -29,6 +30,9 @@ GRP_NAME = "zeolite"
 
 
 def get_osda_features(kwargs):
+    if not kwargs["features"]:
+        raise KeyError("Features must be specified for molecules")
+
     if kwargs["truth_file"]:
         # this is hardcoded to the kind of truth file that is created in utils/create_truth.py
         truth = pd.read_csv(kwargs["truth_file"])
@@ -171,7 +175,8 @@ def get_fw_features(kwargs):
         fws = Framework.objects.filter(
             prototype__parentjob__config__name__in=kwargs["fws_config"]
         )
-    if 'ase_db_parse' in kwargs["fws_config"]:
+    #TODO: how fws_config is used is kind of dodgy
+    if kwargs["fws_config"] and 'ase_db_parse' in kwargs["fws_config"]:
         all_crys = Crystal.objects.filter(id__in=fws.values_list("prototype"))
     else:
         crys = Crystal.objects.filter(id__in=fws.values_list("prototype"))
@@ -213,19 +218,26 @@ def get_fw_features(kwargs):
         }
     data["more"] = data.crystal.apply(get_more_params)
     data = pd.concat([data.drop(["more"], axis=1), data.more.apply(pd.Series)], axis=1)
+
+    # extract all the features hidden inside details
     data = pd.concat(
         [data.drop(["details"], axis=1), data.details.apply(pd.Series)], axis=1
     )
+
     if 'volume' in data.columns:
         data["num_atoms_per_vol"] = data.num_atoms.divide(data.volume)
+
     data = data.set_index(["fw", "crystal"])
-    data = data[[x for x in data.columns.tolist() if x in kwargs["features"]]]
+
+    if kwargs["features"]:
+        data = data[[x for x in data.columns.tolist() if x in kwargs["features"]]]
+    
     data = data.reset_index().set_index("fw")
     # data.to_hdf(kwargs["fws_file"], key="zeolite_priors")
 
     # rename some stuff
     data = data.rename(columns={'density': 'framework_density'})
-    
+
     data.to_pickle(kwargs["fws_file"])
     data.to_csv(kwargs["fws_file"].split(".")[0]+".csv")
     return data
@@ -286,6 +298,12 @@ def preprocess(input):
     kwargs.update(input)
     if kwargs["exc"]:
         kwargs["exc"] = MOLSET_EXCLUSIONS[kwargs["exc"] - 1]
+    if kwargs["ik_file"]:
+        with open(kwargs["ik_file"], "r") as f:
+            kwargs["inchikeys"] = json.load(f)
+    if kwargs["fws_file"]:
+        with open(kwargs["fws_file"], "r") as f:
+            kwargs["fws"] = json.load(f)
     return kwargs
 
 
@@ -311,13 +329,19 @@ if __name__ == "__main__":
         dest="zeolite",
     )
     parser.add_argument(
-        "--features", help="Desired features", type=str, nargs="+", required=True
+        "--features", help="Desired features. Optional for zeolites, will fail if not provided for molecules", type=str, nargs="+" #, required=True
     )
     parser.add_argument(
         "--inchikeys",
         type=str,
         nargs="+",
         help="InchiKeys of desired OSDAs",
+        default=None,
+    )
+    parser.add_argument(
+        "--ik_file",
+        type=str,
+        help="Path to JSON file containing a list of inchikeys",
         default=None,
     )
     parser.add_argument(
@@ -328,6 +352,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--fws", type=str, nargs="+", help="Names of desired frameworks", default=None
+    )
+    parser.add_argument(
+        "--fws_file", type=str, help="Path to JSON file containing a list of framework names", default=None
     )
     parser.add_argument(
         "--fws_config",
