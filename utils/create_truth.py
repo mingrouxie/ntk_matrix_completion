@@ -113,7 +113,7 @@ def main(kwargs):
     # treatment for failed
     truth.loc[(truth["bindingatoms"].isna()),"bindingatoms"] = 10  # again, arbitrary
 
-    # treatment for all
+    # treatment for all non-binding TODO: need to make it SOMETHING else at the end
     truth.loc[truth["bindingatoms"]==10][["bindingatoms", "bindingosda", "bindingosdaatoms"]] = 10
 
     print("[main] truth size before deduplication", truth.shape)
@@ -137,17 +137,31 @@ def main(kwargs):
     mask.loc[mask["Binding (SiO2)"].gt(0), "exists"] = 0
     mask = mask.reset_index()[["SMILES", "Zeolite", "exists", "InchiKey"]]
     # breakpoint() # is it a problem w the non binding
+
     # non-binding treatment
     if kwargs["nb"]:
-        # TODO: drops empty ones so cannot use in hypothetical space
-        # fill all NaN entries, then select the non-binding ones
-        truth.loc[truth["Binding (SiO2)"].gt(0), "Binding (SiO2)"] = nan
-        be = fill_nb_parallel(
-            truth, "Binding (SiO2)", kwargs["index"], kwargs["columns"], kwargs
-        )
+        print("[main] Applying NB treatment:", kwargs['nb'])
+        print('[main] Note that NB treatment drops rows that have empty entries, so cannot be used in the hypothetical space. Proceed with caution')
+        print("[main] Note that the same KIND of binding treatment is applied to both loading and energy for the moment")
+
+        # First, treat the loading
+        truth.loc[truth['Binding (SiO2)'].gt(0), "Loading"] = nan
+        truth['Loading'] = fill_nb_parallel(truth, "Loading", kwargs["index"], kwargs["columns"], kwargs)
+
+        # Then, treat all the energies
+        e_cols = ["Binding (SiO2)", "Binding (OSDA)", "Directivity (SiO2)", "Competition (SiO2)", "Templating"]
+        energies = []
+        for col in e_cols:
+            truth.loc[truth[col].gt(0), col] = nan    
+            energies.append(fill_nb_parallel(
+                truth, col, kwargs["index"], kwargs["columns"], kwargs
+            ))
+        energies = pd.concat(energies, axis=1)
+
+
         truth = truth.reset_index().rename(columns={'index': 'crystal_id'})
-        truth = truth.set_index([kwargs["columns"], kwargs["index"]]).drop(columns='Binding (SiO2)')
-        truth = pd.concat([truth, be], axis=1)
+        truth = truth.set_index([kwargs["columns"], kwargs["index"]]).drop(columns=e_cols)
+        truth = pd.concat([truth, energies], axis=1)
         mask = mask.set_index([kwargs["columns"], kwargs["index"]]).reindex(truth.index).reset_index()
         truth = truth.reset_index().set_index('crystal_id')
 
@@ -172,7 +186,7 @@ def fill_nb_single(df, values, index, columns, kwargs):
         mat = mat.dropna()
     if kwargs["nan_after_nb"] == "keep":
         print(
-            "[fill_nb_single] Filling rows with NaN post-NB treatment with hardcoded one (arbitrary)"
+            "[fill_nb_single] Filling rows with NaN post-NB treatment with hardcoded 1.0 (arbitrary)"
         )
         mat = mat.fillna(1.0)
 
@@ -191,7 +205,7 @@ def fill_nb_single(df, values, index, columns, kwargs):
 
 def fill_nb_parallel(df, values, index, columns, kwargs, chunk_size=1000):
     """
-    Fills non-binding entries in a DataFrame with specified treatment.
+    Fills non-binding entries in a specified column in a DataFrame with specified treatment.
 
     Inputs:
     - df: full DataFrame containing columns of interest: values, index, columns
@@ -202,7 +216,7 @@ def fill_nb_parallel(df, values, index, columns, kwargs, chunk_size=1000):
     - chunk_size: number of distinct rows in the resultant binding matrix
     
     Returns:
-    - DataFrame with the same ordering as df
+    - DataFrame with the same ordering as df, containing a column with binding and non-binding entries 
     """
     rows = sorted(list(set(df[index])))
     rows_chunked = [rows[i : i + chunk_size] for i in range(0, len(rows), chunk_size)]
@@ -265,7 +279,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--nb",
         type=int,
-        help="If specified, assigns pseudo value to non-binding pairs",
+        help="If specified, assigns pseudo value specified by this argument to non-binding pairs (see non_binding.py). Right now, will assign the same kind (mean, zero, etc.) to both loading and all energies, so beware",
         default=None,
     )
     parser.add_argument(
