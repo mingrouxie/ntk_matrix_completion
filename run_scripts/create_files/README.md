@@ -16,6 +16,9 @@
     - create prior files from science + zach subset truth files (which is in total a full matrix)
 - create_files_6.sh
     - create prior files from truths/testing_3, for code debugging purposes
+- create_files_7.sh
+    - re-extract data (test) after changing create_truth to resolve Loading data not extracted properly issue
+    - see matrix_completion_analysis/create_files/analysis1 for details
 - create_hyp_osda_priors.sh
     - create the prior files in data/priors/221221_hyp_osdas_omar/ and data/priors/221221_hyp_osdas_others/ and data/priors/2021_apriori_dskoda (last one is not there??)
 - create_zeolite_files.sh
