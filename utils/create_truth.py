@@ -175,7 +175,7 @@ def main(kwargs):
 
         # Finally, treat Binding (SiO2). Note fill_nb_parallel preserves order
         truth.loc[truth["Binding (SiO2)"].gt(0), "Binding (SiO2)"] = nan  
-        truth["Binding (SiO2)"] = fill_nb_parallel(truth, col, kwargs["index"], kwargs["columns"], kwargs)
+        truth["Binding (SiO2)"] = fill_nb_parallel(truth, "Binding (SiO2)", kwargs["index"], kwargs["columns"], kwargs)
 
     mask.to_csv(os.path.join(kwargs["op"], now + "_mask.csv"))
     truth.to_csv(os.path.join(kwargs["op"], now + "_truth.csv"))
@@ -349,7 +349,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--assume_nb",
-        help="If true, assumes for given set of complexes that they are non-binding if no affinities within range are found",
+        help="If true, creates all possible combinations for extracted substrates and ligands and assume non-existent pairs are non-binding",
         action="store_true",
         default=False
     )
