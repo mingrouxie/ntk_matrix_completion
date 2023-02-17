@@ -20,26 +20,28 @@ def masked_rmse(truth, pred, mask):
     # print(f"[masked_rmse] RMSE={rmse}")
     return rmse
 
-def classifier_loss(y, pred):
-    '''"Classifier" loss. Since normalized loadings are continuous instead of integer numbers, this ends up being a MSE loss'''
-    y_rs = y.reshape(y.shape[0], 1) # TODO: hardcoded
-    loss = nn.MSELoss(reduction='mean')
+# def classifier_loss(y, pred):
+#     '''"Classifier" loss. Since normalized loadings are continuous instead of integer numbers, this ends up being a MSE loss'''
+    # if y.dim() == 1:
+    #     y = y.reshape(y.shape[0], 1) # TODO: hardcoded
+#     loss = nn.MSELoss(reduction='mean')
 
-    if np.isnan(loss(y_rs, pred).detach().numpy()):
-        print("[classifier] nan present in loss")
+#     if np.isnan(loss(y, pred).detach().numpy()):
+#         print("[classifier] nan present in loss")
 
-    return loss(y_rs, pred)
-    # proba = pred.softmax(dim=1)
-    # return nn.CrossEntropyLoss(y, proba)
+#     return loss(y, pred)
+#     # proba = pred.softmax(dim=1)
+#     # return nn.CrossEntropyLoss(y, proba)
 
 def mse_loss(y, pred, mask):
     '''Masked regression loss for binding energies'''
     if sum(mask) == 0:
         # all non-binding entries
         return torch.tensor([0.0], requires_grad=True)
-        
-    y_rs = y.resize(y.shape[0], 1) # TODO: hardcoded
-    y_masked = y_rs[mask==1]
+    
+    if y.dim() == 1:
+        y = y.resize(y.shape[0], 1) # TODO: hardcoded
+    y_masked = y[mask==1]
     pred_masked = pred[mask==1]
     loss = nn.MSELoss(reduction='mean')
 
@@ -49,14 +51,15 @@ def mse_loss(y, pred, mask):
     return loss(y_masked, pred_masked)
 
 def cross_entropy_loss(y, pred):
-    y_rs = y.reshape(y.shape[0], 1) # TODO: hardcoded
+    if y.dim() == 1:
+        y = y.reshape(y.shape[0], 1) # TODO: hardcoded
     proba = pred.softmax(dim=1)
     loss = nn.CrossEntropyLoss()
 
-    if np.isnan(loss(y_rs, proba).detach().numpy()):
+    if np.isnan(loss(y, proba).detach().numpy()):
         print("[classifier] nan present in loss")
 
-    return loss(y_rs, proba)
+    return loss(y, proba)
 
 
 def multitask_loss(y, y_preds, mask):
@@ -70,6 +73,15 @@ def multitask_loss(y, y_preds, mask):
         classfication loss, regression loss
     '''
     # c_loss = classifier_loss(y[:,0], y_preds[0])
-    c_loss = cross_entropy_loss(y[:,0], y_preds[0])
-    r_loss = mse_loss(y[:,1], y_preds[1], mask)
+    # c_loss = cross_entropy_loss(y[:,0], y_preds[0])
+    # r_loss = mse_loss(y[:,1], y_preds[1], mask)
+
+    # looks like first column of truth is meant to be loading
+    # second column is energy. but old code also did be then load wth
+    # ah the models do load then be sigh
+    r_loss = mse_loss(y[:,0], y_preds[1], mask)
+    c_loss = cross_entropy_loss(y[:,1:], y_preds[0])
+
+    # but my debug file has energy first then loading oops
+    # TODO oops this doesn't allow for cross entropy and variable number of columns 
     return c_loss, r_loss 
