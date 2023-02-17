@@ -133,6 +133,7 @@ def train(model, dataloader, optimizers, device):
 
     return np.array(batch_loss).mean()
 
+
 def validate(model, dataloader, device):
     
     '''
@@ -221,9 +222,16 @@ def main(kwargs):
 
     truth = truth.set_index(["SMILES", "Zeolite"])
 
-    # ys are binding energy and normalized loading TODO: hardcoded hm
-    truth = truth[["Binding (SiO2)", "loading_norm"]]
-    truth.loading_norm = truth.loading_norm.fillna(0)
+    # ys are binding energy and normalized loading TODO: energy is hardcoded hm
+
+    print(f"[MT] Filling {truth[kwargs['load_label']].isna().values.sum()} nan points with 0")    
+    truth[kwargs["load_label"]] = truth[kwargs["load_label"]].fillna(0)
+
+    if kwargs["load_type"] == "single":
+        truth = truth[["Binding (SiO2)", kwargs["load_label"]]]
+    else:
+        truth = truth[["Binding (SiO2)", *kwargs["load_label"]]]
+
     mask = pd.read_csv(kwargs["mask"])
 
     # get features
@@ -331,16 +339,16 @@ def main(kwargs):
         truth_test_scaled['Binding (SiO2)'] = truth_test['Binding (SiO2)']
 
     if kwargs ["load_scaler"]:
-        truth_train_scaled['loading_norm'], truth_test_scaled['loading_norm'], kwargs["load_scaler_info"] = scale_data(
+        truth_train_scaled[kwargs["load_label"]], truth_test_scaled[kwargs["load_label"]], kwargs["load_scaler_info"] = scale_data(
             kwargs["energy_scaler"], 
-            pd.DataFrame(truth_train['loading_norm']), 
-            pd.DataFrame(truth_test['loading_norm']), 
+            pd.DataFrame(truth_train[kwargs["load_label"]]), 
+            pd.DataFrame(truth_test[kwargs["load_label"]]), 
             kwargs['output'], # save scaling info
             "truth_load" # scaling info filename
             )
     else:
-        truth_train_scaled['loading_norm'] = truth_train['loading_norm']
-        truth_test_scaled['loading_norm'] = truth_test['loading_norm']
+        truth_train_scaled[kwargs["load_label"]] = truth_train[kwargs["load_label"]]
+        truth_test_scaled[kwargs["load_label"]] = truth_test[kwargs["load_label"]]
 
     # save scaled truths
     truth_train_scaled.to_pickle(
@@ -403,7 +411,7 @@ def main(kwargs):
     print("Time to prepare labels and input", "{:.2f}".format(prep_time/60), "mins")
 
     # get model
-    model = kwargs['model'](l_sizes=kwargs['l_sizes'])
+    model = kwargs['model'](l_sizes=kwargs['l_sizes'], class_op_size=len(kwargs['load_label']))
     print("[MT] model:\n")
     print(model)
 
@@ -459,8 +467,8 @@ def main(kwargs):
         ys, y_preds, masks, indices = evaluate(model, dataloader, kwargs['device'])
         ys = torch.stack(ys)
         # TODO: warning here: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
-        y_preds = [torch.tensor(y_preds[0]), torch.tensor(y_preds[1])]
-        masks = torch.tensor(masks)
+        y_preds = [torch.stack(y_preds[0]), torch.stack(y_preds[1])]
+        masks = torch.stack(masks)
         load_loss, energy_loss = multitask_loss(ys, y_preds, masks)
         print(f"main: {label} set load_loss:", "{:.4f}".format(load_loss.item()), "; energy_loss:", "{:.4f}".format(energy_loss.item()))
 
@@ -468,13 +476,17 @@ def main(kwargs):
         test_mask = pd.DataFrame(masks.numpy())
         test_mask.columns = ['exists']
         test_mask.to_csv(os.path.join(kwargs["output"], f'pred_{label}_mask.csv'))
-
-        y_preds = pd.DataFrame([y.numpy() for y in y_preds]).T
-        y_preds.columns = ["Binding (SiO2)", "loading_norm"]
-        y_preds.to_csv(os.path.join(kwargs["output"], f'pred_{label}_y_preds.csv'))
-
+        y_preds = pd.DataFrame(torch.cat([y_preds[1], y_preds[0]], dim=1))
         ys = pd.DataFrame(ys.numpy())
-        ys.columns = ["Binding (SiO2)", "loading_norm"]
+
+        if kwargs["load_type"] == "single":
+            y_preds.columns = ["Binding (SiO2)", kwargs["load_label"]]
+            ys.columns = ["Binding (SiO2)", kwargs["load_label"]]
+        else:
+            y_preds.columns = ["Binding (SiO2)", *kwargs["load_label"]]
+            ys.columns = ["Binding (SiO2)", *kwargs["load_label"]]
+
+        y_preds.to_csv(os.path.join(kwargs["output"], f'pred_{label}_y_preds.csv'))
         ys.to_csv(os.path.join(kwargs["output"], f'pred_{label}_ys.csv'))
 
         indices = pd.DataFrame(indices).T
@@ -514,6 +526,12 @@ def preprocess(args):
     kwargs['l_sizes'] = literal_eval(kwargs['l_sizes'])
     kwargs["energy_type"] = Energy_Type(kwargs["energy_type"])
     kwargs["split_type"] = SplitType(kwargs["split_type"])
+    if kwargs["load_type"] == "load":
+        kwargs["load_label"] = [f"load_{i}" for i in range(0,22)]
+    elif kwargs["load_type"] == "load_norm":
+        kwargs["load_label"] = [f"load_norm_{i}" for i in range(0,49)]
+    elif kwargs["load_type"] == "single":
+        kwargs["load_label"] = "Loading"
 
     if kwargs.get("split_type", None) == "naive":
         kwargs["split_type"] = SplitType.NAIVE_SPLITS
