@@ -5,20 +5,12 @@ split_type: 3
 energy_type: 2
 input_scaler: standard
 energy_scaler: minmax
-load_scaler: minmax
+load_scaler: null
 ignore_train: false
 seed: 12934
 sieved_file: null
-truth: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/testing_3/truth.csv
-mask: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/testing_3/mask.csv
-# truth: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/testing_4/truth.csv
-# mask: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/testing_4/mask.csv
-# truth: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/testing_4/truth_nbonly.csv
-# mask: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/testing_4/mask_nbonly.csv
-# truth: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/testing_5/truth.csv
-# mask: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/testing_5/mask.csv
-# truth: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/221216/iza_all/zero/20221217_5208_truth.csv
-# mask: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/221216/iza_all/zero/20221217_5208_mask.csv
+truth: /pool001/mrx/projects/affinity/ntk_matrix_completion/truths/230212/iza_apriori_zach/2023213_212058_truth.csv
+mask: /pool001/mrx/projects/affinity/ntk_matrix_completion/truths/230212/iza_apriori_zach/2023213_212058_truth.csv
 osda_prior_file: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/priors/221216/iza_all/osda_priors_all.pkl
 zeolite_prior_file: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/priors/zeolite_priors_20221118_25419.pkl
 osda_prior_map: /home/mrx/projects/affinity/ntk_matrix_completion/configs/osda_weights_structural_v2.json
@@ -32,14 +24,16 @@ optimizer:
   reg_opt: adam
 scheduler: false
 # debug
-epochs: 5
+epochs: 1000
 device: cpu
 batch_size: 256
-model: multitasknnsep
+model: multitasknnsep_v2
 l_sizes: '[(35, 18), (35, 18)]'
 # l_sizes: '[(35,16,8,4), (35,16,8,4)]'
 # l_sizes: '[(290,16,8,4), (290,16,8,4)]'
-# model: multitasknncorr
+# model: multitasknncorr_v2
 # l_sizes: '[(35, 18), (18, 1), (18, 1)]'
 # l_sizes: '[(290,16), (16,8,4), (16,8,4)]'
 # debug please change afterwards
+load_type: load_norm 
+# load, load_norm, single
