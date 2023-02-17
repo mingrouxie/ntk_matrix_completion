@@ -253,6 +253,15 @@ def scale_data(scaler_type: str, train: pd.DataFrame, test: pd.DataFrame, output
             json.dump(gts_dict, gts)
     return train_scaled, test_scaled, gts_dict
 
+def unscale_data(scaler_dict, data):
+    # I think there's an internal method if you can set up the scaler object lol
+    if scaler_dict["scaler_type"] == 'minmax':
+        data -= scaler_dict["min"]
+        data /= scaler_dict["scale"]
+    elif scaler_dict["scaler_type"] == 'standard': 
+        data = data * np.sqrt(scaler_dict["var"]) + scaler_dict["mean"]
+    return data
+
 
 def create_iterator(split_type, all_data, metrics_mask, k_folds, seed): 
     """
@@ -320,12 +329,12 @@ class MultiTaskTensorDataset(Dataset):
     Each sample will be retrieved by indexing tensors along the first dimension (the list is indexed as is).
 
     Args:
-        *tensors (Tensor): tensors that have the same size of the first dimension.
+        *iterables (Tensor): tensors that have the same size of the first dimension.
     """
 
     def __init__(self, *iterables) -> None:
-        tensors = iterables[:-1]
-        pair_indices = iterables[-1]
+        tensors = iterables[:-1] # X, y, mask, _ 
+        pair_indices = iterables[-1] # smiles-zeolite pairs
         assert all(tensors[0].size(0) == tensor.size(0) for tensor in tensors), "Size mismatch between tensors"
         assert len(pair_indices) == tensors[0].size(0), "Size mismatch between tensor and pair indices"
         self.tensors = tensors
