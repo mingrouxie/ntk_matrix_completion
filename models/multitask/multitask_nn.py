@@ -16,34 +16,37 @@ class MultiTaskNNSep_v2(nn.Module):
         Args:
             l_sizes: An iterable of length 2. The first entry contains a list of layers sizes for the classifier, the second entry for the regressor. Note the first entry in both lists is the input feature size.
         '''
+        #TODO: I do not see any difference between this and v1 of the model except for the softmax... 
         super().__init__()
-        c_sizes, r_sizes = l_sizes
+        self.c_sizes, self.r_sizes = l_sizes
+        self.class_op_size = class_op_size
 
         # classifier
-        c_num_layers = len(c_sizes)
+        c_num_layers = len(self.c_sizes)
         c_layers_list = [
             nn.Sequential(
-                nn.Linear(c_sizes[i], c_sizes[i+1]), 
+                nn.Linear(self.c_sizes[i], self.c_sizes[i+1]), 
                 nn.ReLU()
             ) for i in range(0, c_num_layers-1) 
         ]
         self.classifier = nn.Sequential(
             *c_layers_list,
             # nn.Linear(c_sizes[-1], 1)
-            nn.Linear(c_sizes[-1], class_op_size) 
+            nn.Linear(self.c_sizes[-1], self.class_op_size),
+            nn.Softmax(dim=1) 
         )
 
         # regressor
-        r_num_layers = len(r_sizes)
+        r_num_layers = len(self.r_sizes)
         r_layers_list = [
             nn.Sequential(
-                nn.Linear(r_sizes[i], r_sizes[i+1]),
+                nn.Linear(self.r_sizes[i], self.r_sizes[i+1]),
                 nn.ReLU()
             ) for i in range(0, r_num_layers-1) 
         ]
         self.regressor = nn.Sequential(
             *r_layers_list,
-            nn.Linear(r_sizes[-1], 1)
+            nn.Linear(self.r_sizes[-1], 1)
         )
     
     def forward(self, x):
@@ -59,15 +62,16 @@ class MultiTaskNNCorr_v2(nn.Module):
             l_sizes: An iterable of length 2. The first entry contains a lsit of layer sizes for the common layers, the second entry contains a list of layers sizes for the classifier, the third entry for the regressor. Note the first entry in both lists is the input feature size.
         '''
         super().__init__()
-        com_sizes, c_sizes, r_sizes = l_sizes
+        self.com_sizes, self.c_sizes, self.r_sizes = l_sizes
+        self.class_op_size = class_op_size
         # check common output layer is same size as input layers for both classifier and regressor
-        assert c_sizes[0] == r_sizes[0]
+        assert self.c_sizes[0] == self.r_sizes[0]
 
         # common
-        com_num_layers = len(com_sizes)
+        com_num_layers = len(self.com_sizes)
         com_layers_list = [
             nn.Sequential(
-                nn.Linear(com_sizes[i], com_sizes[i+1]), 
+                nn.Linear(self.com_sizes[i], self.com_sizes[i+1]), 
                 nn.ReLU()
             ) for i in range(0, com_num_layers-1) 
         ]
@@ -77,10 +81,10 @@ class MultiTaskNNCorr_v2(nn.Module):
         )
 
         # classifier
-        c_num_layers = len(c_sizes)
+        c_num_layers = len(self.c_sizes)
         c_layers_list = [
             nn.Sequential(
-                nn.Linear(c_sizes[i], c_sizes[i+1]), 
+                nn.Linear(self.c_sizes[i], self.c_sizes[i+1]), 
                 nn.ReLU()
             ) for i in range(0, c_num_layers-1) 
         ]
@@ -88,21 +92,22 @@ class MultiTaskNNCorr_v2(nn.Module):
             self.common,
             *c_layers_list,
             # nn.Linear(c_sizes[-1], 1)
-            nn.Linear(c_sizes[-1], class_op_size) 
+            nn.Linear(self.c_sizes[-1], self.class_op_size),
+            nn.Softmax(dim=1) 
         )
 
         # regressor
-        r_num_layers = len(r_sizes)
+        r_num_layers = len(self.r_sizes)
         r_layers_list = [
             nn.Sequential(
-                nn.Linear(r_sizes[i], r_sizes[i+1]),
+                nn.Linear(self.r_sizes[i], self.r_sizes[i+1]),
                 nn.ReLU()
             ) for i in range(0, r_num_layers-1) 
         ]
         self.regressor = nn.Sequential(
             self.common,
             *r_layers_list,
-            nn.Linear(r_sizes[-1], 1)
+            nn.Linear(self.r_sizes[-1], 1)
         )
 
     def forward(self, x):
@@ -110,7 +115,7 @@ class MultiTaskNNCorr_v2(nn.Module):
 
 
 class MultiTaskNNSep(nn.Module):
-    def __init__(self, l_sizes=[(16,8,4), (16,8,4)]) -> None:
+    def __init__(self, l_sizes=[(16,8,4), (16,8,4)], class_op_size=1) -> None:
         '''
         Architecture where classifier and regressor do not share layers (essentially 2 separate NNs). Loading prediction is regression.
 
@@ -118,32 +123,33 @@ class MultiTaskNNSep(nn.Module):
             l_sizes: An iterable of length 2. The first entry contains a list of layers sizes for the classifier, the second entry for the regressor. Note the first entry in both lists is the input feature size.
         '''
         super().__init__()
-        c_sizes, r_sizes = l_sizes
+        self.c_sizes, self.r_sizes = l_sizes
+        self.class_op_size = class_op_size
 
         # classifier
-        c_num_layers = len(c_sizes)
+        c_num_layers = len(self.c_sizes)
         c_layers_list = [
             nn.Sequential(
-                nn.Linear(c_sizes[i], c_sizes[i+1]), 
+                nn.Linear(self.c_sizes[i], self.c_sizes[i+1]), 
                 nn.ReLU()
             ) for i in range(0, c_num_layers-1) 
         ]
         self.classifier = nn.Sequential(
             *c_layers_list,
-            nn.Linear(c_sizes[-1], 1)
-        )
+            nn.Linear(self.c_sizes[-1], self.class_op_size)
 
+        )
         # regressor
-        r_num_layers = len(r_sizes)
+        r_num_layers = len(self.r_sizes)
         r_layers_list = [
             nn.Sequential(
-                nn.Linear(r_sizes[i], r_sizes[i+1]),
+                nn.Linear(self.r_sizes[i], self.r_sizes[i+1]),
                 nn.ReLU()
             ) for i in range(0, r_num_layers-1) 
         ]
         self.regressor = nn.Sequential(
             *r_layers_list,
-            nn.Linear(r_sizes[-1], 1)
+            nn.Linear(self.r_sizes[-1], 1)
         )
     
     def forward(self, x):
@@ -151,7 +157,7 @@ class MultiTaskNNSep(nn.Module):
 
 
 class MultiTaskNNCorr(nn.Module): 
-    def __init__(self, l_sizes=[(16,8), (8,4), (8,4)]) -> None:
+    def __init__(self, l_sizes=[(16,8), (8,4), (8,4)], class_op_size=1) -> None:
         '''
         Architecture where classifier and regressor share layers. Loading prediction is regression.
 
@@ -159,15 +165,16 @@ class MultiTaskNNCorr(nn.Module):
             l_sizes: An iterable of length 2. The first entry contains a lsit of layer sizes for the common layers, the second entry contains a list of layers sizes for the classifier, the third entry for the regressor. Note the first entry in both lists is the input feature size.
         '''
         super().__init__()
-        com_sizes, c_sizes, r_sizes = l_sizes
+        self.com_sizes, self.c_sizes, self.r_sizes = l_sizes
+        self.class_op_size = class_op_size
         # check common output layer is same size as input layers for both classifier and regressor
-        assert c_sizes[0] == r_sizes[0]
+        assert self.c_sizes[0] == self.r_sizes[0]
 
         # common
-        com_num_layers = len(com_sizes)
+        com_num_layers = len(self.com_sizes)
         com_layers_list = [
             nn.Sequential(
-                nn.Linear(com_sizes[i], com_sizes[i+1]), 
+                nn.Linear(self.com_sizes[i], self.com_sizes[i+1]), 
                 nn.ReLU()
             ) for i in range(0, com_num_layers-1) 
         ]
@@ -177,31 +184,31 @@ class MultiTaskNNCorr(nn.Module):
         )
 
         # classifier
-        c_num_layers = len(c_sizes)
+        c_num_layers = len(self.c_sizes)
         c_layers_list = [
             nn.Sequential(
-                nn.Linear(c_sizes[i], c_sizes[i+1]), 
+                nn.Linear(self.c_sizes[i], self.c_sizes[i+1]), 
                 nn.ReLU()
             ) for i in range(0, c_num_layers-1) 
         ]
         self.classifier = nn.Sequential(
             self.common,
             *c_layers_list,
-            nn.Linear(c_sizes[-1], 1)
+            nn.Linear(self.c_sizes[-1], self.class_op_size)
         )
 
         # regressor
-        r_num_layers = len(r_sizes)
+        r_num_layers = len(self.r_sizes)
         r_layers_list = [
             nn.Sequential(
-                nn.Linear(r_sizes[i], r_sizes[i+1]),
+                nn.Linear(self.r_sizes[i], self.r_sizes[i+1]),
                 nn.ReLU()
             ) for i in range(0, r_num_layers-1) 
         ]
         self.regressor = nn.Sequential(
             self.common,
             *r_layers_list,
-            nn.Linear(r_sizes[-1], 1)
+            nn.Linear(self.r_sizes[-1], 1)
         )
 
     def forward(self, x):
