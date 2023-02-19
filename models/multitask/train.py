@@ -227,10 +227,7 @@ def main(kwargs):
     print(f"[MT] Filling {truth[kwargs['load_label']].isna().values.sum()} nan points with 0")    
     truth[kwargs["load_label"]] = truth[kwargs["load_label"]].fillna(0)
 
-    if kwargs["load_type"] == "single":
-        truth = truth[["Binding (SiO2)", kwargs["load_label"]]]
-    else:
-        truth = truth[["Binding (SiO2)", *kwargs["load_label"]]]
+    truth = truth[["Binding (SiO2)", *kwargs["load_label"]]]
 
     mask = pd.read_csv(kwargs["mask"])
 
@@ -479,12 +476,9 @@ def main(kwargs):
         y_preds = pd.DataFrame(torch.cat([y_preds[1], y_preds[0]], dim=1))
         ys = pd.DataFrame(ys.numpy())
 
-        if kwargs["load_type"] == "single":
-            y_preds.columns = ["Binding (SiO2)", kwargs["load_label"]]
-            ys.columns = ["Binding (SiO2)", kwargs["load_label"]]
-        else:
-            y_preds.columns = ["Binding (SiO2)", *kwargs["load_label"]]
-            ys.columns = ["Binding (SiO2)", *kwargs["load_label"]]
+
+        y_preds.columns = ["Binding (SiO2)", *kwargs["load_label"]]
+        ys.columns = ["Binding (SiO2)", *kwargs["load_label"]]
 
         y_preds.to_csv(os.path.join(kwargs["output"], f'pred_{label}_y_preds.csv'))
         ys.to_csv(os.path.join(kwargs["output"], f'pred_{label}_ys.csv'))
@@ -526,12 +520,13 @@ def preprocess(args):
     kwargs['l_sizes'] = literal_eval(kwargs['l_sizes'])
     kwargs["energy_type"] = Energy_Type(kwargs["energy_type"])
     kwargs["split_type"] = SplitType(kwargs["split_type"])
+    # TODO: 22 and 49 are hardcoded
     if kwargs["load_type"] == "load":
         kwargs["load_label"] = [f"load_{i}" for i in range(0,22)]
     elif kwargs["load_type"] == "load_norm":
         kwargs["load_label"] = [f"load_norm_{i}" for i in range(0,49)]
     elif kwargs["load_type"] == "single":
-        kwargs["load_label"] = "Loading"
+        kwargs["load_label"] = ["Loading"]
 
     if kwargs.get("split_type", None) == "naive":
         kwargs["split_type"] = SplitType.NAIVE_SPLITS
