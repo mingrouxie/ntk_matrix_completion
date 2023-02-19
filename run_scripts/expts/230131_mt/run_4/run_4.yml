@@ -9,8 +9,8 @@ load_scaler: null
 ignore_train: false
 seed: 12934
 sieved_file: null
-truth: /pool001/mrx/projects/affinity/ntk_matrix_completion/truths/230212/iza_apriori_zach/2023213_212058_truth.csv
-mask: /pool001/mrx/projects/affinity/ntk_matrix_completion/truths/230212/iza_apriori_zach/2023213_212058_truth.csv
+truth: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/230212/iza_apriori_zach/2023213_212058_truth.csv
+mask: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/230212/iza_apriori_zach/2023213_212058_mask.csv
 osda_prior_file: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/priors/221216/iza_all/osda_priors_all.pkl
 zeolite_prior_file: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/priors/zeolite_priors_20221118_25419.pkl
 osda_prior_map: /home/mrx/projects/affinity/ntk_matrix_completion/configs/osda_weights_structural_v2.json
@@ -31,9 +31,10 @@ batch_size: 256
 # l_sizes: '[(35, 18), (35, 18)]'
 # l_sizes: '[(35,16,8,4), (35,16,8,4)]'
 # l_sizes: '[(290,16,8,4), (290,16,8,4)]'
-model: multitasknncorr
+model: multitasknncorr_v2
 l_sizes: '[(35, 18), (18, 1), (18, 1)]'
 # l_sizes: '[(290,16), (16,8,4), (16,8,4)]'
 # debug please change afterwards
 load_type: single 
 # load, load_norm, single
+class_op_size: 1
