@@ -495,10 +495,11 @@ def main(kwargs):
 
 
 def preprocess(args):
-    kwargs = args.__dict__
+    config_file = args.__dict__['config']
 
-    with open(kwargs['config'], "rb") as file:
+    with open(config_file, "rb") as file:
         kwargs = yaml.load(file, Loader=yaml.Loader)
+        kwargs['config'] = config_file
 
     if os.path.isdir(kwargs["output"]):
         now = "_%d%d%d_%d%d%d" % (
@@ -538,7 +539,11 @@ def preprocess(args):
     # dump args
     yaml_args = yaml.dump(kwargs, indent=2, default_flow_style=False)
     with open(Path(kwargs["output"]) / "args.yaml", "w") as fp:
+        breakpoint()
         fp.write(yaml_args)
+    with open(Path(kwargs["config"].split(".")[0] + "_args.yaml"), "w") as fp:
+        breakpoint()
+        fp.write(yaml_args) # TODO: COME BACK
 
     print("Output folder:", kwargs["output"])
     print(f"Args:\n{yaml_args}")
