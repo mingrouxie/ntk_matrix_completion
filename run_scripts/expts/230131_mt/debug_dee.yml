@@ -9,10 +9,6 @@ load_scaler: null
 ignore_train: false
 seed: 12934
 sieved_file: null
-# truth: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/truths/testing_7/truth_subset_ohe.csv
-# mask: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/truths/testing_7/mask_subset.csv
-truth: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/truths/testing_7/truth_subset_norm_ohe.csv
-mask: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/truths/testing_7/mask_subset.csv
 # truth: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/truths/testing_7/truth_ohe.csv
 # mask: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/truths/testing_7/mask_ohe.csv
 # truth: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/truths/testing_3/truth.csv
@@ -38,16 +34,21 @@ optimizer:
   reg_opt: adam
 scheduler: false
 # debug
-epochs: 1000
+epochs: 500
 device: cpu
 batch_size: 256
-model: multitasknnsep_v2
-l_sizes: '[(35, 18), (35, 18)]'
+# truth: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/truths/testing_7/truth_subset.csv
+truth: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/truths/testing_7/truth_subset_ohe.csv
+# truth: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/truths/testing_7/truth_subset_norm_ohe.csv
+mask: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/truths/testing_7/mask_subset.csv
+# model: multitasknnsep_v2
+# l_sizes: '[(35, 18), (35, 18)]'
 # l_sizes: '[(35,16,8,4), (35,16,8,4)]'
 # l_sizes: '[(290,16,8,4), (290,16,8,4)]'
-# model: multitasknncorr_v2
-# l_sizes: '[(35, 18), (18, 1), (18, 1)]'
+model: multitasknncorr_v2
+l_sizes: '[(35, 18), (18, 1), (18, 1)]'
 # l_sizes: '[(290,16), (16,8,4), (16,8,4)]'
 # debug please change afterwards
-load_type: load_norm 
+load_type: load
 # load, load_norm, single
+class_op_size: 22
