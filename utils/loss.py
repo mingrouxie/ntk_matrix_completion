@@ -66,6 +66,7 @@ def cross_entropy_loss(y, pred):
     if y.dim() == 1:
         y = y.reshape(y.shape[0], 1) # TODO: hardcoded
     # proba = pred.softmax(dim=1)
+    # CrossEntropyLoss already has softmax baked into it
     loss = nn.CrossEntropyLoss() # TODO: is this necessary
 
     # if np.isnan(loss(y, proba).detach().numpy()):
