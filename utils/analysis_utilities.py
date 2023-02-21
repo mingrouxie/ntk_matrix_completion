@@ -336,6 +336,12 @@ def plot_energy_dist(y, pred, save=False):
 # Plot predicted energy distribution versus actual (only for binding)
 def plot_load_dist(y, pred, save=False):
     '''Plot distribution of normalized loadings'''
+
+    # TODO: idk if this will work
+    if y.shape[1] > 1: # multiclass classification rather than regression
+        y = y.T.idxmax(0) # load_1, or load_norm_1
+        pred = pred.T.idxmax(0)
+
     fig, axs = plt.subplots(figsize=(10,5))
     colors = ['#00429d', '#93003a']
     axs.hist(y.values, bins=100, label='Truth', color=colors[0], alpha=0.7)
@@ -371,11 +377,17 @@ def plot_energy_parity(y, pred, save=False):
 
 def plot_load_parity(y, pred, save=False):
     '''Plot parity plot for normalized loading'''
-    min_l = min(min(y), min(pred))
-    max_l = max(max(y), max(pred))
+
+    # TODO: need to take out the actual value so we can make parity plots
+    if y.shape[1] > 1: # multiclass classification rather than regression
+        y = y.T.idxmax(0) # load_1, or load_norm_1
+        pred = pred.T.idxmax(0)
+
+    min_l = min(min(y.values), min(pred.values))
+    max_l = max(max(y.values), max(pred.values))
     fig, axs = single_scatter(
-        x=y,
-        y=pred,
+        x=y.values,
+        y=pred.values,
         xlabel='Truth', 
         ylabel='Prediction', 
         limits={
@@ -395,8 +407,8 @@ def plot_heatmap(y, pred, index="SMILES", columns="Zeolite", values="Binding (Si
     y_mat = y.reset_index().pivot(values=values, index=index, columns=columns)
     pred_mat = pred.reset_index().pivot(values=values, index=index, columns=columns)
     breakpoint()
-    vmin = min(y[values].min(), y[values].min())
-    vmax = max(pred[values].max(), pred[values].max())
+    vmin = min(y[values].values.min(), y[values].values.min())
+    vmax = max(pred[values].values.max(), pred[values].values.max())
 
     fig, axs = plt.subplots(1, 2, figsize=(5,10), sharex=True, sharey=True)
     cmaps = 'inferno'
@@ -487,85 +499,116 @@ def rescale(data, scaler):
         return data * np.sqrt(np.array(scaler['std'])) + np.array(scaler['mean'])
 
 
-def make_plots(y, pred, mask, label="test", energy=True, load=True):
+def make_plots(y, pred, mask, kwargs, label="test", energy=True, load=True):
     # BINDING ONLY ENERGY
     if energy:
-        plot_energy_dist(y.loc[mask.exists==1]['Binding (SiO2)'], pred.loc[mask.exists==1]['Binding (SiO2)'], save=os.path.join(op, f"{label}_e_dist.png"))
-        plot_energy_parity(y.loc[mask.exists==1]['Binding (SiO2)'], pred.loc[mask.exists==1]['Binding (SiO2)'], save=os.path.join(op, f"{label}_e_par.png"))
+        plot_energy_dist(y.loc[mask.exists==1][kwargs["energy_label"]], pred.loc[mask.exists==1][kwargs["energy_label"]], save=os.path.join(op, f"{label}_e_dist.png"))
+        plot_energy_parity(y.loc[mask.exists==1][kwargs["energy_label"]], pred.loc[mask.exists==1][kwargs["energy_label"]], save=os.path.join(op, f"{label}_e_par.png"))
 
     # BINDING ONLY LOADING
     if load:
-        plot_load_dist(y.loc[mask.exists==1]['loading_norm'], pred.loc[mask.exists==1]['loading_norm'], save=os.path.join(op, f"{label}_l_dist_b.png"))
-        plot_load_parity(y.loc[mask.exists==1]['loading_norm'], pred.loc[mask.exists==1]['loading_norm'], save=os.path.join(op, f"{label}_l_par_b.png"))
+        plot_load_dist(y.loc[mask.exists==1][kwargs["load_label"]], pred.loc[mask.exists==1][kwargs["load_label"]], save=os.path.join(op, f"{label}_l_dist_b.png"))
+        plot_load_parity(y.loc[mask.exists==1][kwargs["load_label"]], pred.loc[mask.exists==1][kwargs["load_label"]], save=os.path.join(op, f"{label}_l_par_b.png"))
 
     # NON BINDING ONLY LOADING
     if load:
-        plot_load_dist(y.loc[mask.exists!=1]['loading_norm'], pred.loc[mask.exists!=1]['loading_norm'], save=os.path.join(op, f"{label}_l_dist_nb.png"))
-        plot_load_parity(y.loc[mask.exists!=1]['loading_norm'], pred.loc[mask.exists!=1]['loading_norm'], save=os.path.join(op, f"{label}_l_par_nb.png"))
+        plot_load_dist(y.loc[mask.exists!=1][kwargs["load_label"]], pred.loc[mask.exists!=1][kwargs["load_label"]], save=os.path.join(op, f"{label}_l_dist_nb.png"))
+        plot_load_parity(y.loc[mask.exists!=1][kwargs["load_label"]], pred.loc[mask.exists!=1][kwargs["load_label"]], save=os.path.join(op, f"{label}_l_par_nb.png"))
 
     # HEATMAP
     if energy:
-        plot_heatmap(y, pred, values="Binding (SiO2)", save=os.path.join(op, f"{label}_heatmap_e.png"))
+        plot_heatmap(y, pred, values=kwargs["energy_label"], save=os.path.join(op, f"{label}_heatmap_e.png"))
         plot_heatmap(
             y.loc[mask.exists==1], 
             pred.loc[mask.exists==1], 
-            values="Binding (SiO2)", save=os.path.join(op, f"{label}_heatmap_e_b.png"))
+            values=kwargs["energy_label"], save=os.path.join(op, f"{label}_heatmap_e_b.png"))
     if load:
-        plot_heatmap(y, pred, values="loading_norm", save=os.path.join(op, f"{label}_heatmap_l.png"))
+        plot_heatmap(y, pred, values=kwargs["load_label"], save=os.path.join(op, f"{label}_heatmap_l.png"))
         plot_heatmap(
             y.loc[mask.exists==1], 
             pred.loc[mask.exists==1], 
-            values="loading_norm", save=os.path.join(op, f"{label}_heatmap_l_b.png"))
+            values=kwargs["load_label"], save=os.path.join(op, f"{label}_heatmap_l_b.png"))
 
     # ERRORS
     if energy:
         print("energy error")
-        plot_errors(y, pred, mask, col="Binding (SiO2)", save=os.path.join(op, f"{label}_err_e.png"))
+        plot_errors(y, pred, mask, col=kwargs["energy_label"], save=os.path.join(op, f"{label}_err_e.png"))
     if load:
         print("loading error")
-        plot_errors(y, pred, mask, col="loading_norm", save=os.path.join(op, f"{label}_err_l.png"))
+        plot_errors(y, pred, mask, col=kwargs["load_label"], save=os.path.join(op, f"{label}_err_l.png"))
 
 
 if __name__ == '__main__':
+    import yaml
+    import re
     parser = argparse.ArgumentParser(description="analysis_utilities")
-    parser.add_argument("--config", help="Config file", required=True)
-    args = parser.parse_args()
-    kwargs = args.__dict__
-    op = kwargs['config']
+    parser.add_argument("--args", help="YAML file containing output directory path to process", required=True)
+    parser.add_argument("--local", help="If true, alters the directory paths from Engaging to local", default=False, action='store_true')
+    parser.add_argument("--load_label", help="single, load or load_norm", default="single", required=True)
+    parser.add_argument("--energy_label", help="Binding (SiO2) for now", default="Binding (SiO2)", required=True)
+    kwargs = parser.parse_args().__dict__
+
+    # preprocess
+    with open(kwargs['args'], "rb") as file:
+        op = yaml.load(file, Loader=yaml.Loader)['output']
+        if kwargs['local']:
+            LOCAL_ROOT = '/home/mrx/projects/affinity_pool/'
+            ENG_ROOT = '/pool001/mrx/projects/affinity/'
+            op = re.sub(ENG_ROOT, LOCAL_ROOT, op, count=0)
+    if kwargs["load_label"] == "single":
+        kwargs["load_label"] = ["Loading"]
+    elif kwargs["load_label"] == "load":
+        kwargs["load_label"] = [f"load_{i}" for i in range(0,23)]
+    elif kwargs["load_label"] == "load_norm":
+        kwargs["load_label"] = [f"load_norm_{i}" for i in range(0,49)]
+    
+    print(f"Processing output folder {op} locally ({kwargs['local']})")
 
     # read files
+    print("Reading files")
     train_indices = pd.read_csv(os.path.join(op, "pred_train_indices.csv"), index_col=0)
     train_mask = pd.read_csv(os.path.join(op, "pred_train_mask.csv"), index_col=0).set_index(pd.MultiIndex.from_frame(train_indices))
     train_y = pd.read_csv(os.path.join(op, "pred_train_ys.csv"), index_col=0).set_index(pd.MultiIndex.from_frame(train_indices))
     train_pred = pd.read_csv(os.path.join(op, "pred_train_y_preds.csv"), index_col=0).set_index(pd.MultiIndex.from_frame(train_indices))
 
+    print("Reading indices")
     test_indices = pd.read_csv(os.path.join(op, "pred_test_indices.csv"), index_col=0)
     test_mask = pd.read_csv(os.path.join(op, "pred_test_mask.csv"), index_col=0).set_index(pd.MultiIndex.from_frame(test_indices))
     test_y = pd.read_csv(os.path.join(op, "pred_test_ys.csv"), index_col=0).set_index(pd.MultiIndex.from_frame(test_indices))
     test_pred = pd.read_csv(os.path.join(op, "pred_test_y_preds.csv"), index_col=0).set_index(pd.MultiIndex.from_frame(test_indices))
     model = torch.load(os.path.join(op, "model.pt"))
 
+    print("Reading scalings")
     # TODO scaling
-    with open(os.path.join(op, "input_scaling.json"), "r") as f:
-        input_scaler = json.load(f)
-    with open(os.path.join(op, "truth_load_scaling.json"), "r") as f:
-        l_scaler = json.load(f)
-    with open(os.path.join(op, "truth_energy_scaling.json"), "r") as f:
-        e_scaler = json.load(f)
-
-    train_y["Binding (SiO2)"] = rescale(train_y["Binding (SiO2)"], e_scaler)
-    train_pred["Binding (SiO2)"] = rescale(train_pred["Binding (SiO2)"], e_scaler)
-    test_y["Binding (SiO2)"] = rescale(test_y["Binding (SiO2)"], e_scaler)
-    test_pred["Binding (SiO2)"] = rescale(test_pred["Binding (SiO2)"], e_scaler)
-
-    train_y["loading_norm"] = rescale(train_y["loading_norm"], l_scaler)
-    train_pred["loading_norm"] = rescale(train_pred["loading_norm"], l_scaler)
-    test_y["loading_norm"] = rescale(test_y["loading_norm"], l_scaler)
-    test_pred["loading_norm"] = rescale(test_pred["loading_norm"], l_scaler)
+    try:
+        with open(os.path.join(op, "input_scaling.json"), "r") as f:
+            input_scaler = json.load(f)
+        # TODO: scale the inputs back or something
+    except FileNotFoundError:
+        print("No input scaling")
+    try:
+        with open(os.path.join(op, "truth_load_scaling.json"), "r") as f:
+            l_scaler = json.load(f)
+        train_y[kwargs["load_label"]] = rescale(train_y[kwargs["load_label"]], l_scaler)
+        train_pred[kwargs["load_label"]] = rescale(train_pred[kwargs["load_label"]], l_scaler)
+        test_y[kwargs["load_label"]] = rescale(test_y[kwargs["load_label"]], l_scaler)
+        test_pred[kwargs["load_label"]] = rescale(test_pred[kwargs["load_label"]], l_scaler)
+    except FileNotFoundError:
+        print("No loading scaling")
+    try:
+        with open(os.path.join(op, "truth_energy_scaling.json"), "r") as f:
+            e_scaler = json.load(f)
+        train_y[kwargs["energy_label"]] = rescale(train_y[kwargs["energy_label"]], e_scaler)
+        train_pred[kwargs["energy_label"]] = rescale(train_pred[kwargs["energy_label"]], e_scaler)
+        test_y[kwargs["energy_label"]] = rescale(test_y[kwargs["energy_label"]], e_scaler)
+        test_pred[kwargs["energy_label"]] = rescale(test_pred[kwargs["energy_label"]], e_scaler)
+    except FileNotFoundError:
+        print("No energy scaling")
 
     # plot
-    make_plots(train_y, train_pred, train_mask, label="train")
-    make_plots(test_y, test_pred, test_mask, label="test")
+    breakpoint()
+    make_plots(train_y, train_pred, train_mask, kwargs, label="train")
+    make_plots(test_y, test_pred, test_mask, kwargs, label="test")
 
     # LOSS CURVES
     plot_loss_curves(model["epoch_losses"], model["val_losses"])
