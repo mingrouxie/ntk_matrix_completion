@@ -408,7 +408,11 @@ def main(kwargs):
     print("Time to prepare labels and input", "{:.2f}".format(prep_time/60), "mins")
 
     # get model
-    model = kwargs['model'](l_sizes=kwargs['l_sizes'], class_op_size=len(kwargs['load_label']))
+    model = kwargs['model'](
+        l_sizes=kwargs['l_sizes'], 
+        class_op_size=len(kwargs['load_label']),
+        batch_norm=kwargs['batch_norm']
+        )
     print("[MT] model:\n")
     print(model)
 
@@ -429,7 +433,7 @@ def main(kwargs):
     #     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', verbose=True, factor=0.5)
 
     # early stopping
-    early_stopper = EarlyStopper(patience=3, min_delta=10)
+    early_stopper = EarlyStopper(patience=kwargs["patience"], min_delta=kwargs["min_delta"])
 
     # train model
     epoch_losses = []
@@ -493,12 +497,22 @@ def main(kwargs):
     print("[MT] Output folder is", kwargs["output"])
     print("Total time:", "{:.2f}".format((time.time() - start_time) / 60), "mins")
 
+def get_defaults():
+    '''Ensure backward compatibility with some of the old run files when new arguments are added. These get overriden by the config file.'''
+    # TODO: please throw into utils or somewhere
+    kwargs = {
+        'batch_norm': False,
+        'softmax': True
+    }
+    return kwargs
+
 
 def preprocess(args):
     config_file = args.__dict__['config']
-
+    kwargs = get_defaults()
     with open(config_file, "rb") as file:
-        kwargs = yaml.load(file, Loader=yaml.Loader)
+        kwargs_config = yaml.load(file, Loader=yaml.Loader)
+        kwargs.update(kwargs_config)
         kwargs['config'] = config_file
 
     if os.path.isdir(kwargs["output"]):
@@ -539,10 +553,8 @@ def preprocess(args):
     # dump args
     yaml_args = yaml.dump(kwargs, indent=2, default_flow_style=False)
     with open(Path(kwargs["output"]) / "args.yaml", "w") as fp:
-        breakpoint()
         fp.write(yaml_args)
     with open(Path(kwargs["config"].split(".")[0] + "_args.yaml"), "w") as fp:
-        breakpoint()
         fp.write(yaml_args) # TODO: COME BACK
 
     print("Output folder:", kwargs["output"])
