@@ -99,10 +99,10 @@ class MultiTaskNNCorr_v2(nn.Module):
         c_num_layers = len(self.c_sizes)
         c_layers_list = []
         for i in range(0, c_num_layers-1):
-            c_layers_list.append(nn.Linear(self.com_sizes[i], self.com_sizes[i+1]))
+            c_layers_list.append(nn.Linear(self.c_sizes[i], self.c_sizes[i+1]))
             c_layers_list.append(nn.ReLU())
         if self.batch_norm:
-            c_layers_list.append(nn.BatchNorm1d(self.com_sizes[i+1]))
+            c_layers_list.append(nn.BatchNorm1d(self.c_sizes[i+1]))
         if self.dropout:
             c_layers_list.append(nn.Dropout(p=self.dropout))
 
@@ -120,10 +120,10 @@ class MultiTaskNNCorr_v2(nn.Module):
         r_num_layers = len(self.r_sizes)
         r_layers_list = []
         for i in range(0, r_num_layers-1):
-            r_layers_list.append(nn.Linear(self.com_sizes[i], self.com_sizes[i+1]))
+            r_layers_list.append(nn.Linear(self.r_sizes[i], self.r_sizes[i+1]))
             r_layers_list.append(nn.ReLU())
         if self.batch_norm:
-            r_layers_list.append(nn.BatchNorm1d(self.com_sizes[i+1]))
+            r_layers_list.append(nn.BatchNorm1d(self.r_sizes[i+1]))
         if self.dropout:
             r_layers_list.append(nn.Dropout(p=self.dropout))
 
