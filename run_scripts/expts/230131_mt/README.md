@@ -22,16 +22,25 @@ Input scaler: standard, energy_scaler: minmax, load_scaler: null but I think we 
 - run_10_3: run_10, but with 5 256 layers, 1000 epochs, with softmax (IDK why but just try)
 - run_10_4: run_10, but with 5 256 layers, 1000 epochs, with dropout (test))
     - Better behaved than without dropout, but has occasional (crazy) spikes in val loss 
+    - Change to softer early stopping (same as run_13_2)
 - run_11: run_4, "
     - bug, rerun
+    - Change to no dropout in last layer and softer early stopping (same as run_13_2)
 - run_12: run_5, "
     - Val loss exploded at epoch 8
+    - Change to no dropout in last layer and softer early stopping (same as run_13_2)
 - run_13: run_6, "
     - Early stopping at epoch 9 but losses were stable (is patience too low?)
+- run_13_2: run_13, but with patience 100 and min_delta 0.5
+    - Seems to be going (1.5h)
 - run_14: run_7, "
-    - Missing job. Resubmitted
+    - same folder name as 15. run 15 first then rerun. - job id 47101189
+    - loss has spikes
+    - Change to no dropout in last layer and softer early stopping (same as run_13_2) -  job id 47101713
 - run_15: run_8, "
-    - bug, rerun
+    - bug, rerun. same folder name as 14. rerun. 
+    - loss also has spikes
+    - Change to no dropout in last layer and softer early stopping (same as run_13_2)
 
 However, just found out that the softmax is baked into the cross entropy loss. So technically, we don't need it in either place BUT it wasn't working when I removed softmax(dim=1) from both the NN and the loss function.
 
