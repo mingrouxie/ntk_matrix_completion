@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 
 class MultiTaskNNSep_v2(nn.Module):
-    def __init__(self, l_sizes=[(16,8,4), (16,8,4)], class_op_size=22, batch_norm=False, softmax=True) -> None:
+    def __init__(self, l_sizes=[(16,8,4), (16,8,4)], class_op_size=22, batch_norm=False, softmax=True, dropout=0.5) -> None:
         '''
         Architecture where classifier and regressor do not share layers (essentially 2 separate NNs). Loading prediction is binned.
 
@@ -23,49 +23,36 @@ class MultiTaskNNSep_v2(nn.Module):
         self.class_op_size = class_op_size
         self.batch_norm = batch_norm
         self.softmax = softmax
+        self.dropout = dropout
 
         # classifier
         c_num_layers = len(self.c_sizes)
-        if self.batch_norm:
-            c_layers_list = [
-                nn.Sequential(
-                    nn.Linear(self.c_sizes[i], self.c_sizes[i+1]), 
-                    nn.ReLU(),
-                    nn.BatchNorm1d(self.c_sizes[i+1])
-                ) for i in range(0, c_num_layers-1) 
-            ]
-        else:
-            c_layers_list = [
-            nn.Sequential(
-                nn.Linear(self.c_sizes[i], self.c_sizes[i+1]), 
-                nn.ReLU()
-            ) for i in range(0, c_num_layers-1) 
-            ]
+        c_layers_list = []
+        for i in range(0, c_num_layers-1):
+            c_layers_list.append(nn.Linear(self.c_sizes[i], self.c_sizes[i+1]))
+            c_layers_list.append(nn.ReLU()), # TODO: change to tanh or kwargs
+            if self.batch_norm:
+                c_layers_list.append(nn.BatchNorm1d(self.c_sizes[i+1]))
+            if self.dropout:
+                c_layers_list.append(nn.Dropout(p=self.dropout))
         class_modules = [
             *c_layers_list,
             nn.Linear(self.c_sizes[-1], self.class_op_size),
         ]
         if self.softmax:
-            self.classifier.append(nn.Softmax(dim=1))
+            class_modules.append(nn.Softmax(dim=1))
         self.classifier = nn.Sequential(*class_modules)
 
         # regressor
         r_num_layers = len(self.r_sizes)
-        if self.batch_norm:
-            r_layers_list = [
-                nn.Sequential(
-                    nn.Linear(self.r_sizes[i], self.r_sizes[i+1]),
-                    nn.ReLU(),
-                    nn.BatchNorm1d(self.r_sizes[i+1])
-                ) for i in range(0, r_num_layers-1) 
-            ]
-        else:
-            r_layers_list = [
-                nn.Sequential(
-                    nn.Linear(self.r_sizes[i], self.r_sizes[i+1]),
-                    nn.ReLU()
-                ) for i in range(0, r_num_layers-1) 
-            ]
+        r_layers_list = []
+        for i in range(0, r_num_layers-1):
+            r_layers_list.append(nn.Linear(self.r_sizes[i], self.r_sizes[i+1]))
+            r_layers_list.append(nn.ReLU()) # TODO: cjhange to tanh or flexible
+            if self.batch_norm:
+                r_layers_list.append(nn.BatchNorm1d(self.r_sizes[i+1]))
+            if self.dropout:
+                r_layers_list.append(nn.Dropout(p=self.dropout))
         self.regressor = nn.Sequential(
             *r_layers_list,
             nn.Linear(self.r_sizes[-1], 1)
@@ -77,7 +64,7 @@ class MultiTaskNNSep_v2(nn.Module):
 
 
 class MultiTaskNNCorr_v2(nn.Module): 
-    def __init__(self, l_sizes=[(16,8), (8,4), (8,4)], class_op_size=22, batch_norm=False, softmax=True) -> None:
+    def __init__(self, l_sizes=[(16,8), (8,4), (8,4)], class_op_size=22, batch_norm=False, softmax=True, dropout=0.5) -> None:
         '''
         Architecture where classifier and regressor share layers. Loading prediction is binned.
 
@@ -91,45 +78,34 @@ class MultiTaskNNCorr_v2(nn.Module):
         assert self.c_sizes[0] == self.r_sizes[0]
         self.batch_norm = batch_norm
         self.softmax = softmax
+        self.dropout = dropout
 
         # common
         com_num_layers = len(self.com_sizes)
-        if self.batch_norm:
-            com_layers_list = [
-                nn.Sequential(
-                    nn.Linear(self.com_sizes[i], self.com_sizes[i+1]), 
-                    nn.ReLU(),
-                    nn.BatchNorm1d(self.com_sizes[i+1])
-                ) for i in range(0, com_num_layers-1) 
-            ]
-        else:
-            com_layers_list = [
-                nn.Sequential(
-                    nn.Linear(self.com_sizes[i], self.com_sizes[i+1]), 
-                    nn.ReLU()
-                ) for i in range(0, com_num_layers-1) 
-            ]
+        com_layers_list = []
+        for i in range(0, com_num_layers-1):
+            com_layers_list.append(nn.Linear(self.com_sizes[i], self.com_sizes[i+1]))
+            com_layers_list.append(nn.ReLU())
+            if self.batch_norm:
+                com_layers_list.append(nn.BatchNorm1d(self.com_sizes[i+1]))
+            if self.dropout:
+                com_layers_list.append(nn.Dropout(p=self.dropout))
+
         self.common = nn.Sequential(
             *com_layers_list,
         )
 
         # classifier
         c_num_layers = len(self.c_sizes)
+        c_layers_list = []
+        for i in range(0, c_num_layers-1):
+            c_layers_list.append(nn.Linear(self.com_sizes[i], self.com_sizes[i+1]))
+            c_layers_list.append(nn.ReLU())
         if self.batch_norm:
-            c_layers_list = [
-                nn.Sequential(
-                    nn.Linear(self.c_sizes[i], self.c_sizes[i+1]), 
-                    nn.ReLU(),
-                    nn.BatchNorm1d(self.c_sizes[i+1])
-                ) for i in range(0, c_num_layers-1) 
-            ]
-        else:
-            c_layers_list = [
-                nn.Sequential(
-                    nn.Linear(self.c_sizes[i], self.c_sizes[i+1]), 
-                    nn.ReLU()
-                ) for i in range(0, c_num_layers-1) 
-            ]
+            c_layers_list.append(nn.BatchNorm1d(self.com_sizes[i+1]))
+        if self.dropout:
+            c_layers_list.append(nn.Dropout(p=self.dropout))
+
         class_modules = [
             self.common,
             *c_layers_list,
@@ -142,21 +118,15 @@ class MultiTaskNNCorr_v2(nn.Module):
 
         # regressor
         r_num_layers = len(self.r_sizes)
+        r_layers_list = []
+        for i in range(0, r_num_layers-1):
+            r_layers_list.append(nn.Linear(self.com_sizes[i], self.com_sizes[i+1]))
+            r_layers_list.append(nn.ReLU())
         if self.batch_norm:
-            r_layers_list = [
-                nn.Sequential(
-                    nn.Linear(self.r_sizes[i], self.r_sizes[i+1]),
-                    nn.ReLU(),
-                    nn.BatchNorm1d(self.r_sizes[i+1])
-                ) for i in range(0, r_num_layers-1) 
-            ]
-        else:
-            r_layers_list = [
-                nn.Sequential(
-                    nn.Linear(self.r_sizes[i], self.r_sizes[i+1]),
-                    nn.ReLU(),
-                ) for i in range(0, r_num_layers-1) 
-            ]
+            r_layers_list.append(nn.BatchNorm1d(self.com_sizes[i+1]))
+        if self.dropout:
+            r_layers_list.append(nn.Dropout(p=self.dropout))
+
         self.regressor = nn.Sequential(
             self.common,
             *r_layers_list,
