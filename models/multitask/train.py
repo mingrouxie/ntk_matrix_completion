@@ -411,8 +411,10 @@ def main(kwargs):
     model = kwargs['model'](
         l_sizes=kwargs['l_sizes'], 
         class_op_size=len(kwargs['load_label']),
-        batch_norm=kwargs['batch_norm']
+        batch_norm=kwargs['batch_norm'],
+        softmax=kwargs['softmax']
         )
+    model.to(kwargs['device'])
     print("[MT] model:\n")
     print(model)
 
@@ -474,11 +476,11 @@ def main(kwargs):
         print(f"main: {label} set load_loss:", "{:.4f}".format(load_loss.item()), "; energy_loss:", "{:.4f}".format(energy_loss.item()))
 
         # save predictions
-        test_mask = pd.DataFrame(masks.numpy())
+        test_mask = pd.DataFrame(masks.cpu().numpy())
         test_mask.columns = ['exists']
         test_mask.to_csv(os.path.join(kwargs["output"], f'pred_{label}_mask.csv'))
-        y_preds = pd.DataFrame(torch.cat([y_preds[1], y_preds[0]], dim=1))
-        ys = pd.DataFrame(ys.numpy())
+        y_preds = pd.DataFrame(torch.cat([y_preds[1].cpu(), y_preds[0].cpu()], dim=1))
+        ys = pd.DataFrame(ys.cpu().numpy())
 
 
         y_preds.columns = ["Binding (SiO2)", *kwargs["load_label"]]
@@ -530,6 +532,13 @@ def preprocess(args):
     # setup_logger(kwargs["output"], log_name="multitask_train.log", debug=kwargs["debug"])
     # pl.utilities.seed.seed_everything(kwargs.get("seed"))
 
+    # check device
+    try:
+        kwargs['device'] = torch.cuda.current_device()
+    except RuntimeError:
+        kwargs['device'] = 'cpu'
+    print(("[preprocess] kwargs device:", kwargs['device']), 'of type', type(kwargs['device']))
+
     # transform some inputs
     kwargs['model'] = MULTITASK_MODELS[kwargs['model']]
     kwargs['l_sizes'] = literal_eval(kwargs['l_sizes'])
@@ -555,7 +564,7 @@ def preprocess(args):
     with open(Path(kwargs["output"]) / "args.yaml", "w") as fp:
         fp.write(yaml_args)
     with open(Path(kwargs["config"].split(".")[0] + "_args.yaml"), "w") as fp:
-        fp.write(yaml_args) # TODO: COME BACK
+        fp.write(yaml_args)
 
     print("Output folder:", kwargs["output"])
     print(f"Args:\n{yaml_args}")
