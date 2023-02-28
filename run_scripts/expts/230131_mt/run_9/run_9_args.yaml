@@ -1,0 +1,98 @@
+batch_size: 256
+class_op_size: 49
+config: /home/mrx/projects/affinity/ntk_matrix_completion/run_scripts/expts/230131_mt/run_9/run_9.yml
+device: cpu
+energy_scaler: minmax
+energy_type: !!python/object/apply:ntk_matrix_completion.utils.package_matrix.Energy_Type
+- 2
+epochs: 3000
+gpu: false
+ignore_train: false
+input_scaler: standard
+l_sizes:
+- !!python/tuple
+  - 35
+  - 24
+  - 18
+  - 12
+  - 8
+  - 4
+- !!python/tuple
+  - 35
+  - 24
+  - 18
+  - 12
+  - 8
+  - 4
+load_label:
+- load_norm_0
+- load_norm_1
+- load_norm_2
+- load_norm_3
+- load_norm_4
+- load_norm_5
+- load_norm_6
+- load_norm_7
+- load_norm_8
+- load_norm_9
+- load_norm_10
+- load_norm_11
+- load_norm_12
+- load_norm_13
+- load_norm_14
+- load_norm_15
+- load_norm_16
+- load_norm_17
+- load_norm_18
+- load_norm_19
+- load_norm_20
+- load_norm_21
+- load_norm_22
+- load_norm_23
+- load_norm_24
+- load_norm_25
+- load_norm_26
+- load_norm_27
+- load_norm_28
+- load_norm_29
+- load_norm_30
+- load_norm_31
+- load_norm_32
+- load_norm_33
+- load_norm_34
+- load_norm_35
+- load_norm_36
+- load_norm_37
+- load_norm_38
+- load_norm_39
+- load_norm_40
+- load_norm_41
+- load_norm_42
+- load_norm_43
+- load_norm_44
+- load_norm_45
+- load_norm_46
+- load_norm_47
+- load_norm_48
+load_scaler: null
+load_type: load_norm
+mask: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/230212/iza_apriori_zach/2023213_212058_mask_overfit.csv
+model: !!python/name:ntk_matrix_completion.models.multitask.multitask_nn.MultiTaskNNSep_v2 ''
+optimizer:
+  cla_opt: adam
+  reg_opt: adam
+osda_prior_file: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/priors/221216/iza_all/osda_priors_all.pkl
+osda_prior_map: /home/mrx/projects/affinity/ntk_matrix_completion/configs/osda_weights_structural_v2.json
+other_prior_to_concat: null
+output: /pool001/mrx/projects/affinity/ntk_matrix_completion/output/2023_multitask/multitask_2023222_185635
+prior_method: CustomOSDAandZeoliteAsRows
+prior_treatment: 3
+scheduler: false
+seed: 12934
+sieved_file: null
+split_type: !!python/object/apply:ntk_matrix_completion.utils.utilities.SplitType
+- 3
+truth: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/230212/iza_apriori_zach/2023213_212058_truth_load_norm_ohe_overfit.csv
+tune: true
+zeolite_prior_file: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/priors/zeolite_priors_20221118_25419.pkl
+zeolite_prior_map: /home/mrx/projects/affinity/ntk_matrix_completion/configs/zeolite_weights_structural_extendable.json

@@ -98,7 +98,7 @@ def multitask_loss(y, y_preds, mask, loss_type='mse'):
         loading loss, energy loss
     '''
 
-    print("[multitaskloss debug]", min(y_preds[0]), max(y_preds[0]), min(y_preds[1]), max(y_preds[1]))
+    # print("[multitaskloss debug]", min(y_preds[0]), max(y_preds[0]), min(y_preds[1]), max(y_preds[1]))
 
     # TODO: hardcoded for loading of variable length 
     energy_loss = masked_loss(y[:,0], y_preds[1], mask, loss_type=loss_type)

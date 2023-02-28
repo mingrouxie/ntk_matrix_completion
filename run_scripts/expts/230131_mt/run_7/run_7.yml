@@ -38,3 +38,5 @@ l_sizes: '[(35, 18), (18, 1), (18, 1)]'
 load_type: load 
 # load, load_norm, single
 class_op_size: 22
+patience: 3
+min_delta: 10

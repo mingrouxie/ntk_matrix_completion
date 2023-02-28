@@ -1,0 +1,54 @@
+batch_norm: true
+batch_size: 256
+class_op_size: 49
+config: /home/mrx/projects/affinity/ntk_matrix_completion/run_scripts/expts/230131_mt/debug_dee.yml
+device: cpu
+energy_scaler: minmax
+energy_type: !!python/object/apply:ntk_matrix_completion.utils.package_matrix.Energy_Type
+- 2
+epochs: 1000
+gpu: false
+ignore_train: false
+input_scaler: standard
+l_sizes:
+- !!python/tuple
+  - 35
+  - 256
+  - 256
+- !!python/tuple
+  - 256
+  - 256
+  - 256
+  - 256
+- !!python/tuple
+  - 256
+  - 256
+  - 256
+  - 256
+load_label:
+- Loading
+load_scaler: null
+load_type: single
+mask: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/truths/testing_7/mask_subset.csv
+min_delta: 0.0005
+model: !!python/name:ntk_matrix_completion.models.multitask.multitask_nn.MultiTaskNNCorr_v2 ''
+optimizer:
+  cla_opt: adam
+  reg_opt: adam
+osda_prior_file: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/priors/221216/iza_all/osda_priors_all.pkl
+osda_prior_map: /home/mrx/projects/affinity/ntk_matrix_completion/configs/osda_weights_structural_v2.json
+other_prior_to_concat: null
+output: /home/mrx/projects/affinity_pool/ntk_matrix_completion/output/2023_multitask/multitask_2023228_94738
+patience: 5
+prior_method: CustomOSDAandZeoliteAsRows
+prior_treatment: 3
+scheduler: false
+seed: 12934
+sieved_file: null
+softmax: false
+split_type: !!python/object/apply:ntk_matrix_completion.utils.utilities.SplitType
+- 3
+truth: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/truths/testing_7/truth_subset_norm_ohe.csv
+tune: true
+zeolite_prior_file: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/priors/zeolite_priors_20221118_25419.pkl
+zeolite_prior_map: /home/mrx/projects/affinity/ntk_matrix_completion/configs/zeolite_weights_structural_extendable.json

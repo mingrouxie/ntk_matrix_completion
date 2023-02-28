@@ -1,7 +1,6 @@
-batch_norm: false
 batch_size: 256
 class_op_size: 1
-config: /home/mrx/projects/affinity/ntk_matrix_completion/run_scripts/expts/230131_mt/run_3/run_3.yml
+config: /home/mrx/projects/affinity/ntk_matrix_completion/run_scripts/expts/230131_mt/run_4/run_4.yml
 device: cpu
 energy_scaler: minmax
 energy_type: !!python/object/apply:ntk_matrix_completion.utils.package_matrix.Energy_Type
@@ -15,29 +14,29 @@ l_sizes:
   - 35
   - 18
 - !!python/tuple
-  - 35
   - 18
+  - 1
+- !!python/tuple
+  - 18
+  - 1
 load_label:
 - Loading
 load_scaler: null
 load_type: single
 mask: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/230212/iza_apriori_zach/2023213_212058_mask.csv
-min_delta: 10
-model: !!python/name:ntk_matrix_completion.models.multitask.multitask_nn.MultiTaskNNSep_v2 ''
+model: !!python/name:ntk_matrix_completion.models.multitask.multitask_nn.MultiTaskNNCorr_v2 ''
 optimizer:
   cla_opt: adam
   reg_opt: adam
 osda_prior_file: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/priors/221216/iza_all/osda_priors_all.pkl
 osda_prior_map: /home/mrx/projects/affinity/ntk_matrix_completion/configs/osda_weights_structural_v2.json
 other_prior_to_concat: null
-output: /pool001/mrx/projects/affinity/ntk_matrix_completion/output/2023_multitask/multitask_2023227_15131
-patience: 3
+output: /pool001/mrx/projects/affinity/ntk_matrix_completion/output/2023_multitask/multitask_2023222_234648
 prior_method: CustomOSDAandZeoliteAsRows
 prior_treatment: 3
 scheduler: false
 seed: 12934
 sieved_file: null
-softmax: true
 split_type: !!python/object/apply:ntk_matrix_completion.utils.utilities.SplitType
 - 3
 truth: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/230212/iza_apriori_zach/2023213_212058_truth.csv

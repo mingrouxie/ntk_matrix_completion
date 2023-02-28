@@ -324,7 +324,7 @@ def create_iterator(split_type, all_data, metrics_mask, k_folds, seed):
 
 
 class MultiTaskTensorDataset(Dataset):
-    r"""Dataset wrapping tensors and molecule-zeolite pair indices (list)
+    """Dataset wrapping tensors and molecule-zeolite pair indices (list)
 
     Each sample will be retrieved by indexing tensors along the first dimension (the list is indexed as is).
 

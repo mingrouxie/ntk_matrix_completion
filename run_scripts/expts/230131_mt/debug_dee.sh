@@ -18,8 +18,7 @@ SRC="${ROOT}/ntk_matrix_completion"
 OUTPUT="/pool001/mrx/projects/affinity/ntk_matrix_completion/output"
 OUTPUT="/home/mrx/projects/affinity_pool/ntk_matrix_completion/output"
 
-# python $SRC/models/multitask/train.py --config $SRC/run_scripts/expts/230131_mt/debug_dee.yml
-python $SRC/models/multitask/train.py --config $SRC/run_scripts/expts/230131_mt/debug_pool.yml
+python $SRC/models/multitask/train.py --config $SRC/run_scripts/expts/230131_mt/debug_dee.yml
 
 # python $SRC/utils/analysis_utilities.py --args $SRC/run_scripts/expts/230131_mt/run_3/run_3_args.yaml --local --energy_label "Binding (SiO2)" --load_label single
 
