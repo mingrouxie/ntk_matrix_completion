@@ -40,8 +40,8 @@ l_sizes: '[(35, 256, 256, 256, 256, 256), (35, 256, 256, 256, 256, 256)]'
 load_type: load 
 # load, load_norm, single
 class_op_size: 22
-patience: 5
-min_delta: 0.0005
+patience: 100
+min_delta: 0.5
 batch_norm: true
 softmax: true
 dropout: 0.05

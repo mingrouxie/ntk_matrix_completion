@@ -39,7 +39,7 @@ optimizer:
 osda_prior_file: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/priors/221216/iza_all/osda_priors_all.pkl
 osda_prior_map: /home/mrx/projects/affinity/ntk_matrix_completion/configs/osda_weights_structural_v2.json
 other_prior_to_concat: null
-output: /pool001/mrx/projects/affinity/ntk_matrix_completion/output/2023_multitask/multitask_2023228_01055
+output: /pool001/mrx/projects/affinity/ntk_matrix_completion/output/2023_multitask/multitask_2023228_9582
 patience: 5
 prior_method: CustomOSDAandZeoliteAsRows
 prior_treatment: 3
