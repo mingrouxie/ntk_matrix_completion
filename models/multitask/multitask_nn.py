@@ -34,7 +34,9 @@ class MultiTaskNNSep_v2(nn.Module):
             if self.batch_norm:
                 c_layers_list.append(nn.BatchNorm1d(self.c_sizes[i+1]))
             if self.dropout:
-                c_layers_list.append(nn.Dropout(p=self.dropout))
+                if i != c_num_layers-2:
+                    # https://stats.stackexchange.com/questions/425610/why-massive-random-spikes-of-validation-loss recommends no dropout before last layer 
+                    c_layers_list.append(nn.Dropout(p=self.dropout))
         class_modules = [
             *c_layers_list,
             nn.Linear(self.c_sizes[-1], self.class_op_size),
@@ -52,7 +54,9 @@ class MultiTaskNNSep_v2(nn.Module):
             if self.batch_norm:
                 r_layers_list.append(nn.BatchNorm1d(self.r_sizes[i+1]))
             if self.dropout:
-                r_layers_list.append(nn.Dropout(p=self.dropout))
+                if i != r_num_layers-2:
+                    # https://stats.stackexchange.com/questions/425610/why-massive-random-spikes-of-validation-loss recommends no dropout before last layer
+                    r_layers_list.append(nn.Dropout(p=self.dropout))
         self.regressor = nn.Sequential(
             *r_layers_list,
             nn.Linear(self.r_sizes[-1], 1)
@@ -104,7 +108,9 @@ class MultiTaskNNCorr_v2(nn.Module):
         if self.batch_norm:
             c_layers_list.append(nn.BatchNorm1d(self.c_sizes[i+1]))
         if self.dropout:
-            c_layers_list.append(nn.Dropout(p=self.dropout))
+            if i != c_num_layers-2: 
+                # https://stats.stackexchange.com/questions/425610/why-massive-random-spikes-of-validation-loss recommends no dropout before last layer
+                c_layers_list.append(nn.Dropout(p=self.dropout))
 
         class_modules = [
             self.common,
@@ -125,7 +131,9 @@ class MultiTaskNNCorr_v2(nn.Module):
         if self.batch_norm:
             r_layers_list.append(nn.BatchNorm1d(self.r_sizes[i+1]))
         if self.dropout:
-            r_layers_list.append(nn.Dropout(p=self.dropout))
+            if i != r_num_layers-2: 
+                # https://stats.stackexchange.com/questions/425610/why-massive-random-spikes-of-validation-loss recommends no dropout before last layer
+                r_layers_list.append(nn.Dropout(p=self.dropout))
 
         self.regressor = nn.Sequential(
             self.common,
