@@ -35,7 +35,8 @@ from ntk_matrix_completion.utils.utilities import (
     scale_data,
     report_best_scores,
     SplitType,
-    MultiTaskTensorDataset
+    MultiTaskTensorDataset,
+    get_optimizer
 )
 
 from sklearn.model_selection import train_test_split
@@ -401,8 +402,8 @@ def main(kwargs):
     # except TypeError:
     #     pass
 
-    train_dataloader = DataLoader(train_dataset, batch_size=kwargs['batch_size'], shuffle=False) # TODO: no shuffle to preserve isomer ordering as much as possible during CV?
-    test_dataloader = DataLoader(test_dataset, batch_size=kwargs['batch_size'], shuffle=False) # TODO: no shuffle to preserve isomer ordering as much as possible during CV?
+    train_dataloader = DataLoader(train_dataset, batch_size=kwargs['batch_size'], shuffle=False, drop_last=True) # TODO: no shuffle to preserve isomer ordering as much as possible during CV?
+    test_dataloader = DataLoader(test_dataset, batch_size=kwargs['batch_size'], shuffle=False, drop_last=True) # TODO: no shuffle to preserve isomer ordering as much as possible during CV?
 
     prep_time = time.time() - start_time
     print("Time to prepare labels and input", "{:.2f}".format(prep_time/60), "mins")
@@ -421,10 +422,9 @@ def main(kwargs):
     # get optimizers
     cla_params = model.classifier.parameters()
     reg_params = model.regressor.parameters()
-    if kwargs["optimizer"]["cla_opt"] == 'adam': #TODO: hardcoded for now
-        cla_opt = torch.optim.Adam(params=cla_params, lr=1e-2) # TODO: lr
-    if kwargs["optimizer"]["reg_opt"] == 'adam':
-        reg_opt = torch.optim.Adam(params=reg_params, lr=1e-2)
+    # TODO: momentum, weight_decay, other parameters... 
+    cla_opt = get_optimizer(kwargs["optimizer"]["cla_opt"], params=cla_params, lr=kwargs['lr'])
+    reg_opt = get_optimizer(kwargs["optimizer"]["reg_opt"], params=reg_params, lr=kwargs['lr'])
     optimizers = [cla_opt, reg_opt]
 
     # get scheduler
@@ -504,7 +504,8 @@ def get_defaults():
     # TODO: please throw into utils or somewhere
     kwargs = {
         'batch_norm': False,
-        'softmax': True
+        'softmax': True,
+        'lr': 1e-2
     }
     return kwargs
 
@@ -538,6 +539,11 @@ def preprocess(args):
     except RuntimeError:
         kwargs['device'] = 'cpu'
     print(("[preprocess] kwargs device:", kwargs['device']), 'of type', type(kwargs['device']))
+
+    # check num of threads
+    torch_threads = torch.get_num_threads()
+    os_threads = os.cpu_count()
+    print("[preprocess] Number of threads:", torch_threads, os_threads)
 
     # transform some inputs
     kwargs['model'] = MULTITASK_MODELS[kwargs['model']]
