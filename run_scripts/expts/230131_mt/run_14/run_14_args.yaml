@@ -52,7 +52,7 @@ load_label:
 load_scaler: null
 load_type: load
 mask: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/230212/iza_apriori_zach/2023213_212058_mask.csv
-min_delta: 0.0005
+min_delta: 0.5
 model: !!python/name:ntk_matrix_completion.models.multitask.multitask_nn.MultiTaskNNCorr_v2 ''
 optimizer:
   cla_opt: adam
@@ -60,8 +60,8 @@ optimizer:
 osda_prior_file: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/priors/221216/iza_all/osda_priors_all.pkl
 osda_prior_map: /home/mrx/projects/affinity/ntk_matrix_completion/configs/osda_weights_structural_v2.json
 other_prior_to_concat: null
-output: /pool001/mrx/projects/affinity/ntk_matrix_completion/output/2023_multitask/multitask_2023228_12384
-patience: 5
+output: /pool001/mrx/projects/affinity/ntk_matrix_completion/output/2023_multitask/multitask_2023228_135435
+patience: 100
 prior_method: CustomOSDAandZeoliteAsRows
 prior_treatment: 3
 scheduler: false

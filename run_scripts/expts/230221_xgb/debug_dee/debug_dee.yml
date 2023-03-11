@@ -1,0 +1,35 @@
+output: /home/mrx/projects/affinity_pool/ntk_matrix_completion/output/2023_xgb/xgb
+tune: false
+k_folds: 5
+search_type: hyperopt
+debug: true 
+nthread: 6 # 20?
+model_seed: 12934 # default is MODEL_SEED
+objective: 'reg:squarederror' # TODO: sync up w FFNN
+model_file: null # only if loading model
+prior_method: CustomOSDAandZeoliteAsRows # inside multitask
+split_type: osda 
+# others: zeolite, naive
+energy_type: binding
+# energy_type: 2 # TODO: new
+# kwargs["energy_type"] = Energy_Type(kwargs["energy_type"])
+prior_treatment: 3 
+# 1 struct, 2 struct and getaway, 3 struct and zeo, 4 getaway and zeo, 5 struct, getaway and zeo
+sieved_file: null
+osda_prior_file: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/priors/221216/iza_all/osda_priors_all.pkl
+other_prior_to_concat: null
+zeolite_prior_file: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/priors/zeolite_priors_20221118_25419.pkl
+osda_prior_map: /home/mrx/projects/affinity/ntk_matrix_completion/configs/osda_weights_structural_v2.json
+zeolite_prior_map: /home/mrx/projects/affinity/ntk_matrix_completion/configs/zeolite_weights_structural_extendable.json
+truth_scaler: minmax # TODO: generalize alrdy
+input_scaler: standard
+split_seed: 12934 # default is ISOMER_SEED
+# device: cpu
+# batch_size: 256
+load_type: single 
+epochs: 1000
+# truth: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/truths/testing_7/truth_subset.csv
+# truth: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/truths/testing_7/truth_subset_ohe.csv
+truth: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/truths/testing_7/truth_subset_norm_ohe.csv
+mask: /home/mrx/projects/affinity_pool/ntk_matrix_completion/data/truths/testing_7/mask_subset.csv
+truth_label: 'Binding (SiO2)'

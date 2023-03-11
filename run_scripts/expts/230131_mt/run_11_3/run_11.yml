@@ -9,7 +9,7 @@ load_scaler: null
 ignore_train: false
 seed: 12934
 sieved_file: null
-truth: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/230212/iza_apriori_zach/2023213_212058_truth_load_norm_ohe.csv
+truth: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/230212/iza_apriori_zach/2023213_212058_truth.csv
 mask: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/truths/230212/iza_apriori_zach/2023213_212058_mask.csv
 osda_prior_file: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/priors/221216/iza_all/osda_priors_all.pkl
 zeolite_prior_file: /pool001/mrx/projects/affinity/ntk_matrix_completion/data/priors/zeolite_priors_20221118_25419.pkl
@@ -24,25 +24,26 @@ optimizer:
   reg_opt: adam
 scheduler: false
 # debug
-epochs: 1000
-device: '0'
-batch_size: 256
+epochs: 5000
+device: 0
+batch_size: 1024
 # model: multitasknnsep_v2
 # l_sizes: '[(35, 256, 256, 256, 256, 256), (35, 256, 256, 256, 256, 256)]'
 # l_sizes: '[(35, 18), (35, 18)]'
 # l_sizes: '[(35,16,8,4), (35,16,8,4)]'
 # l_sizes: '[(290,16,8,4), (290,16,8,4)]'
 model: multitasknncorr_v2
-l_sizes: '[(35, 256, 256), (256, 256, 256, 256), (256, 256, 256, 256)]'
+'[(35, 256, 256, 256), (256, 256, 256, 256, 256), (256, 256, 256, 256, 256)]'
+# l_sizes: '[(35, 256, 256), (256, 256, 256, 256), (256, 256, 256, 256)]'
 # l_sizes: '[(35, 18), (18,), (18,)]'
 # l_sizes: '[(290,16), (16,8,4), (16,8,4)]'
 # debug please change afterwards
-load_type: load_norm 
+load_type: single 
 # load, load_norm, single
-class_op_size: 49
-patience: 100
-min_delta: 0.5
+class_op_size: 1
+patience: 10
+min_delta: 0.05
 batch_norm: true
-softmax: true
+softmax: false
 dropout: 0.05
-lr: 0.01
+lr: 0.00005

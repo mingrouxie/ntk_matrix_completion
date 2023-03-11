@@ -27,22 +27,22 @@ scheduler: false
 epochs: 1000
 device: '0'
 batch_size: 256
-# model: multitasknnsep_v2
-# l_sizes: '[(35, 256, 256, 256, 256, 256), (35, 256, 256, 256, 256, 256)]'
+model: multitasknnsep_v2
+l_sizes: '[(35, 256, 256, 256, 256, 256), (35, 256, 256, 256, 256, 256)]'
 # l_sizes: '[(35, 18), (35, 18)]'
 # l_sizes: '[(35,16,8,4), (35,16,8,4)]'
 # l_sizes: '[(290,16,8,4), (290,16,8,4)]'
-model: multitasknncorr_v2
-l_sizes: '[(35, 256, 256), (256, 256, 256, 256), (256, 256, 256, 256)]'
+# model: multitasknncorr_v2
+# l_sizes: '[(35, 256, 256), (256, 256, 256, 256), (256, 256, 256, 256)]'
 # l_sizes: '[(35, 18), (18,), (18,)]'
 # l_sizes: '[(290,16), (16,8,4), (16,8,4)]'
 # debug please change afterwards
 load_type: load_norm 
 # load, load_norm, single
 class_op_size: 49
-patience: 100
+patience: 10
 min_delta: 0.5
 batch_norm: true
 softmax: true
 dropout: 0.05
-lr: 0.01
+lr: 0.00005
