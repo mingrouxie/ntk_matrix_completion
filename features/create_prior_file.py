@@ -10,7 +10,7 @@ import argparse
 import sys
 import json
 from rdkit import Chem
-
+from tqdm import tqdm
 from ntk_matrix_completion.utils.path_constants import (
     BINDING_GROUND_TRUTH,
     OSDA_PRIOR_FILE,
@@ -64,7 +64,7 @@ def get_osda_features(kwargs):
         for idx, s in enumerate(range(0, len(specs), batch_size)):
             yield idx, specs[s : s + batch_size]
 
-    for idx, sp in batched_specs(specs, kwargs["batch_size"]):
+    for idx, sp in tqdm(batched_specs(specs, kwargs["batch_size"])):
         print("[get_osda_features] Batch length of Species:", len(specs))
         batch_kwargs = deepcopy(kwargs)
         batch_kwargs["species"] = sp
@@ -91,7 +91,10 @@ def get_solubility(row):
         return -1 * get_num_c(row.ligand)
 
 def get_osda_features_single(kwargs):
-    """Returns a DataFrame with SMILES as the index and columns the desired features"""
+    """
+    Returns a DataFrame with SMILES as the index and columns the desired features.
+    Data is saved as a pickle file.
+    """
     geoms = Geom.objects.filter(
         confnum__isnull=False,
         method__name="molecular_mechanics_mmff94",
@@ -162,7 +165,7 @@ def get_osda_features_single(kwargs):
 
     print("[single] Data size", data.shape)
     data.to_pickle(kwargs["osda_file"])
-    data.to_csv(kwargs["osda_file"].split(".")[0]+".csv")
+    # data.to_csv(kwargs["osda_file"].split(".")[0]+".csv")
     # data.to_hdf(kwargs["osda_file"], key="osda_priors")
     return data
 
@@ -239,7 +242,7 @@ def get_fw_features(kwargs):
     data = data.rename(columns={'density': 'framework_density'})
 
     data.to_pickle(kwargs["fws_file"])
-    data.to_csv(kwargs["fws_file"].split(".")[0]+".csv")
+    # data.to_csv(kwargs["fws_file"].split(".")[0]+".csv")
     return data
 
 
