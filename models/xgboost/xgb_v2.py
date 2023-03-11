@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 from ntk_matrix_completion.configs.xgb_hp import get_xgb_space
 from ntk_matrix_completion.features.prior import make_prior
 from ntk_matrix_completion.utils.hyperopt import HyperoptSearchCV
-from ntk_matrix_completion.utils.loss import masked_rmse
+from ntk_matrix_completion.utils.loss import masked_loss
 from ntk_matrix_completion.utils.package_matrix import (
     Energy_Type,
     get_ground_truth_energy_matrix,
@@ -206,8 +206,7 @@ def main(kwargs):
         truth = truth[truth["SMILES"].isin(sieved_priors_index)]
 
     truth = truth.set_index(["SMILES", "Zeolite"])
-    truth = truth[["Binding (SiO2)"]]
-    # TODO: paused here - change to truth_label
+    truth = truth[kwargs['truth_label']]
     mask = pd.read_csv(kwargs["mask"])
 
     # get features
@@ -298,7 +297,7 @@ def main(kwargs):
     truth_train = truth.loc[smiles_train].reset_index().set_index(["SMILES", "Zeolite"])
     truth_test = truth.loc[smiles_test].reset_index().set_index(["SMILES", "Zeolite"])
 
-    # scale ground truth if specified
+    # scale ground truth if specified TODO: copy over new code from multitasknn
     if kwargs["truth_scaler"]:
         truth_train_scaled, truth_test_scaled, scaler_info = scale_data(
             kwargs["truth_scaler"], truth_train, truth_test, kwargs["output"], "truth"
@@ -317,7 +316,7 @@ def main(kwargs):
     X_test = X.loc[smiles_test]
 
     # scale inputs
-    X_train_scaled, X_test_scaled = scale_data(
+    X_train_scaled, X_test_scaled, input_scaler_info = scale_data(
         kwargs["input_scaler"], X_train, X_test, kwargs["output"], "input"
     )
     # print("[XGB] DEBUG: Check X and mask have been created properly")
@@ -346,13 +345,15 @@ def main(kwargs):
             objective=kwargs["objective"],
             model_seed=kwargs["model_seed"],
         )
-    else:
+    elif kwargs['model_file']:
         model = xgboost.XGBRegressor()
         model.load_model(kwargs["model_file"])
-    # breakpoint()
-    # fit and predict tuned model
-    print("[XGB] Using tuned model")
+    else:
+        model = xgboost.XGBRegressor()
+    print("[XGB] Using model:")
     print(model)
+
+    # fit and predict model
     # model.set_params(eval_metric=) # TODO: figure this out
     # disable_default_eval_metric - do we need this?
 
@@ -416,13 +417,13 @@ def main(kwargs):
     # performance
     print(
         "[XGB] Train score:",
-        masked_rmse(
+        masked_loss(
             truth_train["Binding (SiO2)"].values, y_pred_train, mask_train.exists
         ),
     )
     print(
         "[XGB] Test score:",
-        masked_rmse(truth_test["Binding (SiO2)"].values, y_pred_test, mask_test.exists),
+        masked_loss(truth_test["Binding (SiO2)"].values, y_pred_test, mask_test.exists),
     )
     print(
         "[XBG] Unmasked train score:",
@@ -450,22 +451,28 @@ def main(kwargs):
 
     print(f"[XGB] Finished. Output directory is {kwargs['output']}")
 
+def get_defaults():
+    return {
+        "energy_type": Energy_Type.BINDING,
+        "split_type": SplitType.OSDA_ISOMER_SPLITS,
+        "k_folds": 5,
+        # "model": None,
+        }
 
 def preprocess(input):
     """
     Preprocess argparsed arguments into readable format
     """
-    kwargs = {
-        "energy_type": Energy_Type.BINDING,
-        "split_type": SplitType.OSDA_ISOMER_SPLITS,
-        "k_folds": 5,
-        # "model": None,
-    }
+    config_file = input.__dict__['config']
+    kwargs = get_defaults()
 
-    input = input.__dict__
+    with open(config_file, "rb") as file:
+        kwargs_config = yaml.load(file, Loader=yaml.Loader)
+        kwargs.update(kwargs_config)
+        kwargs['config'] = config_file
 
     # make output directory
-    if os.path.isdir(input["output"]):
+    if os.path.isdir(kwargs["output"]):
         now = "_%d%d%d_%d%d%d" % (
             datetime.now().year,
             datetime.now().month,
@@ -474,25 +481,23 @@ def preprocess(input):
             datetime.now().minute,
             datetime.now().second,
         )
-        input["output"] = input["output"] + now
-    print("[XGB] Output folder is", input["output"])
-    os.mkdir(input["output"], exist_ok=True)
+        kwargs["output"] = kwargs["output"] + now
+    print("[XGB] Output folder is", kwargs["output"])
+    os.makedirs(kwargs["output"], exist_ok=True)
     
     # transform some inputs
-    input["energy_type"] = (
+    kwargs["energy_type"] = (
         Energy_Type.BINDING
-        if input.get("energy_type", None) == "binding"
+        if kwargs.get("energy_type", None) == "binding"
         else Energy_Type.TEMPLATING
     )
 
-    if input.get("split_type", None) == "naive":
-        input["split_type"] = SplitType.NAIVE_SPLITS
-    elif input.get("split_type", None) == "zeolite":
-        input["split_type"] = SplitType.ZEOLITE_SPLITS
-    elif input.get("split_type", None) == "osda":
-        input["split_type"] = SplitType.OSDA_ISOMER_SPLITS
-
-    args.update(input)
+    if kwargs.get("split_type", None) == "naive":
+        kwargs["split_type"] = SplitType.NAIVE_SPLITS
+    elif kwargs.get("split_type", None) == "zeolite":
+        kwargs["split_type"] = SplitType.ZEOLITE_SPLITS
+    elif kwargs.get("split_type", None) == "osda":
+        kwargs["split_type"] = SplitType.OSDA_ISOMER_SPLITS
 
     # dump args
     yaml_args = yaml.dump(kwargs, indent=2, default_flow_style=False)
@@ -509,112 +514,113 @@ if __name__ == "__main__":
     # test_xgboost()
 
     parser = argparse.ArgumentParser(description="XGBoost")
-    parser.add_argument("--output", help="Output directory", type=str, required=True)
-    parser.add_argument(
-        "--tune",
-        help="Tune hyperparameters",
-        action="store_true",
-        dest="tune",
-    )
-    parser.add_argument(
-        "--prior_method",
-        help="method var in make_prior",
-        type=str,
-        default="CustomOSDAVector",
-    )
-    parser.add_argument(
-        "--energy_type",
-        help="Binding or templating energy",
-        type=str,
-        default="binding",
-    )
+    # parser.add_argument("--output", help="Output directory", type=str, required=True)
     # parser.add_argument(
-    #     "--stack_combined_priors",
-    #     help="Treatment for stacking priors",
-    #     type=str,
-    #     required=True,
-    #     default="all",
+    #     "--tune",
+    #     help="Tune hyperparameters",
+    #     action="store_true",
+    #     dest="tune",
     # )
-    parser.add_argument(
-        "--prior_treatment",
-        help="Which priors to concatenate to form the final prior. See main function for how it is used",
-        type=int,
-        required=True,
-    )
-    parser.add_argument(
-        "--search_type",
-        help="Hyperparameter tuning method",
-        type=str,
-        # required=True,
-        default="hyperopt",
-    )
-    parser.add_argument("--truth", help="Ground truth file", type=str, required=True)
-    parser.add_argument("--mask", help="Mask file", type=str, required=True)
-    parser.add_argument(
-        "--sieved_file",
-        help="Dataframe whose index is used to sieve for desired data points",
-        type=str,
-        default=None,  # TODO: generalize to substrate
-    )
-    parser.add_argument(
-        "--osda_prior_file",
-        help="OSDA prior file, only read if prior_method is CustomOSDAVector or CustomOSDAandZeoliteAsRows",
-        type=str,
-        default=OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
-    )
-    parser.add_argument(
-        "--other_prior_to_concat",
-        help="2nd OSDA prior file to concat; this is a relic and bad practice. Currently not using it",
-        type=str,
-        default=None,
-    )
-    parser.add_argument(
-        "--zeolite_prior_file",
-        help="Zeolite prior file, only read if prior_method is CustomOSDAandZeoliteAsRows",
-        type=str,
-        default=HANDCRAFTED_ZEOLITE_PRIOR_FILE,
-    )
-    parser.add_argument(
-        "--osda_prior_map",
-        help="Path to json file containing weights for OSDA descriptors",
-        type=str,
-        default=OSDA_PRIOR_LOOKUP,
-    )
-    parser.add_argument(
-        "--zeolite_prior_map",
-        help="Path to json file containing weights for zeolite descriptors",
-        type=str,
-        default=ZEOLITE_PRIOR_LOOKUP,
-    )
-    parser.add_argument(
-        "--truth_scaler",
-        help="Scaling method for ground truth",
-        type=str,
-        default=None,
-    )
-    parser.add_argument(
-        "--input_scaler", help="Scaling method for inputs", type=str, default="standard"
-    )
-    parser.add_argument(
-        "--split_seed", help="Data split seed", type=str, default=ISOMER_SEED
-    )
-    parser.add_argument(
-        "--nthread",
-        help="Number of threads for XGBoost",
-        type=int,
-        default=6,  # was 5 for runs 1 and 2
-    )
-    parser.add_argument(
-        "--objective",
-        help="Objective for XGBoost",
-        type=str,
-        default="reg:squarederror",
-    )
-    parser.add_argument(
-        "--model_seed", help="Seed for model", type=int, default=MODEL_SEED
-    )
-    parser.add_argument("--model_file", help="file to load model from", type=str)
-    parser.add_argument("--debug", action="store_true", dest="debug")
+    # parser.add_argument(
+    #     "--prior_method",
+    #     help="method var in make_prior",
+    #     type=str,
+    #     default="CustomOSDAVector",
+    # )
+    # parser.add_argument(
+    #     "--energy_type",
+    #     help="Binding or templating energy",
+    #     type=str,
+    #     default="binding",
+    # )
+    # # parser.add_argument(
+    # #     "--stack_combined_priors",
+    # #     help="Treatment for stacking priors",
+    # #     type=str,
+    # #     required=True,
+    # #     default="all",
+    # # )
+    # parser.add_argument(
+    #     "--prior_treatment",
+    #     help="Which priors to concatenate to form the final prior. See main function for how it is used",
+    #     type=int,
+    #     required=True,
+    # )
+    # parser.add_argument(
+    #     "--search_type",
+    #     help="Hyperparameter tuning method",
+    #     type=str,
+    #     # required=True,
+    #     default="hyperopt",
+    # )
+    # parser.add_argument("--truth", help="Ground truth file", type=str, required=True)
+    # parser.add_argument("--mask", help="Mask file", type=str, required=True)
+    # parser.add_argument(
+    #     "--sieved_file",
+    #     help="Dataframe whose index is used to sieve for desired data points",
+    #     type=str,
+    #     default=None,  # TODO: generalize to substrate
+    # )
+    # parser.add_argument(
+    #     "--osda_prior_file",
+    #     help="OSDA prior file, only read if prior_method is CustomOSDAVector or CustomOSDAandZeoliteAsRows",
+    #     type=str,
+    #     default=OSDA_CONFORMER_PRIOR_FILE_CLIPPED,
+    # )
+    # parser.add_argument(
+    #     "--other_prior_to_concat",
+    #     help="2nd OSDA prior file to concat; this is a relic and bad practice. Currently not using it",
+    #     type=str,
+    #     default=None,
+    # )
+    # parser.add_argument(
+    #     "--zeolite_prior_file",
+    #     help="Zeolite prior file, only read if prior_method is CustomOSDAandZeoliteAsRows",
+    #     type=str,
+    #     default=HANDCRAFTED_ZEOLITE_PRIOR_FILE,
+    # )
+    # parser.add_argument(
+    #     "--osda_prior_map",
+    #     help="Path to json file containing weights for OSDA descriptors",
+    #     type=str,
+    #     default=OSDA_PRIOR_LOOKUP,
+    # )
+    # parser.add_argument(
+    #     "--zeolite_prior_map",
+    #     help="Path to json file containing weights for zeolite descriptors",
+    #     type=str,
+    #     default=ZEOLITE_PRIOR_LOOKUP,
+    # )
+    # parser.add_argument(
+    #     "--truth_scaler",
+    #     help="Scaling method for ground truth",
+    #     type=str,
+    #     default=None,
+    # )
+    # parser.add_argument(
+    #     "--input_scaler", help="Scaling method for inputs", type=str, default="standard"
+    # )
+    # parser.add_argument(
+    #     "--split_seed", help="Data split seed", type=str, default=ISOMER_SEED
+    # )
+    # parser.add_argument(
+    #     "--nthread",
+    #     help="Number of threads for XGBoost",
+    #     type=int,
+    #     default=6,  # was 5 for runs 1 and 2
+    # )
+    # parser.add_argument(
+    #     "--objective",
+    #     help="Objective for XGBoost",
+    #     type=str,
+    #     default="reg:squarederror",
+    # )
+    # parser.add_argument(
+    #     "--model_seed", help="Seed for model", type=int, default=MODEL_SEED
+    # )
+    # parser.add_argument("--model_file", help="file to load model from", type=str)
+    # parser.add_argument("--debug", action="store_true", dest="debug")
+    parser.add_argument("--config", help="Config file", required=True)
     args = parser.parse_args()
     kwargs = preprocess(args)
     main(kwargs)
