@@ -19,7 +19,7 @@ from ntk_matrix_completion.utils.random_seeds import (
 )
 from ntk_matrix_completion.configs.xgb_hp import get_hyperopt_xgb_space
 from ntk_matrix_completion.utils.utilities import create_iterator, SplitType
-from ntk_matrix_completion.utils.loss import masked_rmse
+from ntk_matrix_completion.utils.loss import masked_loss
 from ntk_matrix_completion.utils.path_constants import XGBOOST_OUTPUT_DIR
 
 # Input data files are available in the "../input/" directory.
@@ -197,7 +197,7 @@ class HyperoptSearchCV:
         # results = self.cross_val(model, cv_generator=self.cv)
         return results
 
-    def cross_val(self, model, cv_generator, metrics="masked_rmse"):
+    def cross_val(self, model, cv_generator, metrics="masked_mse"):
         train_scores = []
         test_scores = []
         # breakpoint()
@@ -217,12 +217,13 @@ class HyperoptSearchCV:
             pred_train = model.predict(X_train)
             pred_test = model.predict(X_test)
 
-            if metrics == "masked_rmse":
+            if metrics == "masked_mse":
+                print("TODO: this used to be masked_rmse")
                 train_scores.append(
-                    masked_rmse(y_train, pred_train, np.squeeze(mask_train))
+                    masked_loss(y_train, pred_train, np.squeeze(mask_train), loss_type='mse')
                 )
                 test_scores.append(
-                    masked_rmse(y_test, pred_test, np.squeeze(mask_test))
+                    masked_loss(y_test, pred_test, np.squeeze(mask_test), loss_type='mse')
                 )
             else:
                 raise NotImplementedError(
